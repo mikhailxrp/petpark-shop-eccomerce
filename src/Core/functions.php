@@ -94,7 +94,31 @@ function requireAuth(): void
 function redirectIfAuthenticated(): void
 {
     if (isAuthenticated()) {
-        redirect('/dashboard');
+        ensureSessionStarted();
+        $role = $_SESSION['user_role'] ?? null;
+        redirect(homePathForRole(is_string($role) ? $role : 'customer'));
+    }
+}
+
+function homePathForRole(string $role): string
+{
+    return match ($role) {
+        'customer' => '/account',
+        'specialist' => '/specialist',
+        'shift_admin', 'content_editor', 'owner' => '/admin',
+        default => '/',
+    };
+}
+
+function requireRole(string ...$roles): void
+{
+    requireAuth();
+    ensureSessionStarted();
+
+    $role = $_SESSION['user_role'] ?? null;
+
+    if (!is_string($role) || !in_array($role, $roles, true)) {
+        redirect(homePathForRole(is_string($role) ? $role : 'customer'));
     }
 }
 

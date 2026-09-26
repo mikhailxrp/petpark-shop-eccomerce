@@ -1,5 +1,5 @@
 ---
-description: PHP e-commerce project rules (Bootstrap grid only, no CSS Grid, no jQuery/Tailwind)
+description: PHP e-commerce project rules (Bootstrap grid only, no CSS Grid, no jQuery/Tailwind in project-authored code — source design templates are an exception, see JavaScript section)
 alwaysApply: true
 ---
 
@@ -93,3 +93,12 @@ alwaysApply: true
 - No jQuery, no global variables — Bootstrap 5's JS components
   (modal, dropdown, carousel, offcanvas) are used via their native
   vanilla JS API
+- Exception: when a page is built from a source design template
+  (e.g. Patte, Valex) that ships jQuery-dependent scripts/plugins
+  (carousels, nice-select, fancybox, its own header/menu scripts),
+  keep and self-host that jQuery build as-is instead of rewriting the
+  template's interactivity — the design is final and reimplementing
+  its JS in vanilla is out of scope for a markup task. New,
+  project-authored JS (not part of the copied template) still follows
+  the no-jQuery rule above. Note the exception in `.docs/dev-log.md`
+  when it's first used on a page, don't apply it silently

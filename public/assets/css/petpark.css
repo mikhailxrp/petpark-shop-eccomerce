@@ -1,0 +1,57 @@
+/*
+ * PetPark — брендовый слой поверх шаблона Patte.
+ * Правит только цвета/шрифты/логотип (screens.md — дизайн финальный),
+ * структуру и интерактив вёрстки style.css/responsive.css не трогает.
+ */
+
+:root {
+    --color-primary: #fa441d;
+    --color-text: #000000;
+    --color-bg-light: #f5f5f5;
+}
+
+/*
+ * style.css ссылается на шрифты 'Anybody'/'DynaPuff' с Google Fonts CDN
+ * (запрещено — shared-хостинг не должен зависеть от внешнего аптайма).
+ * @import убран из style.css; здесь те же имена подменяются локальным
+ * системным шрифтом через src: local(), без сетевых запросов.
+ * Итоговый шрифт бренда — открытый вопрос, см. .docs/dev-log.md.
+ */
+@font-face {
+    font-family: 'Anybody';
+    src: local('Segoe UI'), local('Arial');
+}
+
+@font-face {
+    font-family: 'DynaPuff';
+    src: local('Segoe UI'), local('Arial');
+}
+
+/*
+ * Соц-иконки заменены на VK/Telegram/MAX (components/social-icons.php).
+ * Это одноцветные SVG без атрибута fill на path — цвет наследуется от
+ * `color` через currentColor, поэтому кружок-бейдж 46px и hover
+ * (color: black → #fff) из style.css/color.css продолжают работать
+ * так же, как раньше со шрифтовыми глифами fa-brands: сам SVG только
+ * заменяет глиф, размер и позиционирование внутри круга — прежние.
+ */
+ul.social-icon i svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+/*
+ * style.css: `.mobile-nav ul li a svg { width: 11px; }` — задумано для
+ * стрелочек в пунктах меню, но селектор — это «любой svg внутри a/li/ul
+ * внутри .mobile-nav», и наши соц-иконки под него тоже попадают. У него
+ * больше типовых селекторов (4 против 3 у правила выше), поэтому по
+ * специфичности CSS он перебивает только width, оставляя height — SVG
+ * сжимается и съезжает. Один класс в селекторе — и наше правило снова
+ * весит больше, без изменений в самом style.css.
+ */
+.mobile-nav ul.social-icon i svg {
+    width: 24px;
+    height: 24px;
+}

@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 /**
  * Установка БД — создание таблиц.
- * Запускать один раз через браузер: /install-temp.php
- * После выполнения — удалить install-temp.php из public/
+ * Запускать из CLI: php database/install.php
+ * Идемпотентно (CREATE TABLE IF NOT EXISTS) — повторный запуск безопасен.
  *
  * Схема соответствует .docs/database.md — при добавлении своей таблицы
  * сначала опиши её там, потом продублируй сюда в порядке зависимостей
  * (родитель раньше потомка).
  */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('Доступ только из командной строки: php database/install.php');
+}
 
 require_once dirname(__DIR__) . '/config/config.php';
 
