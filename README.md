@@ -119,9 +119,24 @@ petpark-shop-eccomerce/
 ## Как запустить локально
 
 1. `composer install` — подтянет PHPUnit (dev-зависимость, на прод не деплоится)
-2. Скопировать `.env.example` → `.env`, заполнить подключение к MySQL и SMTP
-3. Выполнить `database/install.php` — создаст таблицы
-4. Document root сервера — папка `public/`
+2. Скопировать `.env.example` → `.env`, заполнить подключение к MySQL,
+   SMTP и `SEED_USER_PASSWORD` (≥ 8 символов, только для локального сида)
+3. `php database/install.php` — создаст таблицы (идемпотентно, можно
+   запускать повторно)
+4. `php database/seed.php` — создаст тестовых пользователей по одному
+   на каждую роль (не запускается при `APP_ENV=production`):
+
+   | Роль | Email |
+   |------|-------|
+   | Владелец | `owner@petpark.test` |
+   | Администратор смены | `shift-admin@petpark.test` |
+   | Контент-редактор | `content-editor@petpark.test` |
+   | Специалист | `specialist@petpark.test` |
+   | Покупатель | `customer@petpark.test` |
+
+   Пароль для всех — значение `SEED_USER_PASSWORD` из вашего `.env`.
+5. `composer test` — юнит-тесты чистой логики (Core-хелперы, Router)
+6. Document root сервера — папка `public/`
 
 ---
 

@@ -7,15 +7,15 @@ declare(strict_types=1);
  * Формат: 'МЕТОД' => ['/путь' => ['ИмяКонтроллера', 'метод']]
  */
 
+// Саморегистрации нет — Покупатель появляется только через первый
+// Заказ/Запись (FR-AUTH-001 правило 2, Q-027), поэтому /register нет.
 return [
     'GET' => [
-        '/'         => ['HomeController', 'index'],
-        '/login'    => ['AuthController', 'showLogin'],
-        '/register' => ['AuthController', 'showRegister'],
+        '/'      => ['HomeController', 'index'],
+        '/login' => ['AuthController', 'showLogin'],
     ],
     'POST' => [
-        '/login'    => ['AuthController', 'login'],
-        '/register' => ['AuthController', 'register'],
-        '/logout'   => ['AuthController', 'logout'],
+        '/login'  => ['AuthController', 'login'],
+        '/logout' => ['AuthController', 'logout'],
     ],
 ];

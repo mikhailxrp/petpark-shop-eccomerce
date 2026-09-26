@@ -8,6 +8,8 @@ node_modules/
 Thumbs.db
 storage/logs/*.log
 storage/cache/*
+.phpunit.result.cache
+tools/
 
 .docs
 .gigacode
