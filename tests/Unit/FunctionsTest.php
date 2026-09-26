@@ -80,4 +80,29 @@ final class FunctionsTest extends TestCase
         $this->assertNotSame($oldId, session_id());
         $this->assertArrayNotHasKey('csrf_token', $_SESSION);
     }
+
+    public function testHomePathForRoleReturnsPathForEachRole(): void
+    {
+        $this->assertSame('/account', homePathForRole('customer'));
+        $this->assertSame('/specialist', homePathForRole('specialist'));
+        $this->assertSame('/admin', homePathForRole('shift_admin'));
+        $this->assertSame('/admin', homePathForRole('content_editor'));
+        $this->assertSame('/admin', homePathForRole('owner'));
+    }
+
+    public function testHomePathForRoleFallsBackToHomeForUnknownRole(): void
+    {
+        $this->assertSame('/', homePathForRole('unknown'));
+    }
+
+    public function testRequireRoleAllowsMatchingRole(): void
+    {
+        $_SESSION['user_id']   = 1;
+        $_SESSION['user_role'] = 'owner';
+
+        // Не должно перенаправлять/завершать выполнение — роль разрешена.
+        requireRole('shift_admin', 'owner');
+
+        $this->assertTrue(true);
+    }
 }

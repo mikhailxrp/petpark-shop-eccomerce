@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 /**
  * @var string $pageTitle
+ * @var string $pageDescription
  * @var string $content Готовый HTML блока контента (собран через ob_start() во View)
  */
 ?>
@@ -13,6 +14,7 @@ declare(strict_types=1);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($pageTitle) ?></title>
+    <meta name="description" content="<?= e($pageDescription) ?>">
     <link rel="icon" href="/assets/img/heading-img.png">
 
     <link rel="stylesheet" href="/assets/css/bootstrap.min.css">

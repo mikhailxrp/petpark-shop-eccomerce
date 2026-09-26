@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-$pageTitle = 'PetPark — зоомагазин и центр ухода за питомцами';
+$pageTitle = seoTitle('generic');
+$pageDescription = seoDescription('generic');
 
 $content = '';
 
