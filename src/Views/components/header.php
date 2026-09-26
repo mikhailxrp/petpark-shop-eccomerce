@@ -70,7 +70,7 @@
                         </div>
                     </li>
                     <li class="navbar-dropdown menu-item-children">
-                        <a href="javascript:void(0)">Каталог</a>
+                        <a href="/catalog">Каталог</a>
                         <div class="dropdown">
                             <a href="#">Товары для кошек</a>
                             <a href="#">Товары для собак</a>
@@ -117,7 +117,7 @@
                 </ul>
             </li>
             <li class="menu-item-has-children">
-                <a href="JavaScript:void(0)">Каталог</a>
+                <a href="/catalog">Каталог</a>
                 <ul class="sub-menu">
                     <li><a href="#">Товары для кошек</a></li>
                     <li><a href="#">Товары для собак</a></li>

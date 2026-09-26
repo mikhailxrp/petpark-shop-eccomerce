@@ -55,3 +55,52 @@ ul.social-icon i svg {
     width: 24px;
     height: 24px;
 }
+
+/*
+ * style.css: `.items-number span { font-weight: 500; }` — в макете
+ * подпись "Sort By" перед селектом сортировки была голым <span>. У нас
+ * это <label for="catalog-sort"> (доступность — связь с select), тот
+ * же вес переносим на тег label.
+ */
+.items-number label {
+    font-weight: 500;
+}
+
+/*
+ * ul.category li:hover/.active — оригинальный макет (style.css/color.css)
+ * писал акцент как `ul.category li:hover span` — обычный descendant-
+ * селектор. В плоском демо-списке без Подкатегорий разницы не видно, но
+ * у нас Подкатегории вложены прямо внутрь родительского <li> (тот же li
+ * физически охватывает и вложенный <ul>), поэтому наведение на
+ * родительскую Категорию через этот селектор подсвечивало счётчики
+ * сразу у всех её Подкатегорий. Ограничиваем эффект прямым потомком
+ * (">") и явно гасим "протекание" на вложенный список.
+ */
+ul.category li.active {
+    border-color: #fa441d;
+}
+ul.category li.active > a > span,
+ul.category li:hover > a > span {
+    border-color: #fa441d;
+    background-color: #fa441d;
+    color: #fff;
+}
+ul.category li:hover ul.category li:not(:hover) > a > span {
+    border-color: #f2f2f2;
+    background-color: transparent;
+    color: #000;
+}
+
+/*
+ * .pagination li.active — в оригинальном макете (style.css/color.css)
+ * текущая страница ничем не выделена, только prev/next залиты жёлтым.
+ * Добавляем заливку primary-цветом по тому же принципу, что и активная
+ * Категория в сайдбаре (ul.category li.active выше) — иначе на странице
+ * каталога не видно, на какой странице пагинации находишься.
+ */
+.pagination li.active {
+    background-color: #fa441d;
+}
+.pagination li.active a {
+    color: #fff;
+}

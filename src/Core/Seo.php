@@ -17,6 +17,10 @@ if (!defined('SHOP_CITY')) {
     define('SHOP_CITY', 'Ростов-на-Дону');
 }
 
+if (!defined('APP_URL')) {
+    define('APP_URL', '');
+}
+
 function seoTitle(string $type, array $entity = []): string
 {
     $filled = trim((string) ($entity['seo_title'] ?? ''));
@@ -69,6 +73,38 @@ function seoDescription(string $type, array $entity = []): string
 function seoFormatPrice(int|float|string $price): string
 {
     return (string) (int) round((float) $price);
+}
+
+/**
+ * JSON-LD BreadcrumbList (FR-CAT-006) — из той же цепочки, что видимые
+ * хлебные крошки, не отдельный источник (dod-global.md, «SEO и GEO»).
+ *
+ * @param array<int, array{name: string, url: ?string}> $items Главная → ... → текущая страница
+ */
+function renderBreadcrumbSchema(array $items): string
+{
+    $itemListElement = [];
+    foreach (array_values($items) as $position => $item) {
+        $listItem = [
+            '@type' => 'ListItem',
+            'position' => $position + 1,
+            'name' => $item['name'],
+        ];
+        if (!empty($item['url'])) {
+            $listItem['item'] = APP_URL . $item['url'];
+        }
+        $itemListElement[] = $listItem;
+    }
+
+    $schema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'BreadcrumbList',
+        'itemListElement' => $itemListElement,
+    ];
+
+    return '<script type="application/ld+json">'
+        . json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        . '</script>';
 }
 
 function seoFirstWords(string $text, int $wordCount): string

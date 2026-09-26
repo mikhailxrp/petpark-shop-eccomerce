@@ -11,6 +11,19 @@ final class FunctionsTest extends TestCase
     protected function tearDown(): void
     {
         $_SESSION = [];
+        unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+    }
+
+    public function testIsAjaxRequestTrueForXmlHttpRequestHeader(): void
+    {
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+        $this->assertTrue(isAjaxRequest());
+    }
+
+    public function testIsAjaxRequestFalseWhenHeaderMissing(): void
+    {
+        unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+        $this->assertFalse(isAjaxRequest());
     }
 
     public function testNormalizeUserIdAcceptsPositiveInt(): void

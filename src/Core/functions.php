@@ -177,6 +177,16 @@ function input(string $key, mixed $default = ''): mixed
     return $_POST[$key] ?? $_GET[$key] ?? $default;
 }
 
+/**
+ * X-Requested-With ставит сам fetch()-вызов (public/assets/js/catalog.js) —
+ * браузер его не добавляет автоматически, поэтому по заголовку надёжно
+ * отличаем AJAX-запрос сортировки от обычного захода на страницу.
+ */
+function isAjaxRequest(): bool
+{
+    return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+}
+
 // ─── CSRF ───────────────────────────────────────────────────────────────
 
 function csrfToken(): string
