@@ -77,6 +77,8 @@ $pdo->exec("
         slug            VARCHAR(220) NOT NULL UNIQUE,
         description     TEXT NULL,
         is_active       TINYINT(1) NOT NULL DEFAULT 1,
+        is_featured     TINYINT(1) NOT NULL DEFAULT 0,
+        popularity_rank INT NULL,
         seo_title       VARCHAR(70) NULL,
         seo_description VARCHAR(160) NULL,
         created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -90,6 +92,22 @@ $pdo->exec("
             FOREIGN KEY (brand_id) REFERENCES brands (id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
+
+// is_featured/popularity_rank (ADR-014, planning-log.md) добавлены после
+// первого запуска install.php — на уже существующей БД CREATE TABLE IF NOT
+// EXISTS их не добавит, проверяем через information_schema и добавляем
+// колонки отдельно, чтобы повторный запуск оставался идемпотентным.
+foreach (['is_featured' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
+          'popularity_rank' => "INT NULL AFTER is_featured"] as $column => $definition) {
+    $exists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($exists === 0) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN {$column} {$definition}");
+    }
+}
 
 // ─── product_secondary_categories ──────────────────────────────────────
 // Вторая (необязательная) категория товара — ADR-002.
