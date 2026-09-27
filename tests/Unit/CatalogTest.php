@@ -328,4 +328,70 @@ final class CatalogTest extends TestCase
             'q'         => 'корм',
         ], $result);
     }
+
+    private function sampleVariants(): array
+    {
+        return [
+            ['id' => 10, 'price' => 990.0, 'discount_price' => null],
+            ['id' => 11, 'price' => 1200.0, 'discount_price' => 799.0],
+            ['id' => 12, 'price' => 500.0, 'discount_price' => null],
+        ];
+    }
+
+    public function testSelectVariantReturnsRequestedWhenPresent(): void
+    {
+        $variant = \catalogSelectVariant($this->sampleVariants(), 10);
+
+        $this->assertSame(10, $variant['id']);
+    }
+
+    public function testSelectVariantAcceptsRequestedIdAsNumericString(): void
+    {
+        $variant = \catalogSelectVariant($this->sampleVariants(), '11');
+
+        $this->assertSame(11, $variant['id']);
+    }
+
+    public function testSelectVariantFallsBackToCheapestEffectivePriceWhenRequestedIsNull(): void
+    {
+        // Вариант 12 (500, без Скидки) дешевле по эффективной цене, чем
+        // Вариант 11 (1200 → 799 со Скидкой) и Вариант 10 (990).
+        $variant = \catalogSelectVariant($this->sampleVariants(), null);
+
+        $this->assertSame(12, $variant['id']);
+    }
+
+    public function testSelectVariantFallsBackToCheapestWhenRequestedIdIsUnknown(): void
+    {
+        // Чужой/несуществующий id — Вариант не найден среди переданных
+        // (уже отфильтрованных по is_active=1 на уровне Model), поэтому
+        // применяется тот же дефолт, что и при отсутствии ?variant=.
+        $variant = \catalogSelectVariant($this->sampleVariants(), 999);
+
+        $this->assertSame(12, $variant['id']);
+    }
+
+    public function testSelectVariantFallsBackForGarbageRequestedId(): void
+    {
+        $variant = \catalogSelectVariant($this->sampleVariants(), 'DROP TABLE products');
+
+        $this->assertSame(12, $variant['id']);
+    }
+
+    public function testSelectVariantBreaksTiesByLowerId(): void
+    {
+        $variants = [
+            ['id' => 5, 'price' => 500.0, 'discount_price' => null],
+            ['id' => 3, 'price' => 500.0, 'discount_price' => null],
+        ];
+
+        $variant = \catalogSelectVariant($variants, null);
+
+        $this->assertSame(3, $variant['id']);
+    }
+
+    public function testSelectVariantReturnsNullForEmptyList(): void
+    {
+        $this->assertNull(\catalogSelectVariant([], 10));
+    }
 }

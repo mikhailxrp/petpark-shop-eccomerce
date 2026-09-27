@@ -1,7 +1,10 @@
 /*
  * PetPark — брендовый слой поверх шаблона Patte.
- * Правит только цвета/шрифты/логотип (screens.md — дизайн финальный),
- * структуру и интерактив вёрстки style.css/responsive.css не трогает.
+ * В основном правит цвета/шрифты/логотип и чинит баги вёрстки шаблона
+ * (screens.md — дизайн финальный, style.css/responsive.css не
+ * переписываем). Отдельные блоки, которых нет в самом макете Patte
+ * (например вкладки на карточке Товара) — тоже здесь, со своим CSS,
+ * а не в style.css.
  */
 
 :root {
@@ -149,6 +152,15 @@ select.nice-select::-ms-expand {
 }
 
 /*
+ * Тот же `.nice-select:before` (см. комментарий выше) — жёлтое кольцо
+ * и на переключателе Варианта карточки Товара (`.variant-select`,
+ * скриншот пользователя). Отключаем и здесь, тем же способом.
+ */
+.variant-select .nice-select:before {
+    display: none;
+}
+
+/*
  * nice-select.css задаёт базовому `.nice-select` `float: left` (расчёт
  * на несколько select'ов в один ряд). `.sidebar` — обычный блочный
  * контейнер без clearfix (`overflow`/`::after { clear: both }`), а до
@@ -231,5 +243,136 @@ select.nice-select::-ms-expand {
     .catalog-filters {
         margin-bottom: 40px;
     }
+}
+
+/*
+ * .variant-select (product.php, переключатель Варианта на карточке
+ * Товара) — тот же float-баг, что уже разобран выше для `.catalog-filters
+ * .nice-select`: nice-select.css задаёт базовому `.nice-select`
+ * `float: left`, а `.variant-select` — обычный блочный div без clearfix.
+ * Floated ребёнок не учитывается в высоте родителя — `.variant-select`
+ * схлопывается, а следующий блок `.quantity` рендерится не под ним, а
+ * встык с ещё «висящим» float (скриншот пользователя — поле
+ * «Количество» вылезает за пределы карточки вправо). Убираем float
+ * только для этого select'а, как и для фильтров каталога.
+ */
+.variant-select .nice-select {
+    float: none;
+}
+
+/*
+ * .pd-description (product.php) — описание Товара под заголовком:
+ * этого блока нет в оригинальном макете (product-details.html), поэтому
+ * своего правила style.css/color.css для него тоже нет, только обычные
+ * браузерные отступы <p>. Лёгкая читаемость по образцу остального
+ * текста карточки — приглушённый цвет, увеличенный line-height.
+ */
+.pd-description {
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+/*
+ * .pd-video-placeholder (product.php, блок «Уход и сервис» — заглушка
+ * вместо видео из макета) — причина «съехавшего» декоративного кольца
+ * на скриншоте пользователя: `style.css` рисует его 510×510px
+ * (`svg.golo`, фиксированные width/height), рассчитанное на реальное
+ * фото макета 468×468 (`.looking.video img { width: auto }` — держит
+ * натуральный размер). Раньше здесь стояла общая заглушка каталога
+ * `food-1.png` — маленькая (217×255), кольцо в разы больше её и
+ * торчало во все стороны, залезая в следующую секцию. Пользователь
+ * явно попросил не переиспользовать фото Товара под видео — вместо
+ * ещё одной картинки не по размеру даём кружок нужного диаметра
+ * (~90% от 510px кольца, тот же принцип, что у оригинального фото
+ * макета) без обмана, что это реальный контент.
+ */
+.pd-video-placeholder {
+    width: min(460px, 100%);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background-color: #fff8e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    color: #940c69;
+    font-size: 64px;
+}
+
+/*
+ * .pd-video-placeholder — 2 бага с формой круга на разных ширинах
+ * (скриншоты пользователя, 320-768px и 1024-1200px):
+ *
+ * 1. Раньше были заданы фиксированные `width: 460px; height: 460px;
+ *    max-width: 100%` — `max-width` сжимает ширину у́же 460px, когда
+ *    колонка сама уже (мобильные и `col-lg-5` на 1024-1200px), а
+ *    `height` остаётся 460px без изменений — круг превращался в овал.
+ *    Заменено на `width: min(460px, 100%); aspect-ratio: 1 / 1` —
+ *    высота всегда равна фактической ширине, круг остаётся кругом на
+ *    любой ширине контейнера, а не только ровно при 460px+.
+ *
+ * 2. `.looking.video { justify-content: end }` (`style.css`) рассчитан
+ *    на десктопный ряд из 2 колонок (макет) — круг прижат к правому
+ *    краю СВОЕЙ колонки, что на десктопе выглядит нормально. Ниже
+ *    Bootstrap lg-брейкпоинта (992px, `col-lg-*` схлопывается в один
+ *    блок на всю ширину) тот же `justify-content: end` прижимает круг
+ *    уже не к краю узкой колонки, а к правому краю всей строки — на
+ *    576-991px, где круг (макс. 460px) уже своего контейнера
+ *    (516-696px), получается явная асимметрия (много пустого места
+ *    слева, круг прижат вправо). Центрируем только в этом диапазоне —
+ *    на ≥992px (десктоп, 2 колонки) поведение макета не трогаем.
+ */
+@media (max-width: 991px) {
+    .looking.video {
+        justify-content: center;
+    }
+}
+
+/*
+ * .pd-tabs/.pd-tab-content (product.php, вкладки «Характеристики»/
+ * «Описание») — своего блока в макете product-details.html нет
+ * (style.css `.nav-tabs` не стилизован), поэтому оформление полностью
+ * своё, под фирменные цвета сайта, а не дефолтный Bootstrap. Активная
+ * вкладка — подчёркивание тем же primary-цветом, что у активной
+ * Категории/пагинации (`ul.category li.active`/`.pagination li.active`
+ * выше в этом файле).
+ */
+.pd-tabs {
+    display: flex;
+    gap: 40px;
+    border-bottom: 1px solid #f2f2f2;
+    margin-bottom: 30px;
+}
+.pd-tabs .nav-link {
+    background: none;
+    border: none;
+    padding: 12px 0;
+    font-size: 20px;
+    font-weight: bold;
+    color: #999;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+}
+.pd-tabs .nav-link.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+.pd-specs-table th,
+.pd-specs-table td {
+    padding: 14px 10px;
+}
+.pd-specs-table th {
+    width: 240px;
+    font-weight: bold;
+}
+.pd-tab-subheading {
+    font-weight: bold;
+    margin-top: 30px;
+    margin-bottom: 10px;
+}
+.pd-tab-content .pd-description {
+    margin-bottom: 0;
 }
 

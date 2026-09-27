@@ -79,6 +79,58 @@ function catalogEffectivePrice(float $price, ?float $discountPrice): float
 }
 
 /**
+ * Выбор Варианта товара для Карточки (FR-CARD-001): запрошенный
+ * `?variant=` id, если он есть среди переданных Вариантов, иначе —
+ * Вариант с минимальной эффективной ценой (тот же принцип, что
+ * каталожная цена листинга, database.md). $variants должны уже быть
+ * отфильтрованы по `is_active = 1` на уровне Model — сюда неактивные
+ * не попадают, поэтому запрос на неактивный/чужой/несуществующий id
+ * не найдёт совпадения и просто попадёт в дефолт.
+ *
+ * @param array<int, array{id: int, price: float, discount_price: ?float}> $variants Только активные Варианты одного Товара
+ */
+function catalogSelectVariant(array $variants, int|string|null $requestedVariantId): ?array
+{
+    if ($variants === []) {
+        return null;
+    }
+
+    if ($requestedVariantId !== null && $requestedVariantId !== '') {
+        $requestedId = is_int($requestedVariantId)
+            ? $requestedVariantId
+            : (ctype_digit((string) $requestedVariantId) ? (int) $requestedVariantId : null);
+
+        if ($requestedId !== null) {
+            foreach ($variants as $variant) {
+                if ((int) $variant['id'] === $requestedId) {
+                    return $variant;
+                }
+            }
+        }
+    }
+
+    $default = $variants[0];
+    $defaultPrice = catalogEffectivePrice(
+        (float) $default['price'],
+        $default['discount_price'] !== null ? (float) $default['discount_price'] : null
+    );
+
+    foreach ($variants as $variant) {
+        $price = catalogEffectivePrice(
+            (float) $variant['price'],
+            $variant['discount_price'] !== null ? (float) $variant['discount_price'] : null
+        );
+
+        if ($price < $defaultPrice || ($price === $defaultPrice && (int) $variant['id'] < (int) $default['id'])) {
+            $default = $variant;
+            $defaultPrice = $price;
+        }
+    }
+
+    return $default;
+}
+
+/**
  * Дерево Категорий из плоского списка (parent_id) — для сайдбара каталога.
  *
  * @param array<int, array{id: int, parent_id: ?int}> $categories

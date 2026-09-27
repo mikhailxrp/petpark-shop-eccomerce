@@ -62,8 +62,10 @@ $footerVariant ??= 'two';
         <span id="progress-value"><i class="fa-solid fa-up-long"></i></span>
     </div>
 
+    <script src="/assets/js/bootstrap.min.js"></script>
     <script src="/assets/js/jquery.nice-select.min.js"></script>
     <script src="/assets/js/custom.js"></script>
     <script src="/assets/js/catalog.js"></script>
+    <script src="/assets/js/product-variants.js"></script>
 </body>
 </html>

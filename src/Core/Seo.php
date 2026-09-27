@@ -113,6 +113,53 @@ function renderBreadcrumbSchema(array $items): string
         . '</script>';
 }
 
+/**
+ * JSON-LD Product (FR-CARD, dod-global.md «SEO и GEO») — цена и
+ * availability передаются уже посчитанными во View (тот же
+ * $effectivePrice/$status, что рисует видимую цену/наличие), а не
+ * пересчитываются здесь заново из сырых данных Варианта — иначе
+ * возможно разойдётся с тем, что видит покупатель.
+ *
+ * @param array{name: string, description: ?string, sku: string} $entity
+ * @param string $availabilityStatus 'in'|'low'|'out' — catalogAvailabilityStatus()
+ * @param array<int, string> $imageUrls Абсолютные URL фото Товара
+ */
+function renderProductSchema(
+    array $entity,
+    float $price,
+    string $availabilityStatus,
+    string $productUrl,
+    array $imageUrls = []
+): string {
+    $schema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Product',
+        'name' => $entity['name'],
+        'sku' => $entity['sku'],
+        'url' => APP_URL . $productUrl,
+        'offers' => [
+            '@type' => 'Offer',
+            'url' => APP_URL . $productUrl,
+            'priceCurrency' => 'RUB',
+            'price' => number_format($price, 2, '.', ''),
+            'availability' => $availabilityStatus === 'out'
+                ? 'https://schema.org/OutOfStock'
+                : 'https://schema.org/InStock',
+        ],
+    ];
+
+    if (($entity['description'] ?? '') !== '') {
+        $schema['description'] = $entity['description'];
+    }
+    if ($imageUrls !== []) {
+        $schema['image'] = $imageUrls;
+    }
+
+    return '<script type="application/ld+json">'
+        . json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        . '</script>';
+}
+
 function seoFirstWords(string $text, int $wordCount): string
 {
     $text = trim($text);

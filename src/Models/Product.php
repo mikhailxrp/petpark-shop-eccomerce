@@ -298,6 +298,133 @@ function productActiveBrands(): array
 }
 
 /**
+ * Товар по slug для Карточки (phase-1.md, Таск 4) — только активный,
+ * иначе Controller отдаёт 404 (dod-global.md).
+ *
+ * @return array<string, mixed>|null
+ */
+function productFindBySlug(string $slug): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, category_id, name, slug, description, seo_title, seo_description
+        FROM products
+        WHERE slug = ? AND is_active = 1
+    ');
+    $stmt->execute([$slug]);
+    $product = $stmt->fetch();
+
+    return $product !== false ? $product : null;
+}
+
+/**
+ * Активные Варианты Товара для переключателя на Карточке (FR-CARD-001) —
+ * упорядочены по эффективной цене, чтобы совпадать с дефолтом
+ * catalogSelectVariant() (Core/Catalog.php).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productVariantsForProduct(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, sku, price, discount_price, stock_quantity, reserved_quantity
+        FROM product_variants
+        WHERE product_id = ? AND is_active = 1
+        ORDER BY IFNULL(discount_price, price) ASC, id ASC
+    ');
+    $stmt->execute([$productId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Характеристики Вариантов (вес/вкус и т.п., ADR-005) для набора
+ * Вариантов — группируются по variant_id, для сборки подписи
+ * переключателя («2 кг, курица», тот же формат, что
+ * `order_items.variant_label`, database.md).
+ *
+ * @param array<int, int> $variantIds
+ * @return array<int, array<int, string>> variant_id => список attr_value по порядку attr_name
+ */
+function productVariantAttributesForVariants(array $variantIds): array
+{
+    if ($variantIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($variantIds), '?'));
+    $stmt = getPdo()->prepare("
+        SELECT variant_id, attr_name, attr_value
+        FROM product_variant_attributes
+        WHERE variant_id IN ({$placeholders})
+        ORDER BY variant_id, attr_name
+    ");
+    $stmt->execute(array_values($variantIds));
+
+    $attributes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $attributes[(int) $row['variant_id']][] = $row['attr_value'];
+    }
+
+    return $attributes;
+}
+
+/**
+ * Похожие товары (FR-CARD-004) — $categoryIds передаются Controller'ом
+ * как поддерево корневой Категории (catalogDescendantCategoryIds() от
+ * корня цепочки, тот же принцип «родитель включает Подкатегории», что
+ * у листинга каталога): в текущих данных (Таск 1) у каждой конечной
+ * Подкатегории ровно 1 Товар, поиск похожих строго по своей же
+ * Подкатегории всегда возвращал бы пусто. Форма строки — та же, что
+ * productListByFilters(), чтобы переиспользовать
+ * components/product-card.php без изменений.
+ *
+ * @param array<int, int> $categoryIds
+ * @return array<int, array<string, mixed>>
+ */
+function productSimilarByCategory(array $categoryIds, int $excludeProductId, int $limit): array
+{
+    if ($categoryIds === []) {
+        return [];
+    }
+
+    $limit = (int) $limit;
+    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+
+    $stmt = getPdo()->prepare("
+        SELECT
+            p.id, p.name, p.slug,
+            c.name AS category_name,
+            v.price, v.discount_price, v.stock_quantity, v.reserved_quantity,
+            img.path AS image_path
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        JOIN (
+            SELECT product_id, price, discount_price, stock_quantity, reserved_quantity,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY product_id
+                       ORDER BY IFNULL(discount_price, price) ASC, id ASC
+                   ) AS rn
+            FROM product_variants
+            WHERE is_active = 1
+        ) v ON v.product_id = p.id AND v.rn = 1
+        LEFT JOIN (
+            SELECT product_id, path,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY product_id
+                       ORDER BY is_main DESC, sort_order ASC, id ASC
+                   ) AS rn
+            FROM product_images
+        ) img ON img.product_id = p.id AND img.rn = 1
+        WHERE p.is_active = 1 AND p.category_id IN ({$placeholders}) AND p.id != ?
+        ORDER BY p.popularity_rank IS NULL, p.popularity_rank ASC, p.id ASC
+        LIMIT {$limit}
+    ");
+    $stmt->execute([...array_values($categoryIds), $excludeProductId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Границы цены по каталогу (минимальная/максимальная эффективная цена
  * среди активных Вариантов активных Товаров) — задают min/max
  * range-слайдера фильтра цены (FR-CAT-003).
