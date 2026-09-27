@@ -9,11 +9,12 @@ declare(strict_types=1);
  * сортировки без перезагрузки страницы. Возвращается вместо catalog.php,
  * когда CatalogController::show() видит заголовок X-Requested-With.
  * @var array<int, array<string, mixed>> $products
- * @var array<int, array<string, mixed>> $categoryChain
  * @var int    $total
  * @var string $sort
  * @var int    $page
  * @var int    $totalPages
+ * @var string $actionPath Базовый URL без query — /catalog[/{cat}[/{sub}]] или /search (Таск 3)
+ * @var array<string, mixed> $queryState Текущие фильтры/поиск (Таск 3)
  */
 
 include __DIR__ . '/components/catalog-results.php';

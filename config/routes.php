@@ -16,6 +16,7 @@ return [
         '/catalog'                => ['CatalogController', 'index'],
         '/catalog/{cat}'          => ['CatalogController', 'category'],
         '/catalog/{cat}/{sub}'    => ['CatalogController', 'subcategory'],
+        '/search'                 => ['SearchController', 'index'],
     ],
     'POST' => [
         '/login'  => ['AuthController', 'login'],

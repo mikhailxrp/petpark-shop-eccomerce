@@ -211,3 +211,188 @@ function catalogBreadcrumbUrls(array $slugChain): array
 
     return $urls;
 }
+
+// Характеристики, реально показанные в сайдбаре фильтра — остальные
+// (вид_животного, Материал, Особенность, Размер, Цвет) убраны по
+// просьбе пользователя: слишком длинный сайдбар чекбоксов, эти
+// характеристики для фильтра избыточны. «Объём/размер» тоже убран
+// (доп. правка) — эвристика сида (Таск 1) свалила в одну характеристику
+// вес/объём/линейные размеры/количество разных Товаров по формальному
+// признаку «единица измерения в скобках», а не по смыслу (44 значения:
+// «1кг», «10л», «40x40см», «100шт», «без запаха», «палочка» — не общая
+// ось фильтрации). Отбор здесь ограничивает и то, что принимает
+// catalogNormalizeAttrFilter() (через $knownAttributes, см.
+// productAttributeFacets()) — не только то, что показано в сайдбаре.
+const CATALOG_FILTERABLE_ATTRIBUTES = ['Вкус'];
+
+// Значения-шум внутри разрешённой Характеристики — та же эвристика сида
+// (Таск 1): для части Товаров без явного вкуса (напр. добавки/таблетки)
+// в attr_value попала дозировка/фасовка, а не вкус (доп. правка по
+// скриншоту пользователя). Остальные значения «Вкус» (говядина, курица,
+// лосось и т.д.) — настоящие вкусы, отбрасывать всю Характеристику
+// незачем — убираем по конкретному значению.
+const CATALOG_ATTRIBUTE_VALUE_DENYLIST = [
+    'Вкус' => ['100г тюбик', '40г таблетки'],
+];
+
+/**
+ * Сужает список Характеристик из БД (productAttributeFacets()) до тех,
+ * что показываются в сайдбаре фильтра (CATALOG_FILTERABLE_ATTRIBUTES) —
+ * порядок и состав сайдбара, а не всё, что в принципе есть в БД. Внутри
+ * оставшихся Характеристик дополнительно убирает значения-шум
+ * (CATALOG_ATTRIBUTE_VALUE_DENYLIST).
+ *
+ * @param array<string, array<int, string>> $facets
+ * @return array<string, array<int, string>>
+ */
+function catalogFilterableAttributeFacets(array $facets): array
+{
+    $result = [];
+    foreach (CATALOG_FILTERABLE_ATTRIBUTES as $attrName) {
+        if (!isset($facets[$attrName])) {
+            continue;
+        }
+
+        $denylist = CATALOG_ATTRIBUTE_VALUE_DENYLIST[$attrName] ?? [];
+        $values = $denylist === []
+            ? $facets[$attrName]
+            : array_values(array_diff($facets[$attrName], $denylist));
+
+        if ($values !== []) {
+            $result[$attrName] = $values;
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Разбор Характеристик фильтра каталога/поиска (FR-CAT-002) из
+ * $_GET['attr'] (attr_name => значение|список значений). Оставляет
+ * только attr_name и значения, реально существующие в БД
+ * ($knownAttributes — productAttributeFacets()) — против инъекций и
+ * мусорных query-параметров.
+ *
+ * @param mixed $raw
+ * @param array<string, array<int, string>> $knownAttributes attr_name => допустимые значения
+ * @return array<string, array<int, string>>
+ */
+function catalogNormalizeAttrFilter(mixed $raw, array $knownAttributes): array
+{
+    if (!is_array($raw)) {
+        return [];
+    }
+
+    $result = [];
+    foreach ($raw as $attrName => $values) {
+        if (!is_string($attrName) || !isset($knownAttributes[$attrName])) {
+            continue;
+        }
+
+        $values = is_array($values) ? $values : [$values];
+        $values = array_values(array_filter($values, 'is_string'));
+        $values = array_values(array_intersect($values, $knownAttributes[$attrName]));
+
+        if ($values !== []) {
+            $result[$attrName] = $values;
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Разбор Бренда фильтра из $_GET['brand'] — только slug'и, реально
+ * существующие среди активных Товаров ($knownSlugs).
+ *
+ * @param mixed $raw
+ * @param array<int, string> $knownSlugs
+ * @return array<int, string>
+ */
+function catalogNormalizeBrandFilter(mixed $raw, array $knownSlugs): array
+{
+    if ($raw === null) {
+        return [];
+    }
+
+    $values = is_array($raw) ? $raw : [$raw];
+    $values = array_values(array_filter($values, 'is_string'));
+
+    return array_values(array_intersect($values, $knownSlugs));
+}
+
+/**
+ * Граница диапазона цены (`price_min`/`price_max`, FR-CAT-003) —
+ * неотрицательное число, иначе граница отсутствует (фильтр не
+ * применяется, а не падает с ошибкой на мусорном вводе).
+ */
+function catalogNormalizePriceBound(mixed $raw): ?float
+{
+    if (is_int($raw) || is_float($raw)) {
+        return $raw >= 0 ? (float) $raw : null;
+    }
+
+    if (is_string($raw) && is_numeric($raw)) {
+        $value = (float) $raw;
+        return $value >= 0 ? $value : null;
+    }
+
+    return null;
+}
+
+/**
+ * Нормализация поискового запроса (FR-SRCH-001): обрезка пробелов и
+ * длины (200 символов — как products.name); короче 2 символов
+ * (включая запись из не-строки) — поиск не выполняется, возвращается
+ * пустая строка.
+ */
+function catalogNormalizeSearchQuery(mixed $raw): string
+{
+    if (!is_string($raw)) {
+        return '';
+    }
+
+    $query = mb_substr(trim($raw), 0, 200);
+
+    return mb_strlen($query) >= 2 ? $query : '';
+}
+
+/**
+ * Текущее состояние фильтра/поиска как query-параметры — общий
+ * источник для ссылок пагинации, скрытых полей формы сортировки
+ * (сохраняются при переключении сортировки/страницы, FR-CAT-005) и
+ * fetch() в public/assets/js/catalog.js. Пустые/неактивные значения не
+ * попадают в результат — иначе в URL появлялись бы пустые
+ * `?price_min=&price_max=`.
+ *
+ * @param array{
+ *     attr?: array<string, array<int, string>>,
+ *     brand?: array<int, string>,
+ *     price_min?: float|null,
+ *     price_max?: float|null,
+ *     q?: string
+ * } $filter
+ * @return array<string, mixed>
+ */
+function catalogFilterQueryParams(array $filter): array
+{
+    $query = [];
+
+    if (($filter['attr'] ?? []) !== []) {
+        $query['attr'] = $filter['attr'];
+    }
+    if (($filter['brand'] ?? []) !== []) {
+        $query['brand'] = $filter['brand'];
+    }
+    if (($filter['price_min'] ?? null) !== null) {
+        $query['price_min'] = $filter['price_min'];
+    }
+    if (($filter['price_max'] ?? null) !== null) {
+        $query['price_max'] = $filter['price_max'];
+    }
+    if (($filter['q'] ?? '') !== '') {
+        $query['q'] = $filter['q'];
+    }
+
+    return $query;
+}

@@ -130,3 +130,26 @@
         <a href="JavaScript:void(0)" id="res-cross"></a>
     </div>
 </header>
+<div class="search-popup">
+    <button class="close-search style-two" aria-label="Закрыть поиск">
+        <span class="flaticon-multiply">
+            <i class="far fa-times-circle"></i>
+        </span>
+    </button>
+    <button class="close-search" aria-label="Закрыть поиск">
+        <i class="fa-solid fa-arrow-right"></i>
+    </button>
+    <form method="get" action="/search">
+        <div class="form-group">
+            <input
+                type="search"
+                name="q"
+                value=""
+                placeholder="Поиск товаров..."
+                minlength="2"
+                required
+            >
+            <button type="submit"><i class="fa fa-search"></i></button>
+        </div>
+    </form>
+</div>

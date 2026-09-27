@@ -15,6 +15,15 @@ declare(strict_types=1);
  * @var int    $page
  * @var int    $totalPages
  * @var bool   $hasFilters
+ * @var string $actionPath Базовый URL без query — /catalog[/{cat}[/{sub}]] (Таск 3)
+ * @var array<string, mixed> $queryState Текущие фильтры (Таск 3)
+ * @var array<string, array<int, string>> $attributeFacets
+ * @var array<int, array{slug: string, name: string}> $brands
+ * @var array<string, array<int, string>> $selectedAttrs
+ * @var array<int, string> $selectedBrands
+ * @var float|null $priceMin
+ * @var float|null $priceMax
+ * @var array{min: float, max: float} $priceBounds
  */
 
 $seoType = $category !== null ? 'category' : 'generic';
@@ -23,8 +32,7 @@ $pageDescription = seoDescription($seoType, $category ?? []);
 $pageHeading = $category['name'] ?? 'Каталог';
 
 $slugChain = array_column($categoryChain, 'slug');
-$canonicalPath = catalogCanonicalPath($slugChain);
-$canonicalUrl = APP_URL . $canonicalPath;
+$canonicalUrl = APP_URL . $actionPath;
 $robotsNoindex = $hasFilters;
 $footerVariant = 'catalog';
 
@@ -87,6 +95,7 @@ ob_start();
                     include __DIR__ . '/components/category-tree.php';
                     ?>
                 </div>
+                <?php include __DIR__ . '/components/catalog-filters.php'; ?>
             </div>
             <div class="col-lg-9" id="catalog-results">
                 <?php include __DIR__ . '/components/catalog-results.php'; ?>

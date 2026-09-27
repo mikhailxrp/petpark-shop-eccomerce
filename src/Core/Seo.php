@@ -37,6 +37,9 @@ function seoTitle(string $type, array $entity = []): string
         ),
         'category' => sprintf('%s — купить в %s, %s', (string) $entity['name'], SHOP_NAME, SHOP_CITY),
         'content_page' => (string) ($entity['title'] ?? SHOP_NAME),
+        'search' => ((string) ($entity['query'] ?? '')) !== ''
+            ? sprintf('Поиск: «%s» — %s', (string) $entity['query'], SHOP_NAME)
+            : sprintf('Поиск товаров — %s', SHOP_NAME),
         default => sprintf('%s — зоомагазин и центр ухода за питомцами, %s', SHOP_NAME, SHOP_CITY),
     };
 }
@@ -62,6 +65,9 @@ function seoDescription(string $type, array $entity = []): string
             SHOP_CITY
         ),
         'content_page' => seoFirstWords((string) ($entity['body'] ?? ''), 25),
+        'search' => ((string) ($entity['query'] ?? '')) !== ''
+            ? sprintf('Результаты поиска «%s» в каталоге %s, %s.', (string) $entity['query'], SHOP_NAME, SHOP_CITY)
+            : sprintf('Поиск товаров в каталоге %s, %s.', SHOP_NAME, SHOP_CITY),
         default => sprintf(
             '%s — доставка и самовывоз, груминг и ветконсультации, %s.',
             SHOP_NAME,

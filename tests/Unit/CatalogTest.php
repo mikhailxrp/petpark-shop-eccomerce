@@ -176,4 +176,156 @@ final class CatalogTest extends TestCase
 
         $this->assertSame(0, $counts[1]);
     }
+
+    public function testFilterableAttributeFacetsKeepsOnlyWhitelist(): void
+    {
+        $facets = [
+            'Цвет' => ['красный'],
+            'Объём/размер' => ['1кг', '2кг'],
+            'вид_животного' => ['Кошка'],
+            'Вкус' => ['курица'],
+        ];
+
+        $this->assertSame(
+            ['Вкус' => ['курица']],
+            \catalogFilterableAttributeFacets($facets)
+        );
+    }
+
+    public function testFilterableAttributeFacetsDropsDenylistedValues(): void
+    {
+        $facets = ['Вкус' => ['курица', '100г тюбик', '40г таблетки', 'говядина']];
+
+        $this->assertSame(
+            ['Вкус' => ['курица', 'говядина']],
+            \catalogFilterableAttributeFacets($facets)
+        );
+    }
+
+    public function testFilterableAttributeFacetsDropsAttributeIfOnlyDenylistedValuesLeft(): void
+    {
+        $facets = ['Вкус' => ['100г тюбик', '40г таблетки']];
+
+        $this->assertSame([], \catalogFilterableAttributeFacets($facets));
+    }
+
+    public function testFilterableAttributeFacetsSkipsMissingWhitelistedEntries(): void
+    {
+        $this->assertSame([], \catalogFilterableAttributeFacets(['Цвет' => ['красный']]));
+    }
+
+    private const KNOWN_ATTRIBUTES = [
+        'вид_животного' => ['кошка', 'собака', 'птица'],
+        'Цвет'          => ['красный', 'синий'],
+    ];
+
+    public function testNormalizeAttrFilterDropsUnknownAttrName(): void
+    {
+        $result = \catalogNormalizeAttrFilter(['возраст' => ['котёнок']], self::KNOWN_ATTRIBUTES);
+
+        $this->assertSame([], $result);
+    }
+
+    public function testNormalizeAttrFilterDropsUnknownValues(): void
+    {
+        $result = \catalogNormalizeAttrFilter(
+            ['вид_животного' => ['кошка', 'DROP TABLE products']],
+            self::KNOWN_ATTRIBUTES
+        );
+
+        $this->assertSame(['вид_животного' => ['кошка']], $result);
+    }
+
+    public function testNormalizeAttrFilterPromotesSingleStringToArray(): void
+    {
+        $result = \catalogNormalizeAttrFilter(['вид_животного' => 'кошка'], self::KNOWN_ATTRIBUTES);
+
+        $this->assertSame(['вид_животного' => ['кошка']], $result);
+    }
+
+    public function testNormalizeAttrFilterKeepsMultipleValuesOfOneCharacteristic(): void
+    {
+        $result = \catalogNormalizeAttrFilter(
+            ['вид_животного' => ['кошка', 'собака'], 'Цвет' => ['красный']],
+            self::KNOWN_ATTRIBUTES
+        );
+
+        $this->assertSame(
+            ['вид_животного' => ['кошка', 'собака'], 'Цвет' => ['красный']],
+            $result
+        );
+    }
+
+    public function testNormalizeAttrFilterIgnoresNonArrayInput(): void
+    {
+        $this->assertSame([], \catalogNormalizeAttrFilter('кошка', self::KNOWN_ATTRIBUTES));
+        $this->assertSame([], \catalogNormalizeAttrFilter(null, self::KNOWN_ATTRIBUTES));
+    }
+
+    public function testNormalizeBrandFilterDropsUnknownSlugs(): void
+    {
+        $result = \catalogNormalizeBrandFilter(['royal-canin', 'not-a-brand'], ['royal-canin', 'purina']);
+
+        $this->assertSame(['royal-canin'], $result);
+    }
+
+    public function testNormalizeBrandFilterPromotesSingleStringToArray(): void
+    {
+        $result = \catalogNormalizeBrandFilter('royal-canin', ['royal-canin']);
+
+        $this->assertSame(['royal-canin'], $result);
+    }
+
+    public function testNormalizeBrandFilterHandlesMissingInput(): void
+    {
+        $this->assertSame([], \catalogNormalizeBrandFilter(null, ['royal-canin']));
+    }
+
+    public function testNormalizePriceBoundAcceptsNumericValues(): void
+    {
+        $this->assertSame(100.0, \catalogNormalizePriceBound('100'));
+        $this->assertSame(99.5, \catalogNormalizePriceBound(99.5));
+        $this->assertSame(0.0, \catalogNormalizePriceBound(0));
+    }
+
+    public function testNormalizePriceBoundRejectsGarbage(): void
+    {
+        $this->assertNull(\catalogNormalizePriceBound('abc'));
+        $this->assertNull(\catalogNormalizePriceBound(-10));
+        $this->assertNull(\catalogNormalizePriceBound(null));
+        $this->assertNull(\catalogNormalizePriceBound(['100']));
+    }
+
+    public function testNormalizeSearchQueryTrimsAndRequiresMinimumLength(): void
+    {
+        $this->assertSame('корм', \catalogNormalizeSearchQuery('  корм  '));
+        $this->assertSame('', \catalogNormalizeSearchQuery('к'));
+        $this->assertSame('', \catalogNormalizeSearchQuery(''));
+        $this->assertSame('', \catalogNormalizeSearchQuery(null));
+    }
+
+    public function testFilterQueryParamsOmitsEmptyValues(): void
+    {
+        $this->assertSame([], \catalogFilterQueryParams([
+            'attr' => [], 'brand' => [], 'price_min' => null, 'price_max' => null, 'q' => '',
+        ]));
+    }
+
+    public function testFilterQueryParamsKeepsActiveValues(): void
+    {
+        $result = \catalogFilterQueryParams([
+            'attr'      => ['вид_животного' => ['кошка']],
+            'brand'     => ['royal-canin'],
+            'price_min' => 100.0,
+            'price_max' => null,
+            'q'         => 'корм',
+        ]);
+
+        $this->assertSame([
+            'attr'      => ['вид_животного' => ['кошка']],
+            'brand'     => ['royal-canin'],
+            'price_min' => 100.0,
+            'q'         => 'корм',
+        ], $result);
+    }
 }

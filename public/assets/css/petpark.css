@@ -104,3 +104,132 @@ ul.category li:hover ul.category li:not(:hover) > a > span {
 .pagination li.active a {
     color: #fff;
 }
+
+/*
+ * jquery.nice-select.min.js оборачивает <select class="nice-select"> в
+ * div сразу после document ready — но пока (или если) это не произошло
+ * (JS ещё не выполнился/заблокирован), в разметке виден сам <select>.
+ * .nice-select:after (стрелка, nice-select.css) не отображается на самом
+ * <select> — ::after не поддерживается на replaced-элементах в Chrome —
+ * поэтому без сброса нативного appearance браузер поверх border-radius/
+ * border из .nice-select рисует свою кнопку раскрытия (в Chrome/Windows
+ * это отдельный кружок со стрелкой), не вписанную в рамку .sidebar.
+ * Сбрасываем appearance и рисуем свою стрелку фоновым SVG — на случай,
+ * если JS ещё не отработал (см. также правило про `:before` ниже —
+ * основная причина жёлтого кружка на скриншоте была не в этом).
+ */
+select.nice-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    max-width: 100%;
+    background-repeat: no-repeat;
+    background-position: right 18px center;
+    background-size: 10px 6px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999999'/%3E%3C/svg%3E");
+}
+select.nice-select::-ms-expand {
+    display: none;
+}
+
+/*
+ * Настоящая причина жёлтого кружка со стрелкой, выходящего за рамку
+ * .sidebar (скриншот пользователя): style.css задаёт `.nice-select:before`
+ * без привязки к `.Advice` — декоративное кольцо 40×40px, рассчитанное
+ * на высокий (50px) поисковый select `.looking form .nice-select.Advice`
+ * из макета (ещё не собран в проекте), а не на обычный select высотой
+ * 42px. Правило действует на ЛЮБОЙ `.nice-select`, поэтому кольцо
+ * появлялось и на наших узких фильтрах Вкус/Объём-размер. Отключаем
+ * только для фильтров каталога/поиска (`.catalog-filters`) — у select
+ * сортировки (`#catalog-sort.nice-select.Advice`) то же кольцо, но это
+ * отдельная зона вне текущего запроса пользователя, не трогаем здесь.
+ */
+.catalog-filters .nice-select:before {
+    display: none;
+}
+
+/*
+ * nice-select.css задаёт базовому `.nice-select` `float: left` (расчёт
+ * на несколько select'ов в один ряд). `.sidebar` — обычный блочный
+ * контейнер без clearfix (`overflow`/`::after { clear: both }`), а до
+ * этого таска внутри `.sidebar` floated-элементов не было (только `ul`),
+ * поэтому проблема не проявлялась. Floated child не учитывается в высоте
+ * родителя — жёлтая рамка `.sidebar` схлопывается по немодифицированному
+ * контенту (`h3`/`.boder-bar`), а сам select виден уже за её пределами.
+ * Убираем float только для select'ов фильтров — блочный элемент сам
+ * попадает в нормальный поток и корректно учитывается в высоте `.sidebar`.
+ */
+.catalog-filters .nice-select {
+    float: none;
+}
+
+/*
+ * .price-wrap #one/#two (style.css) — фиксированная width: 30px,
+ * рассчитанная на 2-3-значные цены демо-макета ($50 / $150). Реальные
+ * цены каталога — до 4 знаков (напр. 6750 ₽), не помещаются в 30px и
+ * обрезаются (скриншот пользователя — вместо "6750" видно "675").
+ * `ch` — ширина в цифровых символах текущего шрифта, а не фиксированный
+ * px, растягивается вместе с ценой само по себе.
+ */
+.catalog-filters .price-wrap #one,
+.catalog-filters .price-wrap #two {
+    width: 5ch;
+}
+
+/*
+ * header (style.css) — position: absolute, не занимает место в потоке.
+ * /catalog очищает её через .banner (padding-top: 190px) перед
+ * .products-section; на /search .products-section идёт первой секцией
+ * страницы, и .gap (padding-top: 120px, ещё меньше на узких экранах)
+ * меньше реальной высоты шапки (144px на десктопе с top-bar) — заголовок
+ * «Результаты поиска» перекрывался шапкой (скриншот пользователя).
+ * Отступ .banner уже подобран под эту же шапку в остальных местах сайта —
+ * переиспользуем те же значения только для первой секции /search.
+ */
+.search-hero {
+    padding-top: 190px;
+}
+@media (max-width: 1200px) {
+    .search-hero {
+        padding-top: 100px;
+    }
+}
+
+/*
+ * .items-number .nice-select.Advice (style.css) — жёлтая пилюля
+ * сортировки, фиксированная width: 240px + margin-left: 10px, в одну
+ * строку с лейблом «Сортировка» (`.items-number form` — bootstrap
+ * `d-flex`, без переноса). На 320-375px их суммарная ширина (~338px)
+ * шире доступного контейнера (296-351px) — правый край пилюли уходит
+ * за экран и обрезается `body { overflow-x: hidden }` (`style.css`,
+ * скриншот пользователя), а не переносится и не создаёт скролл. Ниже
+ * этого порога переносим select под лейбл — сама пилюля не сжимается,
+ * чтобы не терять читаемость текста сортировки.
+ */
+@media (max-width: 400px) {
+    .items-number form {
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
+    .items-number .nice-select.Advice {
+        margin-left: 0;
+    }
+}
+
+/*
+ * .catalog-filters (сайдбар фильтров каталога/поиска) — последний
+ * элемент в `.col-lg-3`, без своего отступа снизу: `.sidebar` даёт
+ * margin-bottom только МЕЖДУ блоками Вкус/Бренд/Цена, а после кнопки
+ * «Применить фильтры» отступа нет. Bootstrap-грид не добавляет
+ * вертикальный gutter между колонками, когда `.col-lg-3` переносится
+ * над `.col-lg-9` (< 992px, lg-брейкпоинт) — сайдбар «прилипал»
+ * вплотную к заголовку/контенту под ним (скриншот пользователя,
+ * 320-768px). Добавляем отступ только в этом состоянии — на ≥992px,
+ * где колонки стоят рядом, он не нужен.
+ */
+@media (max-width: 991px) {
+    .catalog-filters {
+        margin-bottom: 40px;
+    }
+}
+

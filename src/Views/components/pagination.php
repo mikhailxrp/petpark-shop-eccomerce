@@ -6,16 +6,20 @@ declare(strict_types=1);
  * Пагинация листинга каталога — сохраняет сортировку в ссылках (FR-CAT-005).
  * @var int    $page       Текущая страница (с 1)
  * @var int    $totalPages
- * @var string $basePath   Базовый URL категории, без query-строки
+ * @var string $basePath   Базовый URL категории/поиска, без query-строки
  * @var string $sort       Текущая сортировка
+ * @var array<string, mixed> $extraQuery Опционально — текущие фильтры/поиск
+ *      (catalogFilterQueryParams(), Таск 3) — сохраняются в ссылках страниц
  */
 
 if ($totalPages <= 1) {
     return;
 }
 
-$pageUrl = static function (int $targetPage) use ($basePath, $sort): string {
-    $query = [];
+$extraQuery ??= [];
+
+$pageUrl = static function (int $targetPage) use ($basePath, $sort, $extraQuery): string {
+    $query = $extraQuery;
     if ($sort !== 'popularity') {
         $query['sort'] = $sort;
     }
