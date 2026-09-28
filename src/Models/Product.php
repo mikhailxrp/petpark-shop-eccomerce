@@ -449,6 +449,22 @@ function productPriceRange(): array
 }
 
 /**
+ * Активные Товары для sitemap.xml (phase-1.md, Таск 9, [INFRA]) — только
+ * slug и updated_at (для <lastmod>), без Вариантов/фото/связей: sitemap
+ * не показывает карточку, ему не нужна каталожная цена.
+ *
+ * @return array<int, array{slug: string, updated_at: string}>
+ */
+function productActiveForSitemap(): array
+{
+    return getPdo()->query('
+        SELECT slug, updated_at
+        FROM products
+        WHERE is_active = 1
+    ')->fetchAll();
+}
+
+/**
  * «Хиты продаж» для Главной (FR-HOME-005) — отбор вручную Владельцем
  * (`is_featured`, `database.md` ADR), не алгоритм. Та же форма строки и
  * тот же приём минимальной цены среди активных Вариантов

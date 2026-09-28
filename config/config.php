@@ -30,6 +30,7 @@ require_once ROOT_PATH . '/src/Core/Logger.php';
 require_once ROOT_PATH . '/src/Core/Database.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
 require_once ROOT_PATH . '/src/Core/Catalog.php';
+require_once ROOT_PATH . '/src/Core/Cache.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';

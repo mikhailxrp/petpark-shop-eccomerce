@@ -24,6 +24,7 @@ return [
         '/catalog/{cat}/{sub}' => ['CatalogController', 'subcategory'],
         '/search'              => ['SearchController', 'index'],
         '/product/{slug}'      => ['ProductController', 'show'],
+        '/sitemap.xml'         => ['SitemapController', 'index'],
     ],
     'POST' => [
         '/login'           => ['AuthController', 'login'],
