@@ -70,6 +70,7 @@ $footerVariant ??= 'two';
     <script src="/assets/js/custom.js"></script>
     <script src="/assets/js/catalog.js"></script>
     <script src="/assets/js/product-variants.js"></script>
+    <script src="/assets/js/password-toggle.js"></script>
     <script src="/assets/js/hero-nav.js"></script>
 </body>
 </html>

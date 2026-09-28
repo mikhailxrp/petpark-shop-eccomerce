@@ -810,3 +810,85 @@ select.nice-select::-ms-expand {
     color: #000;
 }
 
+/*
+ * .banner-img (баннер /login) — круглые фото шаблона рассчитаны на
+ * квадратные исходники (`banners/banner-img-1.jpg` 232×229,
+ * `banner-img-2.jpg` 299×299 — почти/точно квадрат, поэтому на других
+ * страницах `border-radius: 50%` из `style.css` уже даёт круг). Здесь
+ * переиспользованы `home-page/faq-1.jpg`/`faq-2.jpg` (262×203, не
+ * квадрат): `.banner-img-1 img` в `style.css` задаёт квадратный бокс
+ * 232×232 без `object-fit` — фото сжималось по вертикали; у
+ * `.banner-img-2 img` `style.css` вообще не задаёт размер — рендерился
+ * прямоугольник 262×203, а `border-radius: 50%` превращал его в овал
+ * (скриншот пользователя, «изображение сплюснуто»). Фикс: квадратный
+ * бокс на обоих (второй — 299px, как у оригинального
+ * `banner-img-2.jpg`, для того же масштаба, что на других страницах) +
+ * `object-fit: cover`, чтобы кадрировать, а не сжимать.
+ */
+.banner-img-1 img,
+.banner-img-2 img {
+    object-fit: cover;
+}
+.banner-img-2 img {
+    width: 299px;
+    height: 299px;
+}
+
+/*
+ * .password-field — переключатель видимости пароля (иконка-глазик).
+ * Блока с таким полем нет в макете Patte — своя разметка поверх
+ * `.box input` из `style.css` (высота 60px, `padding-left: 30px`,
+ * `border-radius: 45px`). Кнопка — `position: absolute` внутри
+ * `position: relative`-обёртки; у инпута добавлен `padding-right`,
+ * чтобы текст не заезжал под иконку. Только для полей пароля — второй
+ * селектор `.box input` (email и т.п.) не трогаем.
+ *
+ * `.password-field .password-toggle { margin: 0 }` обязателен и не
+ * может быть просто `.password-toggle`: `style.css` — `.box form
+ * button { margin-top: 25px }` (рассчитано на кнопку «Войти») — 1
+ * класс + 2 тега, специфичность выше одного класса `.password-toggle`
+ * и побеждает в каскаде независимо от порядка подключения файлов;
+ * сдвигало кнопку на 25px вниз поверх `top: 50%` (скриншот
+ * пользователя — иконка «съехала» к низу поля). Два класса в
+ * селекторе здесь — не эстетика, а обязательный уровень специфичности.
+ */
+.password-field {
+    position: relative;
+}
+.password-field input {
+    padding-right: 56px;
+}
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+}
+.password-field .password-toggle {
+    margin: 0;
+}
+.password-toggle:hover,
+.password-toggle:focus-visible,
+.password-toggle[aria-pressed="true"] {
+    color: var(--color-primary);
+}
+
+/*
+ * .box form .remember — style.css задаёт `margin-top: 20px` (отступ
+ * над строкой «Забыли пароль?»); тот же селектор здесь — только
+ * чтобы победить в каскаде по source order (специфичность совпадает).
+ */
+.box form .remember {
+    margin-top: 0;
+}
+

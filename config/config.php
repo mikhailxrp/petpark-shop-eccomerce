@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 define('ROOT_PATH', dirname(__DIR__));
 
+require_once ROOT_PATH . '/vendor/autoload.php';
 require_once ROOT_PATH . '/src/Core/functions.php';
 
 loadEnv(ROOT_PATH . '/.env');
@@ -32,3 +33,5 @@ require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';
+require_once ROOT_PATH . '/src/Models/User.php';
+require_once ROOT_PATH . '/src/Services/Mailer.php';

@@ -11,16 +11,19 @@ declare(strict_types=1);
 // Заказ/Запись (FR-AUTH-001 правило 2, Q-027), поэтому /register нет.
 return [
     'GET' => [
-        '/'                       => ['HomeController', 'index'],
-        '/login'                  => ['AuthController', 'showLogin'],
-        '/catalog'                => ['CatalogController', 'index'],
-        '/catalog/{cat}'          => ['CatalogController', 'category'],
-        '/catalog/{cat}/{sub}'    => ['CatalogController', 'subcategory'],
-        '/search'                 => ['SearchController', 'index'],
-        '/product/{slug}'         => ['ProductController', 'show'],
+        '/'                    => ['HomeController', 'index'],
+        '/login'               => ['AuthController', 'showLogin'],
+        '/forgot-password'     => ['AuthController', 'showForgotPassword'],
+        '/account'             => ['AccountController', 'index'],
+        '/catalog'             => ['CatalogController', 'index'],
+        '/catalog/{cat}'       => ['CatalogController', 'category'],
+        '/catalog/{cat}/{sub}' => ['CatalogController', 'subcategory'],
+        '/search'              => ['SearchController', 'index'],
+        '/product/{slug}'      => ['ProductController', 'show'],
     ],
     'POST' => [
-        '/login'  => ['AuthController', 'login'],
-        '/logout' => ['AuthController', 'logout'],
+        '/login'           => ['AuthController', 'login'],
+        '/logout'          => ['AuthController', 'logout'],
+        '/forgot-password' => ['AuthController', 'forgotPassword'],
     ],
 ];

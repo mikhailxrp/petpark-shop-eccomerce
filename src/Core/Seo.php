@@ -40,6 +40,8 @@ function seoTitle(string $type, array $entity = []): string
         'search' => ((string) ($entity['query'] ?? '')) !== ''
             ? sprintf('Поиск: «%s» — %s', (string) $entity['query'], SHOP_NAME)
             : sprintf('Поиск товаров — %s', SHOP_NAME),
+        'login' => sprintf('Вход в личный кабинет — %s', SHOP_NAME),
+        'forgot-password' => sprintf('Восстановление пароля — %s', SHOP_NAME),
         default => sprintf('%s — зоомагазин и центр ухода за питомцами, %s', SHOP_NAME, SHOP_CITY),
     };
 }
@@ -68,6 +70,8 @@ function seoDescription(string $type, array $entity = []): string
         'search' => ((string) ($entity['query'] ?? '')) !== ''
             ? sprintf('Результаты поиска «%s» в каталоге %s, %s.', (string) $entity['query'], SHOP_NAME, SHOP_CITY)
             : sprintf('Поиск товаров в каталоге %s, %s.', SHOP_NAME, SHOP_CITY),
+        'login' => sprintf('Вход в личный кабинет покупателя %s, %s.', SHOP_NAME, SHOP_CITY),
+        'forgot-password' => sprintf('Восстановление пароля личного кабинета %s.', SHOP_NAME),
         default => sprintf(
             '%s — доставка и самовывоз, груминг и ветконсультации, %s.',
             SHOP_NAME,

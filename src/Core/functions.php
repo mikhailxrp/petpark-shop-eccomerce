@@ -187,6 +187,30 @@ function isAjaxRequest(): bool
     return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
 }
 
+// ─── Пароли ─────────────────────────────────────────────────────────────
+
+/**
+ * Новый пароль для восстановления (FR-AUTH-002/003) — без визуально
+ * похожих символов (0/O, 1/l/I), random_int — криптостойкий генератор,
+ * не mt_rand().
+ */
+function generatePassword(int $length = 12): string
+{
+    $alphabet = str_replace(
+        ['0', 'O', '1', 'l', 'I'],
+        '',
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    );
+    $max = strlen($alphabet) - 1;
+
+    $password = '';
+    for ($i = 0; $i < $length; $i++) {
+        $password .= $alphabet[random_int(0, $max)];
+    }
+
+    return $password;
+}
+
 // ─── CSRF ───────────────────────────────────────────────────────────────
 
 function csrfToken(): string

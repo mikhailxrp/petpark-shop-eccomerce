@@ -118,4 +118,29 @@ final class FunctionsTest extends TestCase
 
         $this->assertTrue(true);
     }
+
+    public function testGeneratePasswordDefaultLength(): void
+    {
+        $this->assertSame(12, strlen(generatePassword()));
+    }
+
+    public function testGeneratePasswordRespectsCustomLength(): void
+    {
+        $this->assertSame(20, strlen(generatePassword(20)));
+    }
+
+    public function testGeneratePasswordUsesOnlyUnambiguousAlnumChars(): void
+    {
+        $password = generatePassword(64);
+
+        $this->assertMatchesRegularExpression(
+            '/^[A-HJ-NP-Za-km-z2-9]+$/',
+            $password
+        );
+    }
+
+    public function testGeneratePasswordIsRandomBetweenCalls(): void
+    {
+        $this->assertNotSame(generatePassword(), generatePassword());
+    }
 }
