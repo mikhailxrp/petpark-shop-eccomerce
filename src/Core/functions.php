@@ -84,13 +84,6 @@ function isAuthenticated(): bool
     return normalizeUserId($_SESSION['user_id'] ?? null) !== null;
 }
 
-function requireAuth(): void
-{
-    if (!isAuthenticated()) {
-        redirect('/login');
-    }
-}
-
 function redirectIfAuthenticated(): void
 {
     if (isAuthenticated()) {
@@ -110,10 +103,27 @@ function homePathForRole(string $role): string
     };
 }
 
+function adminRoleLabel(string $role): string
+{
+    return match ($role) {
+        'specialist' => 'Специалист',
+        'shift_admin' => 'Администратор смены',
+        'content_editor' => 'Контент-редактор',
+        'owner' => 'Владелец',
+        default => 'Персонал',
+    };
+}
+
 function requireRole(string ...$roles): void
 {
-    requireAuth();
     ensureSessionStarted();
+
+    // Незалогиненный видит форму входа своей части сайта — персонал
+    // (specialist/shift_admin/content_editor/owner) шлём на
+    // /admin/login, не на /login Покупателя (phase-1.md, Таск 7).
+    if (!isAuthenticated()) {
+        redirect(in_array('customer', $roles, true) ? '/login' : '/admin/login');
+    }
 
     $role = $_SESSION['user_role'] ?? null;
 

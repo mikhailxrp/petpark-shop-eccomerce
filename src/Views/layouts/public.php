@@ -28,7 +28,7 @@ $footerVariant ??= 'two';
     <?php if ($robotsNoindex): ?>
         <meta name="robots" content="noindex, follow">
     <?php endif; ?>
-    <link rel="icon" href="/assets/img/heading-img.png">
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
 
     <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
     <link rel="stylesheet" href="/assets/css/owl.carousel.min.css">

@@ -15,6 +15,9 @@ return [
         '/login'               => ['AuthController', 'showLogin'],
         '/forgot-password'     => ['AuthController', 'showForgotPassword'],
         '/account'             => ['AccountController', 'index'],
+        '/admin/login'         => ['Admin\AuthController', 'showLogin'],
+        '/admin'               => ['Admin\DashboardController', 'index'],
+        '/specialist'          => ['Admin\DashboardController', 'specialist'],
         '/catalog'             => ['CatalogController', 'index'],
         '/catalog/{cat}'       => ['CatalogController', 'category'],
         '/catalog/{cat}/{sub}' => ['CatalogController', 'subcategory'],
@@ -25,5 +28,7 @@ return [
         '/login'           => ['AuthController', 'login'],
         '/logout'          => ['AuthController', 'logout'],
         '/forgot-password' => ['AuthController', 'forgotPassword'],
+        '/admin/login'     => ['Admin\AuthController', 'login'],
+        '/admin/logout'    => ['Admin\AuthController', 'logout'],
     ],
 ];

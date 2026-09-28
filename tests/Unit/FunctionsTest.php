@@ -108,6 +108,20 @@ final class FunctionsTest extends TestCase
         $this->assertSame('/', homePathForRole('unknown'));
     }
 
+    public function testAdminRoleLabelReturnsLabelForEachStaffRole(): void
+    {
+        $this->assertSame('Специалист', adminRoleLabel('specialist'));
+        $this->assertSame('Администратор смены', adminRoleLabel('shift_admin'));
+        $this->assertSame('Контент-редактор', adminRoleLabel('content_editor'));
+        $this->assertSame('Владелец', adminRoleLabel('owner'));
+    }
+
+    public function testAdminRoleLabelFallsBackForUnknownRole(): void
+    {
+        $this->assertSame('Персонал', adminRoleLabel('customer'));
+        $this->assertSame('Персонал', adminRoleLabel('unknown'));
+    }
+
     public function testRequireRoleAllowsMatchingRole(): void
     {
         $_SESSION['user_id']   = 1;

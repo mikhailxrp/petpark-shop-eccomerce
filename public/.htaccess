@@ -1,6 +1,13 @@
 Options -Indexes
 
 RewriteEngine On
+
+# /admin — маршрут PHP-роутера (Controllers/Admin/*), хотя public/admin/
+# существует и как физическая папка (Valex-ассеты/html-копии для
+# сверки вёрстки, phase-1.md Таск 7) — без этого правила общее условие
+# !-d ниже отдаёт запрос Apache вместо роутера, минуя requireRole()
+RewriteRule ^admin/?$ index.php [L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [L]
