@@ -1,3 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Шапка — на каждой странице сайта (layouts/public.php), поэтому дерево
+ * Категорий для выпадающего меню «Каталог» строит сама, а не получает
+ * через Controller/layout (иначе пришлось бы передавать его из каждого
+ * Controller, рендерящего через public.php — CatalogController,
+ * ProductController, SearchController, HomeController).
+ */
+$headerCategoryTree = catalogBuildCategoryTree(categoryAll());
+?>
 <header class="two">
     <div class="top-bar">
         <div class="container">
@@ -72,9 +85,9 @@
                     <li class="navbar-dropdown menu-item-children">
                         <a href="/catalog">Каталог</a>
                         <div class="dropdown">
-                            <a href="#">Товары для кошек</a>
-                            <a href="#">Товары для собак</a>
-                            <a href="#">Товары для птиц</a>
+                            <?php foreach ($headerCategoryTree as $rootCategory): ?>
+                                <a href="/catalog/<?= e((string) $rootCategory['slug']) ?>"><?= e((string) $rootCategory['name']) ?></a>
+                            <?php endforeach; ?>
                         </div>
                     </li>
                     <li class="navbar-dropdown">
@@ -119,9 +132,9 @@
             <li class="menu-item-has-children">
                 <a href="/catalog">Каталог</a>
                 <ul class="sub-menu">
-                    <li><a href="#">Товары для кошек</a></li>
-                    <li><a href="#">Товары для собак</a></li>
-                    <li><a href="#">Товары для птиц</a></li>
+                    <?php foreach ($headerCategoryTree as $rootCategory): ?>
+                        <li><a href="/catalog/<?= e((string) $rootCategory['slug']) ?>"><?= e((string) $rootCategory['name']) ?></a></li>
+                    <?php endforeach; ?>
                 </ul>
             </li>
             <li><a href="#">Контакты</a></li>

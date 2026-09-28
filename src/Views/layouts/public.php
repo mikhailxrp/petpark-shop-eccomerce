@@ -31,6 +31,8 @@ $footerVariant ??= 'two';
     <link rel="icon" href="/assets/img/heading-img.png">
 
     <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/assets/css/owl.carousel.min.css">
+    <link rel="stylesheet" href="/assets/css/owl.theme.default.min.css">
     <link rel="stylesheet" href="/assets/css/nice-select.css">
     <link rel="stylesheet" href="/assets/css/fontawesome.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
@@ -63,9 +65,11 @@ $footerVariant ??= 'two';
     </div>
 
     <script src="/assets/js/bootstrap.min.js"></script>
+    <script src="/assets/js/owl.carousel.min.js"></script>
     <script src="/assets/js/jquery.nice-select.min.js"></script>
     <script src="/assets/js/custom.js"></script>
     <script src="/assets/js/catalog.js"></script>
     <script src="/assets/js/product-variants.js"></script>
+    <script src="/assets/js/hero-nav.js"></script>
 </body>
 </html>

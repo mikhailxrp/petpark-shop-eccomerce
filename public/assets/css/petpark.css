@@ -14,20 +14,66 @@
 }
 
 /*
- * style.css ссылается на шрифты 'Anybody'/'DynaPuff' с Google Fonts CDN
- * (запрещено — shared-хостинг не должен зависеть от внешнего аптайма).
- * @import убран из style.css; здесь те же имена подменяются локальным
- * системным шрифтом через src: local(), без сетевых запросов.
- * Итоговый шрифт бренда — открытый вопрос, см. .docs/dev-log.md.
+ * style.css ссылается на шрифты 'Anybody' (текст) и 'DynaPuff' (h1/h2/
+ * .count-text, всегда font-weight: 600) с Google Fonts CDN — self-host
+ * запрещён (`general.md`, shared-хостинг не должен зависеть от внешнего
+ * аптайма), @import убран из style.css. Ни у Anybody, ни у DynaPuff нет
+ * кириллицы — раньше здесь стоял системный шрифт-заглушка (см. историю
+ * файла), брендовый шрифт был открытым вопросом (`.docs/dev-log.md`).
+ *
+ * Подобрано по референсу макета (Home 2, bootstraptema.ru/_sf/63/6320,
+ * оригинал — winsfolio.net/html/patte/index-2.html): пара с кириллицей,
+ * ближайшая по характеру к Anybody/DynaPuff, а не случайные шрифты —
+ * DynaPuff (пухлые, «надутые» скруглённые буквы) заменяет ближайший по
+ * духу кириллический playful-rounded дисплейный шрифт — Comfortaa,
+ * самый жирный доступный начерк (700) под тем же именем/весом 600, что
+ * уже использует style.css (h1/h2/.count-text), — компенсирует то, что
+ * у Comfortaa даже 700 визуально тоньше «пухлого» DynaPuff. Anybody
+ * (нейтральный текстовый grotesque) заменяет Nunito Sans — тот же
+ * скруглённый, дружелюбный характер, что хорошо сочетается с Comfortaa
+ * (частая пара в реальных проектах), вариативный шрифт — один файл
+ * покрывает все веса 400-800, которые реально встречаются в style.css.
+ * Кандидаты с похожим на DynaPuff «пухлым» рисунком (Fredoka, Fredoka
+ * One, Baloo 2, Quicksand, Varela Round) — без кириллицы вообще,
+ * проверено через Google Fonts API (`&subset=cyrillic`), поэтому не
+ * подошли, несмотря на более точное визуальное сходство.
+ *
+ * Самохостинг: только latin + cyrillic subset (кириллица без digits/
+ * пунктуации — они в latin), cyrillic-ext/greek/vietnamese не нужны
+ * для русского контента.
  */
 @font-face {
-    font-family: 'Anybody';
-    src: local('Segoe UI'), local('Arial');
+    font-family: 'DynaPuff';
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+    src: url('/assets/fonts/comfortaa-700-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+    font-family: 'DynaPuff';
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+    src: url('/assets/fonts/comfortaa-700-cyrillic.woff2') format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 
 @font-face {
-    font-family: 'DynaPuff';
-    src: local('Segoe UI'), local('Arial');
+    font-family: 'Anybody';
+    font-weight: 400 800;
+    font-style: normal;
+    font-display: swap;
+    src: url('/assets/fonts/nunito-sans-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+    font-family: 'Anybody';
+    font-weight: 400 800;
+    font-style: normal;
+    font-display: swap;
+    src: url('/assets/fonts/nunito-sans-cyrillic.woff2') format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 
 /*
@@ -374,5 +420,393 @@ select.nice-select::-ms-expand {
 }
 .pd-tab-content .pd-description {
     margin-bottom: 0;
+}
+
+/*
+ * .hero-two-slider (home.php) — в оригинальном макете (`index.html`)
+ * карусель оборачивает ЦЕЛИКОМ пару «фото + текст» на слайд (свой `<h1>`
+ * в каждом из 4 слайдов). owl-carousel с `loop:true` (уже готовая
+ * инициализация в `custom.js`, п. 04, не переписываем — general.md,
+ * секция JS) клонирует крайние слайды для бесшовной петли — проверено
+ * headless Chrome: после инициализации в DOM оказывается 2 `<h1>`
+ * (оригинал + клон 1-го слайда), хотя в серверном HTML он один. Это не
+ * ловится проверкой `dod-global.md` через `curl`/raw HTML, но реальная
+ * проблема для JS-исполняющих краулеров (Google). Поэтому карусель здесь
+ * крутит только фото (`.hero-two-img .hero-two-slider`), а `<h1>`/текст/
+ * кнопка — один статичный блок рядом, вне зоны, которую owl-carousel
+ * клонирует, — гарантированно один `<h1>` в любом состоянии DOM, а не
+ * только в исходном HTML-ответе.
+ */
+
+/*
+ * img.hero-shaps-2 (style.css: `left: -4%`, ширина не ограничена — фикс.
+ * 908px) — на 1280px (обязательная брейкпоинт-проверка dod-global.md)
+ * decorative-фигура (лапа/кость) заходит правым краем поверх `<h1>` в
+ * `.hero-two-text` (найдено headless Chrome + CDP скриншотом, видно
+ * перечёркивание текста). На брейкпоинте, для которого рисовался макет
+ * (≥1920px), контейнер шире и фигура не дотягивается до текстовой
+ * колонки — на 1200-1400px (Bootstrap `.container` уже ýже) достаёт.
+ * Сужаем и сдвигаем левее только в этом диапазоне — сама фигура и её
+ * анимация (`style.css`) не меняются, ≥1400px макет не трогаем.
+ */
+@media (max-width: 1400px) {
+    img.hero-shaps-2 {
+        left: -10%;
+        max-width: 620px;
+    }
+}
+
+/*
+ * .hero-two-text h1 (home.php, правка по скриншоту пользователя) —
+ * дефолтный line-height браузера на 76px (`style.css`, без своего
+ * line-height) у Comfortaa визуально даёт слишком большие межстрочные
+ * промежутки для 3-строчного заголовка; `font-weight: 600` (жирнее в
+ * `style.css` нет) выглядит тоньше, чем «пухлый» DynaPuff оригинала —
+ * у Comfortaa нет начерка жирнее 700 (самый жирный уже используется,
+ * `@font-face` выше), поэтому дожимаем визуальную жирность через
+ * `-webkit-text-stroke` (обводка той же заливкой, не другой шрифт).
+ * Только у заголовка первого экрана — другие `<h1>` (catalog/product/
+ * search) этот скриншот не касался, не трогаем.
+ */
+.hero-two-text h1 {
+    line-height: 1.05;
+    -webkit-text-stroke: 0.6px #000;
+}
+
+/*
+ * .hero-two-cta / .owl-nav (home.php, правка по скриншоту пользователя)
+ * — стрелки карусели должны стоять сразу за кнопкой «Смотреть каталог»,
+ * а не под фото слева (там они оказались после того, как карусель стала
+ * оборачивать только фото — см. комментарий выше про клонирование
+ * `<h1>`). style.css кладёт `.owl-nav` внутрь `.hero-two-slider`
+ * (абсолютным позиционированием, `right: 0`), а `.hero-two-slider` и
+ * кнопка — в разных колонках Bootstrap-грида: подогнать абсолютную
+ * позицию фиксированным отступом не вышло — на 992-1199px у кнопки
+ * другая (меньшая) ширина из-за отдельного `@media` в `style.css`, а
+ * подбирать свой margin под каждый брейкпоинт отдельно — плодить
+ * хрупкие магические числа. Вместо этого `public/assets/js/hero-nav.js`
+ * (новый, ванильный JS — `general.md`, без jQuery) один раз переносит
+ * DOM-узел `.owl-nav`, который owl-carousel сам создаёт при
+ * инициализации (`MutationObserver`, т.к. узла нет при загрузке
+ * страницы), внутрь `.hero-two-cta` — рядом с кнопкой уже в обычном
+ * потоке, без пересчёта в CSS под каждую ширину.
+ */
+.hero-two-cta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 24px;
+}
+.hero-two-cta .owl-nav {
+    position: static;
+    width: auto;
+    margin: 0;
+}
+/*
+ * owl.carousel.min.css сбрасывает рамку/фон у самих `<button>` только
+ * через `.owl-carousel .owl-nav button.owl-next/.owl-prev` — после
+ * переноса `.owl-nav` из `.hero-two-slider` (класс `owl-carousel`) в
+ * `.hero-two-cta` этот селектор тоже перестал совпадать, и на кнопках
+ * вернулась дефолтная браузерная квадратная рамка вокруг круглой `i`
+ * (скриншот пользователя). Тот же сброс под новым родителем.
+ */
+.hero-two-cta .owl-nav button.owl-next,
+.hero-two-cta .owl-nav button.owl-prev {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/*
+ * `style.css`/`color.css` стилизуют круглые стрелки только через
+ * `.hero-two-slider .owl-nav i` (обычный/hover) — после переноса
+ * `hero-nav.js` узел уже не потомок `.hero-two-slider`, старый селектор
+ * не совпадает. Дублируем те же правила под новым родителем, один в
+ * один (включая hover-заливку брендовым цветом из `color.css`, здесь —
+ * через `--color-primary`, не второй хардкод того же `#fa441d`).
+ */
+.hero-two-cta .owl-nav i {
+    font-size: 16px;
+    border: 1px solid #999;
+    background-color: #fff;
+    line-height: 0;
+    color: #999;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hero-two-cta .owl-nav i:hover {
+    color: #fff;
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+/*
+ * .home-pets-icon-text (home.php, блок «Мы знаем, как сильно вы любите
+ * своих питомцев») — `style.css`'s `.pets-icon-text{justify-content:
+ * space-between}` рассчитан на полные ряды по 3 плитки (макет всегда
+ * отдаёт 6 услуг). У нас 5 корневых Категорий: последний ряд из 2
+ * плиток при space-between разъезжается к краям контейнера с пустотой
+ * посередине. `flex-start` + `gap` по горизонтали убирает разъезд, не
+ * трогая вертикальный отступ — он по-прежнему приходит от
+ * `.pets-icon:nth-child(4/5){margin-top:10px}` в `style.css`, поэтому
+ * `gap` здесь только по колонкам (row-gap: 0).
+ */
+.home-pets-icon-text {
+    justify-content: flex-start;
+    gap: 0 2%;
+}
+
+/*
+ * .home-packages .package (home.php, блок «Груминг и ветконсультации»)
+ * — фото `package-1/2.jpg` и бейдж-иконка `.package-text > i` в
+ * `style.css` фиксированной ширины (378px / 120px) и без `margin:
+ * auto`, в макете это работало, потому что колонка была `col-lg-4`
+ * (~378px). У нас 2 карточки на `col-lg-6` (~570px) — фото и текст
+ * прижимались к левому краю широкой колонки вместо центра (скриншот
+ * пользователя). Ограничиваем `.package` и центрируем — так бейдж
+ * остаётся на месте относительно фото (он позиционируется внутри того
+ * же блока), просто весь блок теперь по центру колонки.
+ *
+ * Ширина не 378px (интринсик самого фото), а 410px: у `.package
+ * figure > img` в style.css есть `padding: 12px` и `border: 3px` —
+ * итоговый овал (фото + паддинг + бордер) физически занимает
+ * 378 + 24 + 6 = 408px. `figure` в style.css — `overflow: hidden`, и
+ * при ширине контейнера ровно 378px правый край овала обрезался
+ * (второй скриншот пользователя). 410px — с запасом под весь овал
+ * целиком, без обрезки и без даунскейла фото.
+ */
+.home-packages .package {
+    max-width: 410px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/*
+ * .home-visit-section (home.php, блок «Скидка 50% на первое
+ * посещение») — в макете фон секции задан инлайн-стилем
+ * (`style="background-image:..."` прямо в HTML), но по правилам
+ * проекта (CLAUDE.md/general.md) инлайн-стили в Views запрещены.
+ * Выносим фон в класс здесь; `healthy-product-bg.png` — декоративная
+ * подложка с лапками/кляксами по углам, предоставлена пользователем
+ * взамен фона макета.
+ */
+.home-visit-section {
+    background-image: url(../img/home-page/healthy-product-bg.png);
+    background-color: #f5f5f5;
+}
+
+/*
+ * .home-visit-section .nav-pills img (вкладки «Популярные товары») —
+ * в макете иконки вкладок нарисованы инлайн-SVG (`.nav-pills svg` в
+ * style.css задаёт им `width:50px`), у нас те же PNG-иконки Категорий
+ * (`pets-icon-*.png`, 95×90), что и в блоке «Мы знаем...» выше — правило
+ * для svg на них не действует, без этого они рендерятся в
+ * интринсик-размере и не помещаются по центру круглого бейджа
+ * (`button.nav-link i`, 100×100).
+ */
+.home-visit-section .nav-pills img {
+    width: 50px;
+    height: auto;
+    display: block;
+    margin: auto;
+}
+
+/*
+ * .home-about-img (home.php, блок «О компании») — раньше здесь стояло
+ * `banner-img-1.jpg` (232×229px, маленькое круглое фото шаблона не под
+ * эту секцию) с самодельной розовой подложкой под ним вместо рамки —
+ * фото было слишком маленьким, вокруг него оставалось пустое место
+ * (два скриншота пользователя, см. историю правок ниже в dev-log.md).
+ * Пользователь указал готовую замену — `dogs-1.png`, коллаж из 3 фото
+ * (собака/собака/кошка) уже с собственными цветными фигурами-подложками
+ * и декоративными штрихами/искрами по краям, тот же приём, что и у
+ * `.home-visit` (цветная фигура за фото), но встроенный прямо в PNG.
+ * Самодельная розовая подложка (`::before`) больше не нужна — своя
+ * цветная форма уже есть у каждого фото в коллаже, наша поверх неё
+ * смотрелась бы лишним пятном; растяжки/тени тоже убраны — коллаж
+ * задуман как есть, без рамки вокруг всего изображения.
+ */
+.home-about-img {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.home-about-img img {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+}
+
+/*
+ * .home-faq (home.php, блок FAQ) — как и `.home-visit-section` выше, в
+ * макете фон секции задан инлайн-стилем; инлайн-стили в Views запрещены
+ * (CLAUDE.md/general.md), выносим сюда. `faq-shaps.png` (декоративные
+ * штрихи/сердечки/косточка) в style.css уже спозиционирован абсолютно
+ * (`img.faq-shaps{position:absolute; top:5%; right:16%}` + анимация
+ * `top`) — ему нужен `position: relative` у секции-контейнера, которого
+ * своего класса под FAQ в style.css нет (как и у `.home-visit-section`,
+ * см. комментарий выше), добавляем тем же приёмом.
+ */
+.home-faq {
+    position: relative;
+    background-image: url(../img/home-page/faq-bg.jpg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/*
+ * .home-faq .accordion-item .heading — коллизия имени класса: `.heading`
+ * в style.css закреплён сразу под два разных компонента шаблона — общий
+ * заголовок секции (`.heading.two`, `text-align:center;
+ * padding-bottom:40px`, используется по всей странице) и ссылка-тоггл
+ * вопроса в демо-аккордеоне FAQ (`.accordion-item .heading`, тот же
+ * класс). У нас оба стоят рядом на одной странице — центрирование
+ * секционного заголовка протекает и на кнопки вопросов: `.title`
+ * (inline span) наследует `text-align:center` и визуально съезжает
+ * вправо от жёлтого кружка-иконки вместо выравнивания по его правому
+ * краю (проверено `getBoundingClientRect()` — у каждого вопроса `.title`
+ * начинается на разном x, чем короче текст — тем больше сдвиг). Также
+ * убираем `text-transform: capitalize` (та же строка правил шаблона) —
+ * рассчитан на англоязычный демо-текст, на русских вопросах
+ * капитализирует каждое слово («Как Оформить Заказ?»), для кириллицы
+ * так не принято. Правим только здесь — ни общий `.heading`, ни сам
+ * `.accordion-item .heading` не трогаем.
+ */
+.home-faq .accordion-item .heading {
+    text-align: left;
+    padding-bottom: 0;
+    text-transform: none;
+}
+
+/*
+ * .home-faq .accordion-item .title — на узких экранах (320-375px,
+ * обязательная проверка dod-global.md) русский текст вопроса длиннее
+ * английского демо-текста шаблона и переносится на 2 строки. `.title` в
+ * style.css — `display: inline` (по умолчанию для span): жёлтый фон-
+ * пилюля (`background-color:#fff; border-radius:51px`) у inline-
+ * элемента с переносом строк красится только на первом фрагменте
+ * строки — вторая строка вопроса оказывается вообще без фона, прямо на
+ * фоне секции (скриншот 320px при проверке). `inline-block` даёт
+ * вопросу единый блок с фоном и скруглением на обе строки сразу.
+ *
+ * `padding-right` — в style.css `.title{padding:16px 70px}` сразу же
+ * обнуляется своим же следующим правилом (`padding-right:0`, дважды
+ * подряд, копипаста в самом шаблоне) — текст вопроса упирается прямо в
+ * правый скруглённый край пилюли без отступа (скриншот пользователя,
+ * стрелки к каждому вопросу). Левые 70px не трогаем — там место под
+ * жёлтый кружок-иконку; справа возвращаем отступ, но меньше (иконки
+ * там нет, нужен просто воздух до края).
+ */
+.home-faq .accordion-item .title {
+    display: inline-block;
+    padding-right: 32px;
+}
+
+/*
+ * .home-reviews (home.php, блок «Отзывы покупателей») — по скриншоту
+ * пользователя (оригинальный макет Home 2) нужен тот же фон, что и у
+ * блока FAQ выше (`faq-bg.jpg`). Заодно фон и объясняет саму карточку
+ * отзыва: `.client img` (`client.png`) — это не аватар, а сама форма
+ * пузыря-«облачка» (белая заливка + мягкая тень, нарисована в самом
+ * PNG), на белом фоне секции она была почти не видна — тень/заливка
+ * читаются только на контрастном фоне, как в макете. Без своего класса
+ * под FAQ/отзывы в style.css (см. комментарий у `.home-faq` выше) —
+ * тот же приём, инлайн-стили в Views запрещены.
+ */
+.home-reviews {
+    background-image: url(../img/home-page/faq-bg.jpg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/*
+ * .home-reviews .rated (бейдж «Рейтинг X из 5.0» под каруселью отзывов)
+ * — в style.css `.rated` только центрирует звёзды и текст в ряд
+ * (`display:flex; justify-content:center`), без жёлтой пилюли-фона,
+ * которая есть на скриншоте макета — та же история, что и у фона секции
+ * выше: в демо-разметке это, скорее всего, инлайн-стиль. Достраиваем
+ * фон/паддинг/скругление тем же брендовым жёлтым (`#feda46`), что уже
+ * используется по всей странице (кружки-иконки аккордеона FAQ,
+ * `.pets-icon` и т.д.), не новый цвет.
+ */
+.home-reviews .rated {
+    align-items: center;
+    gap: 16px;
+    width: fit-content;
+    margin: 40px auto 0;
+    padding: 16px 32px;
+    background-color: #feda46;
+    border-radius: 51px;
+}
+.home-reviews .rated ul.star {
+    color: #000;
+}
+.home-reviews .rated h4 {
+    margin: 0;
+    white-space: nowrap;
+}
+
+/*
+ * .home-reviews .rated — на 320px (обязательная проверка dod-global.md)
+ * 5 звёзд + текст с нашим паддингом/gap уже не помещаются в одну
+ * строку — «Рейтинг 4.7 из 5.0» переносился внутри пилюли на 2 строки
+ * (скриншот при проверке). Сама пилюля/фон — не из шаблона (см.
+ * комментарий выше), поэтому и сужаем именно свои значения, а не что-то
+ * из style.css/responsive.css.
+ */
+@media (max-width: 340px) {
+    .home-reviews .rated {
+        gap: 8px;
+        padding: 12px 20px;
+    }
+}
+
+/*
+ * .subscribe (home.php, форма подписки над футером) — фон в макете
+ * задан инлайн-стилем (`style="background-image:..."`, как и у
+ * остальных фоновых секций этой страницы), инлайн-стили в Views
+ * запрещены. `subscribe.jpg` — узкая широкая полоса (1607×173) под
+ * `background-position: right` без повтора в макете; берём `cover` +
+ * `center`, как у остальных фоновых секций этой страницы — тот же
+ * приём, что и у `.home-faq`/`.home-reviews` выше, не расходится с
+ * остальной вёрсткой при более широких экранах, чем ширина картинки.
+ */
+.subscribe {
+    background-image: url(../img/home-page/subscribe.jpg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/*
+ * .subscribe input[type="email"] (форма подписки) — в макете инпут
+ * `type="text"` и растягивается на всю ширину колонки через глобальное
+ * правило `style.css`: `input[type="text"]{width:100%; height:50px;
+ * border-radius:50px; padding-left:30px; ...}` + `form.subscribe
+ * input[type="text"]{height:62px}` поверх него. У нас `type="email"`
+ * (осознанно — встроенная HTML5-валидация формата и мобильная
+ * клавиатура, лучше, чем `text`) — оба правила шаблона рассчитаны
+ * ровно на `[type="text"]` и просто не совпадают с `[type="email"]`,
+ * инпут остаётся без стилей вообще (узкий, без скругления — скриншот
+ * пользователя, «не растягивается на всю длину»). Повторяем те же
+ * значения под наш селектор, не меняя сам тип поля.
+ */
+.subscribe input[type="email"] {
+    width: 100%;
+    height: 62px;
+    border-radius: 50px;
+    padding-left: 30px;
+    border: 0;
+    outline: none;
+    font-size: 16px;
+}
+.subscribe input[type="email"]::placeholder {
+    color: #000;
 }
 

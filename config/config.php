@@ -31,3 +31,4 @@ require_once ROOT_PATH . '/src/Core/Seo.php';
 require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
+require_once ROOT_PATH . '/src/Models/Review.php';
