@@ -287,7 +287,7 @@ ob_start();
 
 <section class="gap home-faq">
   <div class="container">
-    <div class="row align-items-center">
+    <div class="row home-faq-row">
       <div class="col-lg-6">
         <div class="heading two">
           <h6>Отвечаем на</h6>
@@ -343,7 +343,7 @@ ob_start();
           </div>
         </div>
       </div>
-      <div class="col-lg-6">
+      <div class="col-lg-6 home-faq-gallery">
         <div class="row">
           <div class="col-6">
             <div class="faq-img">
@@ -359,10 +359,28 @@ ob_start();
             </div>
           </div>
         </div>
+        <img src="/assets/img/home-page/faq-shaps.png" class="faq-shaps" alt="">
       </div>
     </div>
   </div>
-  <img src="/assets/img/home-page/faq-shaps.png" class="faq-shaps" alt="">
+</section>
+
+<section class="gap">
+  <div class="container">
+    <div class="mockup">
+      <h3>Найдите всё нужное для питомца в нашем <span>каталоге</span></h3>
+      <div class="mockup-img">
+        <img src="/assets/img/home-page/mockup.png" alt="Собака смотрит вверх, ожидая лакомство">
+      </div>
+      <div class="mockup-text">
+        <p>
+          Корма, аксессуары и уход для кошек, собак и декоративных
+          птиц — с доставкой и самовывозом по Ростову-на-Дону.
+        </p>
+        <a href="/catalog" class="button">Смотреть каталог</a>
+      </div>
+    </div>
+  </div>
 </section>
 
 <?php if ($reviews !== []): ?>
@@ -401,7 +419,8 @@ ob_start();
     <div class="rated">
       <ul class="star">
         <?php for ($i = 0; $i < 5; $i++): ?>
-        <li><i class="<?= $i < (int) round($reviewsAggregate['average']) ? 'fa-solid' : 'fa-regular' ?> fa-star"></i></li>
+        <li><i class="<?= $i < (int) round($reviewsAggregate['average']) ? 'fa-solid' : 'fa-regular' ?> fa-star"></i>
+        </li>
         <?php endfor; ?>
       </ul>
       <h4>Рейтинг <?= e(number_format($reviewsAggregate['average'], 1)) ?> из 5.0</h4>
@@ -410,23 +429,7 @@ ob_start();
 </section>
 <?php endif; ?>
 
-<section class="gap">
-  <div class="container">
-    <div class="mockup">
-      <h3>Найдите всё нужное для питомца в нашем <span>каталоге</span></h3>
-      <div class="mockup-img">
-        <img src="/assets/img/home-page/mockup.png" alt="Собака смотрит вверх, ожидая лакомство">
-      </div>
-      <div class="mockup-text">
-        <p>
-          Корма, аксессуары и уход для кошек, собак и декоративных
-          птиц — с доставкой и самовывозом по Ростову-на-Дону.
-        </p>
-        <a href="/catalog" class="button">Смотреть каталог</a>
-      </div>
-    </div>
-  </div>
-</section>
+
 
 <section class="subscribe">
   <div class="container">
