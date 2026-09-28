@@ -34,6 +34,7 @@ final class DashboardController
             'pageTitle' => 'Панель управления — PetPark',
             'roleLabel' => adminRoleLabel($role),
             'homeUrl'   => homePathForRole($role),
+            'userRole'  => $role,
         ]);
     }
 }

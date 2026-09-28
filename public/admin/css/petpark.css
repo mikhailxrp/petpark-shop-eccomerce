@@ -1,0 +1,80 @@
+/*
+ * PetPark — проектные правки поверх шаблона Valex (админка).
+ * Тот же принцип, что у public/assets/css/petpark.css для публичного
+ * Patte: сам шаблон (styles.min.css/icons.min.css) не переписываем,
+ * только точечно чиним/дополняем здесь.
+ */
+
+/*
+ * `styles.min.css` уже ссылается на `--default-font-family: "Roboto",
+ * sans-serif`, но сам файл шрифта в шаблон не входит (только
+ * иконочные шрифты) — реально показывался системный sans-serif
+ * (Segoe UI/Arial на Windows), не Roboto. Самохостим Roboto (как
+ * Nunito Sans/Comfortaa на публичном сайте — public/assets/fonts):
+ * только latin+cyrillic, только веса 400/700 — используются в
+ * шаблоне как обычный и полужирный текст.
+ */
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url('/admin/assets/fonts/roboto-400-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url('/admin/assets/fonts/roboto-400-cyrillic.woff2') format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url('/admin/assets/fonts/roboto-700-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+    src: url('/admin/assets/fonts/roboto-700-cyrillic.woff2') format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/*
+ * .app-sidebar .side-menu__icon (сайдбар, пункт «Отзывы», Таск 8) —
+ * styles.min.css задаёт иконке фиксированный `line-height: 34px` при
+ * боксе `width/height: 1.375rem` (22px) — глиф центрируется по строке
+ * высотой 34px, а не по своему 22px-боксу. У контурной звезды
+ * (`fe-star`) это расхождение видно на глаз (скриншот пользователя,
+ * `fe-home` того же класса визуально «прощает» смещение из-за формы
+ * домика). Отключаем `line-height` здесь — глиф центрируется штатным
+ * flex-выравниванием `.side-menu__item` (`align-items: center`, уже
+ * есть в шаблоне), действует на все пункты сайдбара, а не только на
+ * «Отзывы».
+ */
+.app-sidebar .side-menu__icon {
+    line-height: normal;
+}
+
+/*
+ * .sidemenu-toggle (кнопка гамбургера в шапке) — в шаблоне Valex это
+ * `<a>`; у нас `<button>` (без href="javascript:void(0);" ради
+ * семантики), а styles.min.css сбрасывает стили только под `<a>`.
+ * Браузерный `<button>` по умолчанию рисует рамку/фон/паддинги —
+ * поверх иконки виден системный прямоугольник (скриншот пользователя).
+ * Сбрасываем нативное оформление, чтобы кнопка выглядела как в
+ * дизайне — просто иконка без рамки.
+ */
+button.sidemenu-toggle {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+}

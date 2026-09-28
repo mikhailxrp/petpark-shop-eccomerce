@@ -18,6 +18,7 @@
     const skuEl = document.getElementById('product-sku');
     const quantityInput = document.getElementById('product-quantity');
     const addToCartButton = document.getElementById('product-add-to-cart');
+    const favoriteVariantInput = document.getElementById('favorite-variant-id');
     const defaultVariantId = form.dataset.defaultVariant;
 
     // Наличие/цена/подпись уже посчитаны на сервере теми же функциями,
@@ -53,6 +54,11 @@
         if (addToCartButton) {
             addToCartButton.classList.toggle('disabled', variant.available <= 0);
             addToCartButton.setAttribute('aria-disabled', variant.available <= 0 ? 'true' : 'false');
+        }
+        // Кнопка «В избранное» всегда должна ставить отметку на реально
+        // выбранный Вариант, а не на дефолтный из первичного рендера.
+        if (favoriteVariantInput) {
+            favoriteVariantInput.value = variantId;
         }
 
         const url = new URL(window.location.href);

@@ -255,6 +255,43 @@ function requireCsrf(): void
     }
 }
 
+// ─── Антибот для публичных форм от незалогиненного посетителя ──────────
+// Форма отзыва (add-review, phase-1.md Таск 8) — первая публичная форма
+// от Гостя в проекте, поэтому хелпер заводится здесь впервые
+// (dod-global.md, раздел «Безопасность»: honeypot — проверяется инлайн в
+// контроллере по имени поля, минимальное время заполнения + одноразовый
+// токен — здесь, в одной функции).
+
+function generateFormToken(string $formName): string
+{
+    ensureSessionStarted();
+    $token = bin2hex(random_bytes(16));
+    $_SESSION['form_tokens'][$formName] = ['token' => $token, 'shown_at' => time()];
+    return $token;
+}
+
+/**
+ * Проверяет одноразовый токен показа формы и минимальное время
+ * заполнения. Токен удаляется из сессии при любом исходе — повторная
+ * отправка тем же токеном (в т.ч. после успеха) всегда отклоняется.
+ */
+function verifyFormToken(string $formName, ?string $token, int $minFillSeconds = 3): bool
+{
+    ensureSessionStarted();
+
+    $stored = $_SESSION['form_tokens'][$formName] ?? null;
+    unset($_SESSION['form_tokens'][$formName]);
+
+    if (!is_array($stored) || !isset($stored['token'], $stored['shown_at'])) {
+        return false;
+    }
+    if (!is_string($token) || $token === '' || !hash_equals((string) $stored['token'], $token)) {
+        return false;
+    }
+
+    return time() - (int) $stored['shown_at'] >= $minFillSeconds;
+}
+
 // ─── Rate limiting ──────────────────────────────────────────────────────
 // Файловый счётчик в storage/cache/rate-limit/ — без Redis/Memcached,
 // подходит для shared-хостинга. Ключ = действие + IP клиента.

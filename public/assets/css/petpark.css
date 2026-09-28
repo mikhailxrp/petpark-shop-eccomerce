@@ -892,3 +892,101 @@ select.nice-select::-ms-expand {
     margin-top: 0;
 }
 
+/*
+ * .form-honeypot (product.php, форма отзыва) — ловушка для ботов
+ * (dod-global.md требует именно `display:none`, не атрибут `hidden`,
+ * который часть ботов пропускает). Человек это поле никогда не видит и
+ * не заполняет; заполненное — молчаливый отказ (ReviewController).
+ */
+.form-honeypot {
+    display: none;
+}
+
+/*
+ * .heart-wishlist (кнопка «В избранное», product.php) — в макете
+ * (`product-details.html`) это `<a href="#">`, декоративная ссылка.
+ * Наша кнопка — реальный POST-запрос с CSRF (php.md: состояние меняет
+ * только форма, не голая ссылка), поэтому разметка — `<button>` внутри
+ * `<form>`. Стили `.heart-wishlist` в `style.css` написаны только под
+ * тег `a` (`.add-to-cart a.heart-wishlist`) и не совпадают с `button` —
+ * `display: contents` убирает саму форму из потока, чтобы кнопка вела
+ * себя как прямой ребёнок флекс-контейнера `.add-to-cart`, и дублируем
+ * под неё те же значения style.css, тег ничего не меняет визуально.
+ */
+.add-to-cart form.favorite-form {
+    display: contents;
+}
+.add-to-cart button.heart-wishlist {
+    background-color: #feda46;
+    color: #000;
+    border: none;
+    font: inherit;
+    padding: 16px 20px;
+    margin: 2px;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+/*
+ * .star-rating (форма «Оставить отзыв», product.php) — в макете звёзды
+ * выбора оценки чисто декоративные (`.start i`, без обработчика клика,
+ * не заведено и в custom.js). Наша форма отправляет реальный `rating`,
+ * поэтому это 5 настоящих `<input type="radio">` — CSS-приём
+ * «звёзды в обратном порядке + подсветка через `~`» не требует своего
+ * JS-файла ради одного виджета (general.md — не плодить JS без нужды).
+ * Обратный порядок радиокнопок в разметке обязателен — иначе `~`
+ * (следующие соседи) не сможет подсветить кнопки «до» наведённой/
+ * выбранной при чтении слева направо.
+ */
+.star-rating {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 4px;
+}
+.star-rating input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+.star-rating label {
+    font-size: 28px;
+    line-height: 1;
+    color: #ccc;
+    cursor: pointer;
+}
+.star-rating input:checked ~ label,
+.star-rating label:hover,
+.star-rating label:hover ~ label {
+    /* Не #feda46 (жёлтый) — форма отзыва сама на жёлтом фоне
+       (`form.add-review{background-color:#feda46}`, style.css), звёзды
+       сливались с фоном при наведении (скриншот пользователя).
+       `--color-primary` — тот же акцент, что уже используют активная
+       Категория/пагинация/вкладки карточки (petpark.css выше). */
+    color: var(--color-primary);
+}
+.star-rating input:focus-visible + label {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/*
+ * form.add-review.comment.leave-comment input[type="email"] — style.css
+ * растягивает поля формы только через `input[type="text"]`
+ * (width:100%, padding-left:30px, border:0, outline:none) — то же самое
+ * расхождение, что уже чинили у `.subscribe input[type="email"]` выше в
+ * этом файле. Поле имени (`type="text"`) подхватывает глобальное
+ * правило само, поле email (`type="email"`) — нет, остаётся в
+ * браузерной ширине по умолчанию и прижато к левому краю (скриншот
+ * пользователя). Дублируем те же значения под наш селектор.
+ */
+form.add-review.comment.leave-comment input[type="email"] {
+    width: 100%;
+    padding-left: 30px;
+    border: 0;
+    outline: none;
+    font-size: 16px;
+}
+
+

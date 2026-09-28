@@ -33,5 +33,6 @@ require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';
+require_once ROOT_PATH . '/src/Models/Favorite.php';
 require_once ROOT_PATH . '/src/Models/User.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';

@@ -17,6 +17,7 @@ return [
         '/account'             => ['AccountController', 'index'],
         '/admin/login'         => ['Admin\AuthController', 'showLogin'],
         '/admin'               => ['Admin\DashboardController', 'index'],
+        '/admin/reviews'       => ['Admin\ReviewController', 'index'],
         '/specialist'          => ['Admin\DashboardController', 'specialist'],
         '/catalog'             => ['CatalogController', 'index'],
         '/catalog/{cat}'       => ['CatalogController', 'category'],
@@ -30,5 +31,9 @@ return [
         '/forgot-password' => ['AuthController', 'forgotPassword'],
         '/admin/login'     => ['Admin\AuthController', 'login'],
         '/admin/logout'    => ['Admin\AuthController', 'logout'],
+        '/product/{slug}/review'       => ['ReviewController', 'store'],
+        '/favorites/toggle'            => ['FavoriteController', 'toggle'],
+        '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],
+        '/admin/reviews/{id}/reject'   => ['Admin\ReviewController', 'reject'],
     ],
 ];

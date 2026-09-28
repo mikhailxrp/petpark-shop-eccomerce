@@ -8,7 +8,7 @@ namespace App\Controllers;
  * Карточка товара — /product/{slug}/ (phase-1.md, Таск 4). SQL — в
  * src/Models/Product.php; выбор Варианта по ?variant= — чистая функция
  * catalogSelectVariant() (Core/Catalog.php). Отзывы (FR-CARD-005) и
- * избранное (FR-CARD-006) — Таск 8, здесь не подключаются.
+ * избранное (FR-CARD-006) — Таск 8.
  */
 final class ProductController
 {
@@ -53,16 +53,30 @@ final class ProductController
         $rootCategoryId = (int) ($categoryChain[0]['id'] ?? $product['category_id']);
         $similarCategoryIds = catalogDescendantCategoryIds($categories, $rootCategoryId);
 
+        // Избранное — только для авторизованного Покупателя (FR-CARD-006);
+        // Гостя/персонал FavoriteController уводит на /login при клике,
+        // здесь достаточно false по умолчанию.
+        $isFavorite = false;
+        if (isAuthenticated() && ($_SESSION['user_role'] ?? null) === 'customer') {
+            $isFavorite = favoriteExists((int) $_SESSION['user_id'], (int) $selectedVariant['id']);
+        }
+
         render('product', [
-            'product'         => $product,
-            'variants'        => $variants,
-            'selectedVariant' => $selectedVariant,
-            'categoryChain'   => $categoryChain,
-            'similarProducts' => productSimilarByCategory(
+            'product'          => $product,
+            'variants'         => $variants,
+            'selectedVariant'  => $selectedVariant,
+            'categoryChain'    => $categoryChain,
+            'similarProducts'  => productSimilarByCategory(
                 $similarCategoryIds,
                 (int) $product['id'],
                 self::SIMILAR_PRODUCTS_LIMIT
             ),
+            'reviews'          => reviewsPublishedForProduct((int) $product['id']),
+            'reviewFormToken'  => generateFormToken('add-review'),
+            'reviewError'      => getFlash('review_error'),
+            'reviewSuccess'    => getFlash('review_success'),
+            'isFavorite'       => $isFavorite,
+            'favoriteNotice'   => getFlash('favorite_notice'),
         ]);
     }
 }

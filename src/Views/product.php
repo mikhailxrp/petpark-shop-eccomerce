@@ -13,6 +13,12 @@ declare(strict_types=1);
  * @var array<string, mixed>              $selectedVariant catalogSelectVariant()
  * @var array<int, array<string, mixed>>  $categoryChain   Главная-цепочка parent_id, без корня
  * @var array<int, array<string, mixed>>  $similarProducts productSimilarByCategory() — в пределах корневой Категории (ProductController), та же форма строки, что у components/product-card.php
+ * @var array<int, array<string, mixed>>  $reviews         reviewsPublishedForProduct() — только published, для этого Товара
+ * @var string                            $reviewFormToken generateFormToken('add-review') — антибот, скрытое поле формы отзыва
+ * @var string|null                       $reviewError     flash 'review_error' — невалидная форма (не бот-сценарий)
+ * @var string|null                       $reviewSuccess   flash 'review_success' — реальный успех И бот-сценарий выглядят одинаково (dod-global.md)
+ * @var bool                              $isFavorite      favoriteExists() для текущего выбранного Варианта и авторизованного Покупателя
+ * @var string|null                       $favoriteNotice  flash 'favorite_notice' — результат последнего переключения «В избранное»
  */
 
 $minPrice = min(array_map(
@@ -115,6 +121,11 @@ ob_start();
 ?>
 <?= $breadcrumbSchema ?>
 <?= $productSchema ?>
+<?php if ($favoriteNotice !== null): ?>
+    <div class="container mt-3">
+        <div class="alert alert-info mb-0"><?= e($favoriteNotice) ?></div>
+    </div>
+<?php endif; ?>
 <section class="banner" style="background-color: #fff8e5; background-image: url(/assets/img/banners/banner-catalog.png)">
     <div class="container">
         <div class="row align-items-center">
@@ -220,6 +231,16 @@ ob_start();
                                 id="product-add-to-cart"
                                 aria-disabled="<?= $selectedAvailable <= 0 ? 'true' : 'false' ?>"
                             >В корзину</a>
+                            <form method="post" action="/favorites/toggle" class="favorite-form">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="slug" value="<?= e($product['slug']) ?>">
+                                <input type="hidden" name="variant_id" id="favorite-variant-id" value="<?= (int) $selectedVariant['id'] ?>">
+                                <button
+                                    type="submit"
+                                    class="heart-wishlist"
+                                    aria-label="<?= $isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' ?>"
+                                ><i class="fa-<?= $isFavorite ? 'solid' : 'regular' ?> fa-heart"></i></button>
+                            </form>
                         </div>
                         <ul class="product_meta">
                             <li>
@@ -397,6 +418,78 @@ ob_start();
                         <i class="fa-solid fa-video"></i>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="gap no-top">
+    <div class="container">
+        <div class="row mt-70">
+            <div class="col-lg-7">
+                <div class="information">
+                    <h3>Отзывы</h3>
+                    <div class="boder-bar"></div>
+                </div>
+                <?php if ($reviews === []): ?>
+                    <p>Пока нет отзывов об этом товаре — станьте первым.</p>
+                <?php else: ?>
+                    <ul class="reviews">
+                        <?php foreach ($reviews as $review): ?>
+                            <li>
+                                <div>
+                                    <div class="star">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="fa-<?= $i <= (int) $review['rating'] ? 'solid' : 'regular' ?> fa-star"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="d-flex align-items-center">
+                                        <h4><?= e((string) $review['author_name']) ?></h4>
+                                        <span><?= e(date('d.m.Y', strtotime((string) $review['created_at']))) ?></span>
+                                    </div>
+                                    <p><?= e((string) $review['body']) ?></p>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+            <div class="col-lg-5">
+                <?php if ($reviewSuccess !== null): ?>
+                    <div class="alert alert-success"><?= e($reviewSuccess) ?></div>
+                <?php elseif ($reviewError !== null): ?>
+                    <div class="alert alert-danger"><?= e($reviewError) ?></div>
+                <?php endif; ?>
+                <form class="add-review comment leave-comment" method="post" action="/product/<?= e($product['slug']) ?>/review" novalidate>
+                    <?= csrfField() ?>
+                    <!--
+                        Honeypot — скрыт классом .form-honeypot (display:none,
+                        petpark.css), не атрибутом hidden (dod-global.md:
+                        некоторые боты его пропускают). Заполнение — молчаливый
+                        отказ, тот же ответ, что и у настоящего успеха.
+                    -->
+                    <input type="text" name="website" class="form-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <input type="hidden" name="form_token" value="<?= e($reviewFormToken) ?>">
+                    <div class="information">
+                        <h3>Оставить отзыв</h3>
+                        <div class="boder-bar"></div>
+                    </div>
+                    <fieldset class="star-rating-input d-flex align-items-center mb-4">
+                        <legend class="visually-hidden">Оценка</legend>
+                        <span>Оценка:</span>
+                        <div class="star-rating ps-md-4">
+                            <?php for ($i = 5; $i >= 1; $i--): ?>
+                                <input type="radio" name="rating" id="rating-<?= $i ?>" value="<?= $i ?>" required>
+                                <label for="rating-<?= $i ?>" title="<?= $i ?> из 5">★</label>
+                            <?php endfor; ?>
+                        </div>
+                    </fieldset>
+                    <input type="text" name="name" placeholder="Ваше имя" maxlength="100" required>
+                    <input type="email" name="email" placeholder="Email" maxlength="150" required>
+                    <textarea name="body" placeholder="Текст отзыва" required></textarea>
+                    <button type="submit" class="button">Отправить отзыв</button>
+                </form>
             </div>
         </div>
     </div>
