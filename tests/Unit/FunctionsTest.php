@@ -11,6 +11,19 @@ final class FunctionsTest extends TestCase
     protected function tearDown(): void
     {
         $_SESSION = [];
+        unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+    }
+
+    public function testIsAjaxRequestTrueForXmlHttpRequestHeader(): void
+    {
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
+        $this->assertTrue(isAjaxRequest());
+    }
+
+    public function testIsAjaxRequestFalseWhenHeaderMissing(): void
+    {
+        unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+        $this->assertFalse(isAjaxRequest());
     }
 
     public function testNormalizeUserIdAcceptsPositiveInt(): void
@@ -95,6 +108,20 @@ final class FunctionsTest extends TestCase
         $this->assertSame('/', homePathForRole('unknown'));
     }
 
+    public function testAdminRoleLabelReturnsLabelForEachStaffRole(): void
+    {
+        $this->assertSame('Специалист', adminRoleLabel('specialist'));
+        $this->assertSame('Администратор смены', adminRoleLabel('shift_admin'));
+        $this->assertSame('Контент-редактор', adminRoleLabel('content_editor'));
+        $this->assertSame('Владелец', adminRoleLabel('owner'));
+    }
+
+    public function testAdminRoleLabelFallsBackForUnknownRole(): void
+    {
+        $this->assertSame('Персонал', adminRoleLabel('customer'));
+        $this->assertSame('Персонал', adminRoleLabel('unknown'));
+    }
+
     public function testRequireRoleAllowsMatchingRole(): void
     {
         $_SESSION['user_id']   = 1;
@@ -104,5 +131,83 @@ final class FunctionsTest extends TestCase
         requireRole('shift_admin', 'owner');
 
         $this->assertTrue(true);
+    }
+
+    public function testGeneratePasswordDefaultLength(): void
+    {
+        $this->assertSame(12, strlen(generatePassword()));
+    }
+
+    public function testGeneratePasswordRespectsCustomLength(): void
+    {
+        $this->assertSame(20, strlen(generatePassword(20)));
+    }
+
+    public function testGeneratePasswordUsesOnlyUnambiguousAlnumChars(): void
+    {
+        $password = generatePassword(64);
+
+        $this->assertMatchesRegularExpression(
+            '/^[A-HJ-NP-Za-km-z2-9]+$/',
+            $password
+        );
+    }
+
+    public function testGeneratePasswordIsRandomBetweenCalls(): void
+    {
+        $this->assertNotSame(generatePassword(), generatePassword());
+    }
+
+    public function testGenerateFormTokenStoresTokenAndShownAtInSession(): void
+    {
+        $token = generateFormToken('add-review');
+
+        $this->assertSame($token, $_SESSION['form_tokens']['add-review']['token']);
+        $this->assertArrayHasKey('shown_at', $_SESSION['form_tokens']['add-review']);
+    }
+
+    public function testVerifyFormTokenAcceptsValidTokenAfterMinFillTime(): void
+    {
+        $token = generateFormToken('add-review');
+        $_SESSION['form_tokens']['add-review']['shown_at'] = time() - 5;
+
+        $this->assertTrue(verifyFormToken('add-review', $token, 3));
+    }
+
+    public function testVerifyFormTokenRejectsSubmissionFasterThanMinFillTime(): void
+    {
+        $token = generateFormToken('add-review');
+
+        $this->assertFalse(verifyFormToken('add-review', $token, 3));
+    }
+
+    public function testVerifyFormTokenRejectsWrongToken(): void
+    {
+        generateFormToken('add-review');
+        $_SESSION['form_tokens']['add-review']['shown_at'] = time() - 5;
+
+        $this->assertFalse(verifyFormToken('add-review', 'wrong-token', 3));
+    }
+
+    public function testVerifyFormTokenRejectsMissingOrEmptyToken(): void
+    {
+        generateFormToken('add-review');
+
+        $this->assertFalse(verifyFormToken('add-review', null));
+        $this->assertFalse(verifyFormToken('add-review', ''));
+    }
+
+    public function testVerifyFormTokenRejectsWhenNoTokenWasEverShown(): void
+    {
+        $this->assertFalse(verifyFormToken('never-shown', 'anything'));
+    }
+
+    public function testVerifyFormTokenIsOneTimeUse(): void
+    {
+        $token = generateFormToken('add-review');
+        $_SESSION['form_tokens']['add-review']['shown_at'] = time() - 5;
+
+        $this->assertTrue(verifyFormToken('add-review', $token, 3));
+        $this->assertFalse(verifyFormToken('add-review', $token, 3));
     }
 }

@@ -102,4 +102,71 @@ final class SeoTest extends TestCase
 
         $this->assertNotSame(seoTitle('generic'), seoDescription('generic'));
     }
+
+    private function sampleProductEntity(): array
+    {
+        return [
+            'name'        => 'Корм для кошек',
+            'description' => 'Сухой корм с курицей',
+            'sku'         => 'KORM-01',
+        ];
+    }
+
+    public function testRenderProductSchemaUsesGivenPriceNotRecomputedFromEntity(): void
+    {
+        // Цена/наличие передаются готовыми — та же величина, что рисует
+        // видимую цену на странице (dod-global.md), функция не пересчитывает
+        // их заново из $entity (в котором цены вообще нет).
+        $schema = renderProductSchema($this->sampleProductEntity(), 799.0, 'in', '/product/korm/');
+
+        $this->assertStringContainsString('"price":"799.00"', $schema);
+        $this->assertStringContainsString('https://schema.org/InStock', $schema);
+    }
+
+    public function testRenderProductSchemaMarksOutOfStock(): void
+    {
+        $schema = renderProductSchema($this->sampleProductEntity(), 799.0, 'out', '/product/korm/');
+
+        $this->assertStringContainsString('OutOfStock', $schema);
+        $this->assertStringNotContainsString('"availability":"https://schema.org/InStock"', $schema);
+    }
+
+    public function testRenderProductSchemaMarksLowStockAsInStock(): void
+    {
+        // «Осталось мало» — всё ещё можно купить, поэтому это InStock,
+        // а не отдельный статус schema.org (у него нет «мало»).
+        $schema = renderProductSchema($this->sampleProductEntity(), 799.0, 'low', '/product/korm/');
+
+        $this->assertStringContainsString('InStock', $schema);
+    }
+
+    public function testRenderProductSchemaIncludesNameSkuAndImages(): void
+    {
+        $schema = renderProductSchema(
+            $this->sampleProductEntity(),
+            799.0,
+            'in',
+            '/product/korm/',
+            ['/uploads/products/korm.png']
+        );
+
+        $this->assertStringContainsString('Корм для кошек', $schema);
+        $this->assertStringContainsString('KORM-01', $schema);
+        $this->assertStringContainsString('/uploads/products/korm.png', $schema);
+    }
+
+    public function testRenderProductSchemaIsValidJsonLd(): void
+    {
+        $schema = renderProductSchema($this->sampleProductEntity(), 799.0, 'in', '/product/korm/');
+
+        $json = trim(str_replace(
+            ['<script type="application/ld+json">', '</script>'],
+            '',
+            $schema
+        ));
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('Product', $decoded['@type']);
+        $this->assertSame('Offer', $decoded['offers']['@type']);
+    }
 }

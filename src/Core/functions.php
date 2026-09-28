@@ -84,13 +84,6 @@ function isAuthenticated(): bool
     return normalizeUserId($_SESSION['user_id'] ?? null) !== null;
 }
 
-function requireAuth(): void
-{
-    if (!isAuthenticated()) {
-        redirect('/login');
-    }
-}
-
 function redirectIfAuthenticated(): void
 {
     if (isAuthenticated()) {
@@ -110,10 +103,27 @@ function homePathForRole(string $role): string
     };
 }
 
+function adminRoleLabel(string $role): string
+{
+    return match ($role) {
+        'specialist' => 'Специалист',
+        'shift_admin' => 'Администратор смены',
+        'content_editor' => 'Контент-редактор',
+        'owner' => 'Владелец',
+        default => 'Персонал',
+    };
+}
+
 function requireRole(string ...$roles): void
 {
-    requireAuth();
     ensureSessionStarted();
+
+    // Незалогиненный видит форму входа своей части сайта — персонал
+    // (specialist/shift_admin/content_editor/owner) шлём на
+    // /admin/login, не на /login Покупателя (phase-1.md, Таск 7).
+    if (!isAuthenticated()) {
+        redirect(in_array('customer', $roles, true) ? '/login' : '/admin/login');
+    }
 
     $role = $_SESSION['user_role'] ?? null;
 
@@ -177,6 +187,40 @@ function input(string $key, mixed $default = ''): mixed
     return $_POST[$key] ?? $_GET[$key] ?? $default;
 }
 
+/**
+ * X-Requested-With ставит сам fetch()-вызов (public/assets/js/catalog.js) —
+ * браузер его не добавляет автоматически, поэтому по заголовку надёжно
+ * отличаем AJAX-запрос сортировки от обычного захода на страницу.
+ */
+function isAjaxRequest(): bool
+{
+    return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+}
+
+// ─── Пароли ─────────────────────────────────────────────────────────────
+
+/**
+ * Новый пароль для восстановления (FR-AUTH-002/003) — без визуально
+ * похожих символов (0/O, 1/l/I), random_int — криптостойкий генератор,
+ * не mt_rand().
+ */
+function generatePassword(int $length = 12): string
+{
+    $alphabet = str_replace(
+        ['0', 'O', '1', 'l', 'I'],
+        '',
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    );
+    $max = strlen($alphabet) - 1;
+
+    $password = '';
+    for ($i = 0; $i < $length; $i++) {
+        $password .= $alphabet[random_int(0, $max)];
+    }
+
+    return $password;
+}
+
 // ─── CSRF ───────────────────────────────────────────────────────────────
 
 function csrfToken(): string
@@ -209,6 +253,43 @@ function requireCsrf(): void
         http_response_code(419);
         exit('419 Неверный CSRF-токен. Обновите страницу и попробуйте снова.');
     }
+}
+
+// ─── Антибот для публичных форм от незалогиненного посетителя ──────────
+// Форма отзыва (add-review, phase-1.md Таск 8) — первая публичная форма
+// от Гостя в проекте, поэтому хелпер заводится здесь впервые
+// (dod-global.md, раздел «Безопасность»: honeypot — проверяется инлайн в
+// контроллере по имени поля, минимальное время заполнения + одноразовый
+// токен — здесь, в одной функции).
+
+function generateFormToken(string $formName): string
+{
+    ensureSessionStarted();
+    $token = bin2hex(random_bytes(16));
+    $_SESSION['form_tokens'][$formName] = ['token' => $token, 'shown_at' => time()];
+    return $token;
+}
+
+/**
+ * Проверяет одноразовый токен показа формы и минимальное время
+ * заполнения. Токен удаляется из сессии при любом исходе — повторная
+ * отправка тем же токеном (в т.ч. после успеха) всегда отклоняется.
+ */
+function verifyFormToken(string $formName, ?string $token, int $minFillSeconds = 3): bool
+{
+    ensureSessionStarted();
+
+    $stored = $_SESSION['form_tokens'][$formName] ?? null;
+    unset($_SESSION['form_tokens'][$formName]);
+
+    if (!is_array($stored) || !isset($stored['token'], $stored['shown_at'])) {
+        return false;
+    }
+    if (!is_string($token) || $token === '' || !hash_equals((string) $stored['token'], $token)) {
+        return false;
+    }
+
+    return time() - (int) $stored['shown_at'] >= $minFillSeconds;
 }
 
 // ─── Rate limiting ──────────────────────────────────────────────────────

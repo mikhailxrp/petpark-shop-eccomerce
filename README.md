@@ -135,8 +135,13 @@ petpark-shop-eccomerce/
    | Покупатель | `customer@petpark.test` |
 
    Пароль для всех — значение `SEED_USER_PASSWORD` из вашего `.env`.
-5. `composer test` — юнит-тесты чистой логики (Core-хелперы, Router)
-6. Document root сервера — папка `public/`
+5. `php database/seed-catalog.php` — демо-каталог (5 категорий с
+   подкатегориями, 7 брендов, 60 товаров с Вариантами, отзывы) из
+   `00-input/attachments/catalog-petpark.xlsx`; идемпотентно, требует
+   `php.ini` с включённым `extension=gd` (генерация демо-фото
+   товаров в `public/uploads/products/`)
+6. `composer test` — юнит-тесты чистой логики (Core-хелперы, Router)
+7. Document root сервера — папка `public/`
 
 ---
 
