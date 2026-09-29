@@ -204,6 +204,7 @@ $pdo->exec("
         user_id    INT NULL,
         variant_id INT NOT NULL,
         quantity   INT NOT NULL DEFAULT 1,
+        price_seen DECIMAL(10, 2) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_cart_items_session (session_id),
         KEY idx_cart_items_user (user_id),
@@ -230,12 +231,18 @@ $pdo->exec("
         payment_method     ENUM('card_online', 'cash_or_card_on_delivery') NOT NULL,
         delivery_cost      DECIMAL(10, 2) NOT NULL DEFAULT 0,
         delivery_address   VARCHAR(255) NULL,
+        contact_name       VARCHAR(150) NULL,
+        contact_phone      VARCHAR(20) NULL,
+        contact_email      VARCHAR(255) NULL,
+        customer_note      VARCHAR(500) NULL,
+        checkout_token     CHAR(64) NULL,
         reserved_until     TIMESTAMP NULL,
         amocrm_id          VARCHAR(64) NULL,
         amocrm_synced_at   TIMESTAMP NULL,
         total              DECIMAL(10, 2) NOT NULL,
         created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_orders_checkout_token (checkout_token),
         KEY idx_orders_user (user_id),
         KEY idx_orders_status (status),
         KEY idx_orders_created (created_at),
@@ -246,6 +253,38 @@ $pdo->exec("
             FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
+
+// Колонки Фазы 2 (ADR-016, ADR-017, planning-log.md) добавлены после первого
+// запуска install.php — на существующей БД досоздаём их отдельно, как
+// is_featured/popularity_rank у products выше.
+$phase2Columns = [
+    ['cart_items', 'price_seen',    "DECIMAL(10, 2) NULL AFTER quantity"],
+    ['orders',     'contact_name',  "VARCHAR(150) NULL AFTER delivery_address"],
+    ['orders',     'contact_phone', "VARCHAR(20) NULL AFTER contact_name"],
+    ['orders',     'contact_email', "VARCHAR(255) NULL AFTER contact_phone"],
+    ['orders',     'customer_note', "VARCHAR(500) NULL AFTER contact_email"],
+    ['orders',     'checkout_token', "CHAR(64) NULL AFTER customer_note"],
+];
+
+foreach ($phase2Columns as [$table, $column, $definition]) {
+    $exists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$table}' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($exists === 0) {
+        $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+    }
+}
+
+$checkoutTokenIndexExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND INDEX_NAME = 'uq_orders_checkout_token'
+")->fetchColumn();
+
+if ($checkoutTokenIndexExists === 0) {
+    $pdo->exec("ALTER TABLE orders ADD UNIQUE KEY uq_orders_checkout_token (checkout_token)");
+}
 
 // ─── order_items ────────────────────────────────────────────────────────
 // product_name/variant_label/price — снэпшот на момент заказа, дублируются намеренно.

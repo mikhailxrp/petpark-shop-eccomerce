@@ -10,3 +10,4 @@ require_once ROOT_PATH . '/src/Core/Router.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
 require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Core/Cache.php';
+require_once ROOT_PATH . '/src/Core/Order.php';
