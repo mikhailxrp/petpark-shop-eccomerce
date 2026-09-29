@@ -335,6 +335,25 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
 }
 
 /**
+ * Заказы `new` с истёкшим сроком резерва (BR-003) — кандидаты на отмену.
+ * Только id: сам переход и повторную проверку статуса под блокировкой
+ * делает orderTransition().
+ *
+ * @return array<int, int>
+ */
+function orderFindExpiredIds(): array
+{
+    $stmt = getPdo()->query("
+        SELECT id
+        FROM orders
+        WHERE status = 'new' AND reserved_until < NOW()
+        ORDER BY id ASC
+    ");
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
  * Лог каждого вызова платёжного callback'а (php.md: логировать все
  * вебхуки с id Заказа) — вне зависимости от исхода.
  */
