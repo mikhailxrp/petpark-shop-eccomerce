@@ -217,6 +217,8 @@ ob_start();
                                 type="number"
                                 class="input-text"
                                 id="product-quantity"
+                                name="quantity"
+                                form="product-cart-form"
                                 step="1"
                                 min="1"
                                 max="<?= max(1, $selectedAvailable) ?>"
@@ -225,22 +227,25 @@ ob_start();
                             >
                         </div>
                         <div class="add-to-cart">
-                            <a
-                                href="#"
-                                class="button<?= $selectedAvailable <= 0 ? ' disabled' : '' ?>"
+                            <button
+                                type="submit"
+                                form="product-cart-form"
+                                class="button"
                                 id="product-add-to-cart"
-                                aria-disabled="<?= $selectedAvailable <= 0 ? 'true' : 'false' ?>"
-                            >В корзину</a>
-                            <form method="post" action="/favorites/toggle" class="favorite-form">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="slug" value="<?= e($product['slug']) ?>">
-                                <input type="hidden" name="variant_id" id="favorite-variant-id" value="<?= (int) $selectedVariant['id'] ?>">
-                                <button
-                                    type="submit"
-                                    class="heart-wishlist"
-                                    aria-label="<?= $isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' ?>"
-                                ><i class="fa-<?= $isFavorite ? 'solid' : 'regular' ?> fa-heart"></i></button>
-                            </form>
+                                <?= $selectedAvailable <= 0 ? 'disabled' : '' ?>
+                            >В корзину</button>
+                            <!-- Кнопка вынесена из своей <form>: вложенные <form> в
+                                 HTML недействительны, браузер удаляет тег вложенной
+                                 <form> при разборе — кнопка оставалась без формы для
+                                 отправки и не работала (тот же баг, что чинили для
+                                 «В корзину» выше). Форма — ниже, вне .variations_form,
+                                 связь через form="product-favorite-form". -->
+                            <button
+                                type="submit"
+                                form="product-favorite-form"
+                                class="heart-wishlist"
+                                aria-label="<?= $isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' ?>"
+                            ><i class="fa-<?= $isFavorite ? 'solid' : 'regular' ?> fa-heart"></i></button>
                         </div>
                         <ul class="product_meta">
                             <li>
@@ -258,6 +263,20 @@ ob_start();
                                 <span id="product-sku"><?= e((string) $selectedVariant['sku']) ?></span>
                             </li>
                         </ul>
+                    </form>
+                    <!-- Формы «В корзину» и «В избранное» вынесены из
+                         .variations_form: вложенные <form> в HTML не работают.
+                         Поля/кнопки выше привязаны к ним атрибутом form="...";
+                         variant_id в обеих подставляет product-variants.js при
+                         смене Варианта. -->
+                    <form method="post" action="/cart/add" id="product-cart-form">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="variant_id" id="cart-variant-id" value="<?= (int) $selectedVariant['id'] ?>">
+                    </form>
+                    <form method="post" action="/favorites/toggle" id="product-favorite-form">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="slug" value="<?= e($product['slug']) ?>">
+                        <input type="hidden" name="variant_id" id="favorite-variant-id" value="<?= (int) $selectedVariant['id'] ?>">
                     </form>
                 </div>
             </div>

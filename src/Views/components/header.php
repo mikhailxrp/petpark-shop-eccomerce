@@ -10,6 +10,15 @@ declare(strict_types=1);
  * ProductController, SearchController, HomeController).
  */
 $headerCategoryTree = catalogBuildCategoryTree(categoryAll());
+
+// Мини-корзина (Таск 3, FR-CART-007) — считаем сами, тем же принципом,
+// что дерево Категорий выше: шапка сама запрашивает свои данные, чтобы
+// каждый Controller, рендерящий через public.php, не прокидывал их.
+$headerCartSummary = cartSummarize(cartItemsForOwner(cartOwner()));
+$headerCartCount = 0;
+foreach ($headerCartSummary['items'] as $headerCartItem) {
+    $headerCartCount += (int) $headerCartItem['quantity'];
+}
 ?>
 <header class="two">
     <div class="top-bar">
@@ -110,6 +119,41 @@ $headerCategoryTree = catalogBuildCategoryTree(categoryAll());
                 </div>
                 <div class="line"></div>
                 <a href="#"><i class="fa-regular fa-heart"></i></a>
+                <div class="line"></div>
+                <div class="cart-widget">
+                    <a
+                        href="/cart"
+                        class="cart-widget__toggle"
+                        id="cart-widget-toggle"
+                        aria-expanded="false"
+                        aria-controls="cart-widget-popup"
+                        aria-label="Корзина"
+                    >
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        <span class="cart-widget__count<?= $headerCartCount === 0 ? ' d-none' : '' ?>" id="cart-count"><?= $headerCartCount ?></span>
+                    </a>
+                    <div class="cart-popup" id="cart-widget-popup" aria-labelledby="cart-widget-toggle">
+                        <ul class="cart-popup__list" id="cart-popup-items">
+                            <?php foreach ($headerCartSummary['items'] as $headerCartItem): ?>
+                                <li class="cart-popup__item" data-item-id="<?= (int) $headerCartItem['id'] ?>">
+                                    <img class="cart-popup__item-img" src="/assets/img/food-1.png" alt="<?= e((string) $headerCartItem['name']) ?>" width="50" height="50">
+                                    <div class="cart-popup__item-info">
+                                        <p class="cart-popup__item-name"><?= e((string) $headerCartItem['name']) ?></p>
+                                        <p class="cart-popup__item-line cart-popup-item__line">
+                                            <?= (int) $headerCartItem['quantity'] ?> шт. — <?= e(cartFormatMoney($headerCartItem['line_total'])) ?> ₽
+                                        </p>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                            <li id="cart-popup-empty" class="cart-popup__empty<?= $headerCartCount > 0 ? ' d-none' : '' ?>">Корзина пуста</li>
+                        </ul>
+                        <div class="cart-popup__total">
+                            <span>Итого:</span>
+                            <span id="cart-popup-subtotal"><?= e(cartFormatMoney($headerCartSummary['subtotal'])) ?> ₽</span>
+                        </div>
+                        <a class="cart-popup__cta" href="/cart">Перейти в корзину</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

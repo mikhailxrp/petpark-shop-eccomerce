@@ -24,6 +24,7 @@ return [
         '/catalog/{cat}/{sub}' => ['CatalogController', 'subcategory'],
         '/search'              => ['SearchController', 'index'],
         '/product/{slug}'      => ['ProductController', 'show'],
+        '/cart'                => ['CartController', 'index'],
         '/sitemap.xml'         => ['SitemapController', 'index'],
     ],
     'POST' => [
@@ -34,6 +35,9 @@ return [
         '/admin/logout'    => ['Admin\AuthController', 'logout'],
         '/product/{slug}/review'       => ['ReviewController', 'store'],
         '/favorites/toggle'            => ['FavoriteController', 'toggle'],
+        '/cart/add'                    => ['CartController', 'add'],
+        '/cart/update'                 => ['CartController', 'update'],
+        '/cart/remove'                 => ['CartController', 'remove'],
         '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],
         '/admin/reviews/{id}/reject'   => ['Admin\ReviewController', 'reject'],
     ],

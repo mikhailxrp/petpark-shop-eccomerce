@@ -255,6 +255,38 @@ function requireCsrf(): void
     }
 }
 
+// ─── Долгоживущие cookie-токены ─────────────────────────────────────────
+// Для состояния, которое должно пережить закрытие браузера — PHP-сессия
+// его не переживает. Первый и пока единственный потребитель — токен
+// корзины Гостя (Core/Cart.php, ADR-015), хелпер написан без привязки к
+// корзине, чтобы не дублировать код при следующем похожем случае.
+
+function getOrSetPersistentToken(string $cookieName, string $pattern, int $bytes, int $days): string
+{
+    $token = $_COOKIE[$cookieName] ?? null;
+    if (is_string($token) && preg_match($pattern, $token) === 1) {
+        return $token;
+    }
+
+    $token = bin2hex(random_bytes($bytes));
+
+    if (!headers_sent()) {
+        setcookie($cookieName, $token, [
+            'expires'  => time() + $days * 86400,
+            'path'     => '/',
+            'secure'   => defined('APP_ENV') && APP_ENV === 'production',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+    // Без этого следующий вызов в том же запросе не увидел бы токен —
+    // setcookie() только ставит заголовок ответа, $_COOKIE обновится лишь
+    // при следующем запросе браузера.
+    $_COOKIE[$cookieName] = $token;
+
+    return $token;
+}
+
 // ─── Антибот для публичных форм от незалогиненного посетителя ──────────
 // Форма отзыва (add-review, phase-1.md Таск 8) — первая публичная форма
 // от Гостя в проекте, поэтому хелпер заводится здесь впервые
