@@ -26,6 +26,26 @@ function userFindByEmail(string $email): ?array
     return $user !== false ? $user : null;
 }
 
+/**
+ * Контакты авторизованного Покупателя для автоподстановки на оформлении
+ * (FR-CHK-001, правило 2) — без password_hash, он здесь не нужен.
+ *
+ * @return array<string, mixed>|null
+ */
+function userFindById(int $id): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, name, email, phone, role
+        FROM users
+        WHERE id = :id
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $id]);
+
+    $user = $stmt->fetch();
+    return $user !== false ? $user : null;
+}
+
 function userUpdatePassword(int $userId, string $passwordHash): void
 {
     $stmt = getPdo()->prepare('

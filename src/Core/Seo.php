@@ -43,6 +43,7 @@ function seoTitle(string $type, array $entity = []): string
         'login' => sprintf('Вход в личный кабинет — %s', SHOP_NAME),
         'forgot-password' => sprintf('Восстановление пароля — %s', SHOP_NAME),
         'cart' => sprintf('Корзина — %s', SHOP_NAME),
+        'checkout' => sprintf('Оформление заказа — %s', SHOP_NAME),
         default => sprintf('%s — зоомагазин и центр ухода за питомцами, %s', SHOP_NAME, SHOP_CITY),
     };
 }
@@ -74,6 +75,7 @@ function seoDescription(string $type, array $entity = []): string
         'login' => sprintf('Вход в личный кабинет покупателя %s, %s.', SHOP_NAME, SHOP_CITY),
         'forgot-password' => sprintf('Восстановление пароля личного кабинета %s.', SHOP_NAME),
         'cart' => sprintf('Корзина покупок %s, %s: товары для кошек, собак и птиц.', SHOP_NAME, SHOP_CITY),
+        'checkout' => sprintf('Оформление заказа в %s, %s: контакты, доставка и оплата.', SHOP_NAME, SHOP_CITY),
         default => sprintf(
             '%s — доставка и самовывоз, груминг и ветконсультации, %s.',
             SHOP_NAME,

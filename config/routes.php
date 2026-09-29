@@ -25,6 +25,7 @@ return [
         '/search'              => ['SearchController', 'index'],
         '/product/{slug}'      => ['ProductController', 'show'],
         '/cart'                => ['CartController', 'index'],
+        '/checkout'            => ['CheckoutController', 'index'],
         '/sitemap.xml'         => ['SitemapController', 'index'],
     ],
     'POST' => [

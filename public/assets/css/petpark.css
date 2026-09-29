@@ -1131,6 +1131,11 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     text-transform: none;
     color: var(--color-text);
 }
+.cart-totals__checkout {
+    display: block;
+    margin-top: var(--cart-gap-sm);
+    text-align: center;
+}
 .cart-empty {
     padding: var(--cart-gap-lg) 0;
     text-align: center;
@@ -1157,6 +1162,47 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     .cart-page table.shop_table_responsive tr {
         padding: 0 50px;
     }
+}
+
+/*
+ * Оформление заказа (checkout.php, phase-2.md Таск 4). Тот же приём,
+ * что у .cart-page выше — .cart_totals/.checkout-side из style.css
+ * заданы без адаптива (padding 54–60px), на 320px вылезали за экран.
+ */
+.checkout-page .cart_totals {
+    padding: 24px;
+}
+.checkout-page table.shop_table_responsive tr {
+    padding: 0 16px;
+}
+.checkout-page .checkout-side {
+    padding: 24px;
+}
+@media (min-width: 768px) {
+    .checkout-page .cart_totals {
+        padding: 54px;
+    }
+    .checkout-page table.shop_table_responsive tr {
+        padding: 0 50px;
+    }
+    .checkout-page .checkout-side {
+        padding: 60px;
+    }
+}
+
+.checkout-section-title {
+    margin-top: 20px;
+}
+.checkout-login-hint {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: var(--color-text);
+}
+.checkout-conditional {
+    margin-bottom: 15px;
+}
+.checkout-address__city {
+    font-weight: 700;
 }
 
 /*

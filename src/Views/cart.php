@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * Корзина — /cart (phase-2.md, Таск 2), макет SCR-04 `shop-cart.html`.
  * Поля купона нет (FR-CART-006), строки «Доставка» нет — она считается
- * на оформлении (FR-CART-003, правило 2). Кнопки «Оформить заказ» нет до
- * Таска 4 (маршрута /checkout ещё нет). Без JS формы работают обычной
+ * на оформлении (FR-CART-003, правило 2). Кнопка «Оформить заказ» ведёт
+ * на /checkout (phase-2.md, Таск 4). Без JS формы работают обычной
  * отправкой; public/assets/js/cart.js перехватывает их и перерисовывает
  * суммы из JSON сервера.
  * @var array<int, array<string, mixed>> $items    cartSummarize()['items'] — + line_total, available
@@ -174,6 +174,7 @@ ob_start();
                                 </tbody>
                             </table>
                             <p class="cart-totals__note">Стоимость доставки рассчитывается при оформлении заказа.</p>
+                            <a href="/checkout" class="button cart-totals__checkout">Оформить заказ</a>
                         </div>
                     </div>
                 </div>
