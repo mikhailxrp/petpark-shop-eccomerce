@@ -55,10 +55,20 @@ final class AuthController
         }
 
         clearRateLimit('login');
+
+        // До входа текущий запрос — всегда Гость (redirectIfAuthenticated()
+        // уже увёл бы вошедшего с этой страницы), поэтому cartOwner() здесь
+        // отдаёт токен cookie-корзины Гостя (FR-CART-005, Q-049).
+        $guestCartToken = cartOwner()['session_id'];
+
         regenerateSession();
 
         $_SESSION['user_id']   = (int) $user['id'];
         $_SESSION['user_role'] = $user['role'];
+
+        if ($guestCartToken !== null) {
+            cartMergeGuestIntoUser($guestCartToken, (int) $user['id']);
+        }
 
         redirect(homePathForRole($user['role']));
     }

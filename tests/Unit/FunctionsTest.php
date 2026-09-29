@@ -11,7 +11,7 @@ final class FunctionsTest extends TestCase
     protected function tearDown(): void
     {
         $_SESSION = [];
-        unset($_SERVER['HTTP_X_REQUESTED_WITH']);
+        unset($_SERVER['HTTP_X_REQUESTED_WITH'], $_COOKIE['test_persistent_token']);
     }
 
     public function testIsAjaxRequestTrueForXmlHttpRequestHeader(): void
@@ -209,5 +209,37 @@ final class FunctionsTest extends TestCase
 
         $this->assertTrue(verifyFormToken('add-review', $token, 3));
         $this->assertFalse(verifyFormToken('add-review', $token, 3));
+    }
+
+    private const TEST_TOKEN_PATTERN = '/^[0-9a-f]{10}$/';
+
+    public function testGetOrSetPersistentTokenGeneratesValidTokenWhenCookieMissing(): void
+    {
+        unset($_COOKIE['test_persistent_token']);
+
+        $token = getOrSetPersistentToken('test_persistent_token', self::TEST_TOKEN_PATTERN, 5, 30);
+
+        $this->assertMatchesRegularExpression(self::TEST_TOKEN_PATTERN, $token);
+        $this->assertSame($token, $_COOKIE['test_persistent_token']);
+    }
+
+    public function testGetOrSetPersistentTokenReusesValidExistingCookie(): void
+    {
+        $_COOKIE['test_persistent_token'] = 'aaaaaaaaaa';
+
+        $token = getOrSetPersistentToken('test_persistent_token', self::TEST_TOKEN_PATTERN, 5, 30);
+
+        $this->assertSame('aaaaaaaaaa', $token);
+    }
+
+    public function testGetOrSetPersistentTokenRejectsMalformedCookieAndGeneratesNew(): void
+    {
+        $_COOKIE['test_persistent_token'] = 'not-a-token';
+
+        $token = getOrSetPersistentToken('test_persistent_token', self::TEST_TOKEN_PATTERN, 5, 30);
+
+        $this->assertNotSame('not-a-token', $token);
+        $this->assertMatchesRegularExpression(self::TEST_TOKEN_PATTERN, $token);
+        $this->assertSame($token, $_COOKIE['test_persistent_token']);
     }
 }

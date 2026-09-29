@@ -947,16 +947,15 @@ select.nice-select::-ms-expand {
  * .heart-wishlist (кнопка «В избранное», product.php) — в макете
  * (`product-details.html`) это `<a href="#">`, декоративная ссылка.
  * Наша кнопка — реальный POST-запрос с CSRF (php.md: состояние меняет
- * только форма, не голая ссылка), поэтому разметка — `<button>` внутри
- * `<form>`. Стили `.heart-wishlist` в `style.css` написаны только под
+ * только форма, не голая ссылка), поэтому разметка — `<button>`.
+ * Форма вынесена за пределы `.add-to-cart` (вложенные `<form>` в HTML
+ * недействительны — TASK.md Фазы 2, Таск 2, правка), кнопка связана с
+ * ней атрибутом `form=`, поэтому `display: contents` для формы больше
+ * не нужен. Стили `.heart-wishlist` в `style.css` написаны только под
  * тег `a` (`.add-to-cart a.heart-wishlist`) и не совпадают с `button` —
- * `display: contents` убирает саму форму из потока, чтобы кнопка вела
- * себя как прямой ребёнок флекс-контейнера `.add-to-cart`, и дублируем
- * под неё те же значения style.css, тег ничего не меняет визуально.
+ * дублируем под неё те же значения style.css, тег ничего не меняет
+ * визуально.
  */
-.add-to-cart form.favorite-form {
-    display: contents;
-}
 .add-to-cart button.heart-wishlist {
     background-color: #feda46;
     color: #000;
@@ -1031,3 +1030,347 @@ form.add-review.comment.leave-comment input[type="email"] {
 }
 
 
+
+/*
+ * Корзина (phase-2.md, Таск 2). В макете кнопки «Add to Cart» и
+ * удаление строки корзины — декоративные `<a href="#">`; у нас это
+ * реальные POST-формы с CSRF, поэтому `<button>`. Стили `style.css`/
+ * `color.css` написаны только под тег `a` (`.add-to-cart a`,
+ * `.add-to-cart a.button`) — дублируем те же значения под `button`,
+ * визуально ничего не меняется (тот же приём, что `.heart-wishlist` выше).
+ */
+:root {
+    --cart-accent-hover: #940c69;
+    --cart-muted: #808080;
+    --cart-button-padding: 16px 20px;
+    --cart-button-font-size: 18px;
+    --cart-gap-sm: 0.5rem;
+    --cart-gap-lg: 3rem;
+    --cart-quantity-width: 110px;
+}
+
+/* Карточка в листинге (components/product-card.php) */
+.add-to-cart form.cart-add-form {
+    display: contents;
+}
+.add-to-cart button.cart-add-form__button {
+    margin: 2px;
+    padding: var(--cart-button-padding);
+    border: none;
+    font: inherit;
+    font-size: var(--cart-button-font-size);
+    color: #fff;
+    background-color: var(--color-primary);
+    cursor: pointer;
+}
+.add-to-cart button.cart-add-form__button:hover {
+    background-color: var(--cart-accent-hover);
+}
+
+/* Карточка товара (product.php) */
+.add-to-cart button.button {
+    margin: 2px;
+    padding: 16px 25px;
+    border-radius: 0;
+    font-size: var(--cart-button-font-size);
+    background-color: var(--color-primary);
+}
+.add-to-cart button.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Страница корзины (cart.php) — вместо inline overflow-x из макета */
+.cart-table {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.cart-item__remove {
+    padding: var(--cart-gap-sm);
+    border: none;
+    color: inherit;
+    background: none;
+    cursor: pointer;
+}
+.cart-item__remove:hover {
+    color: var(--color-primary);
+}
+table.shop_table td.product-price del {
+    display: block;
+    color: var(--cart-muted);
+}
+.cart-item__quantity-form {
+    display: inline-block;
+}
+table.shop_table td.product-quantity input.cart-item__quantity {
+    width: var(--cart-quantity-width);
+}
+.cart-item__update {
+    display: block;
+    margin: var(--cart-gap-sm) auto 0;
+    border: none;
+    color: var(--color-primary);
+    background: none;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.cart-item__warning {
+    margin: var(--cart-gap-sm) 0 0;
+    color: var(--color-primary);
+    font-size: 14px;
+}
+.cart-totals__title {
+    padding-bottom: 20px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--color-text);
+}
+.cart-totals__note {
+    margin: var(--cart-gap-sm) 0 0;
+    font-size: 14px;
+    text-transform: none;
+    color: var(--color-text);
+}
+.cart-totals__checkout {
+    display: block;
+    margin-top: var(--cart-gap-sm);
+    text-align: center;
+}
+.cart-empty {
+    padding: var(--cart-gap-lg) 0;
+    text-align: center;
+}
+.cart-empty__text {
+    margin-bottom: var(--cart-gap-lg);
+}
+
+/*
+ * .cart_totals — style.css задаёт padding 54px и строкам итога
+ * padding 0 50px без адаптива: на 320px блок «Итого» вылезал за
+ * экран. Mobile-first — компактно по умолчанию, значения макета с md.
+ */
+.cart-page .cart_totals {
+    padding: 24px;
+}
+.cart-page table.shop_table_responsive tr {
+    padding: 0 16px;
+}
+@media (min-width: 768px) {
+    .cart-page .cart_totals {
+        padding: 54px;
+    }
+    .cart-page table.shop_table_responsive tr {
+        padding: 0 50px;
+    }
+}
+
+/*
+ * Оформление заказа (checkout.php, phase-2.md Таск 4). Тот же приём,
+ * что у .cart-page выше — .cart_totals/.checkout-side из style.css
+ * заданы без адаптива (padding 54–60px), на 320px вылезали за экран.
+ */
+.checkout-page .cart_totals {
+    padding: 24px;
+}
+.checkout-page table.shop_table_responsive tr {
+    padding: 0 16px;
+}
+.checkout-page .checkout-side {
+    padding: 24px;
+}
+@media (min-width: 768px) {
+    .checkout-page .cart_totals {
+        padding: 54px;
+    }
+    .checkout-page table.shop_table_responsive tr {
+        padding: 0 50px;
+    }
+    .checkout-page .checkout-side {
+        padding: 60px;
+    }
+}
+
+/*
+ * order-success.php (phase-2.md, Таск 5) — .cart_totals и .checkout-side
+ * здесь стоят друг под другом в одной колонке (на checkout.php они
+ * всегда рядом, в двух разных col-*, поэтому вертикального отступа
+ * между ними в style.css никогда не требовалось). style.css задаёт
+ * .checkout-side { color: white }, но глобальное правило `p { color:
+ * #444 }` там же метит тег <p> напрямую и перебивает унаследованный
+ * белый цвет — на checkout.php это не проявлялось, потому что внутри
+ * .checkout-side используются только ul/li, без <p>.
+ */
+.order-success .checkout-side {
+    margin-top: 24px;
+}
+.checkout-side p {
+    color: #fff;
+}
+/*
+ * .cart_totals/.checkout-side (style.css) рассчитаны на col-lg-6 —
+ * у checkout.php это ровно так. order-success.php отдаёт им только
+ * col-lg-4 (слева ещё таблица состава заказа), а `.checkout-page`
+ * даёт этим блокам padding 54–60px и строкам таблицы — ещё 50px с
+ * каждой стороны (petpark.css выше) — в узкой колонке сумма (980 ₽)
+ * не помещалась в строку и переносилась. Сужено точечно для этой
+ * страницы, checkout.php (col-lg-6) не трогает.
+ */
+.order-success .cart_totals,
+.order-success .checkout-side {
+    padding: 24px;
+}
+.order-success .cart_totals table.shop_table_responsive tr {
+    padding: 0 16px;
+}
+/*
+ * «Спасибо! Заказ №N оформлен» — глобальный h2 (style.css) рассчитан на
+ * большие маркетинговые заголовки секций (60px) и здесь смотрится не как
+ * подтверждение оформления, а как ещё один баннер; уменьшено до размера
+ * заголовка контентного блока (тот же порядок, что `.our-blog h3` — 35px).
+ */
+.order-success__title {
+    margin-bottom: 20px;
+    font-size: 32px;
+}
+
+.checkout-section-title {
+    margin-top: 20px;
+}
+.checkout-login-hint {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: var(--color-text);
+}
+.checkout-conditional {
+    margin-bottom: 15px;
+}
+.checkout-address__city {
+    font-weight: 700;
+}
+
+/*
+ * Мини-корзина в шапке (components/header.php, Таск 3, FR-CART-007).
+ * Открытие/закрытие — Bootstrap Dropdown не подходит: проект грузит
+ * bootstrap.min.js без Popper (`popper.min.js` в assets/js нет), а без
+ * Popper Dropdown падает в консоли (`i.createPopper is not a function`)
+ * — та же ошибка, что у навбара шаблона нет, только потому что навбар
+ * вообще не использует Popper (dod-global.md проверено в браузере).
+ * Открытие/закрытие — свой класс-модификатор + public/assets/js/cart.js,
+ * без сторонней библиотеки позиционирования (`general.md`).
+ */
+.cart-widget {
+    position: relative;
+}
+.cart-widget__toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.cart-widget__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    margin-left: 4px;
+    border-radius: 50px;
+    font-size: 11px;
+    line-height: 1;
+    color: #fff;
+    background-color: var(--color-primary);
+}
+.cart-popup {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 20;
+    width: 300px;
+    max-width: 90vw;
+    margin-top: var(--cart-gap-sm);
+    padding: 15px;
+    background-color: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+.cart-widget--open .cart-popup {
+    display: block;
+}
+.cart-popup__list {
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+    max-height: 280px;
+    overflow-y: auto;
+}
+.cart-popup__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+}
+.cart-popup__item:not(:last-child) {
+    border-bottom: 1px solid var(--color-bg-light);
+}
+.cart-popup__item-img {
+    flex-shrink: 0;
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    background-color: var(--color-bg-light);
+}
+.cart-popup__item-info {
+    min-width: 0;
+}
+.cart-popup__item-name {
+    margin: 0 0 4px;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cart-popup__item-line {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-primary);
+}
+.cart-popup__empty {
+    padding: 20px 0;
+    color: var(--cart-muted);
+    text-align: center;
+}
+.cart-popup__total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    margin-bottom: 12px;
+    background-color: var(--color-bg-light);
+    font-weight: 600;
+    color: var(--color-text);
+}
+/*
+ * `.cart-popup .cart-popup__cta` (2 класса), не просто
+ * `.cart-popup__cta` — шаблонное `.menu-end a{color:#000;font-size:20px;
+ * margin-right:18px;line-height:0}` (style.css) специфичнее одного
+ * класса и перебивало белый цвет текста и высоту строки кнопки.
+ */
+.cart-popup .cart-popup__cta {
+    display: block;
+    margin-right: 0;
+    padding: 12px;
+    font-size: var(--cart-button-font-size);
+    font-weight: 700;
+    line-height: normal;
+    text-align: center;
+    text-transform: uppercase;
+    color: #fff;
+    background-color: var(--color-primary);
+}
+.cart-popup .cart-popup__cta:hover {
+    color: #fff;
+    background-color: var(--cart-accent-hover);
+}

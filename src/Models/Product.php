@@ -204,13 +204,15 @@ function productListByFilters(
         SELECT
             p.id, p.name, p.slug, p.seo_title, p.seo_description,
             c.name AS category_name,
+            v.variant_id, v.variant_count,
             v.price, v.discount_price, v.stock_quantity, v.reserved_quantity,
             v.effective_price,
             img.path AS image_path
         FROM products p
         JOIN categories c ON c.id = p.category_id
         JOIN (
-            SELECT product_id, price, discount_price, stock_quantity, reserved_quantity,
+            SELECT product_id, id AS variant_id, price, discount_price, stock_quantity, reserved_quantity,
+                   COUNT(*) OVER (PARTITION BY product_id) AS variant_count,
                    IFNULL(discount_price, price) AS effective_price,
                    ROW_NUMBER() OVER (
                        PARTITION BY product_id
@@ -394,12 +396,14 @@ function productSimilarByCategory(array $categoryIds, int $excludeProductId, int
         SELECT
             p.id, p.name, p.slug,
             c.name AS category_name,
+            v.variant_id, v.variant_count,
             v.price, v.discount_price, v.stock_quantity, v.reserved_quantity,
             img.path AS image_path
         FROM products p
         JOIN categories c ON c.id = p.category_id
         JOIN (
-            SELECT product_id, price, discount_price, stock_quantity, reserved_quantity,
+            SELECT product_id, id AS variant_id, price, discount_price, stock_quantity, reserved_quantity,
+                   COUNT(*) OVER (PARTITION BY product_id) AS variant_count,
                    ROW_NUMBER() OVER (
                        PARTITION BY product_id
                        ORDER BY IFNULL(discount_price, price) ASC, id ASC
@@ -479,12 +483,14 @@ function productFeatured(int $limit): array
         SELECT
             p.id, p.name, p.slug,
             c.name AS category_name,
+            v.variant_id, v.variant_count,
             v.price, v.discount_price, v.stock_quantity, v.reserved_quantity,
             img.path AS image_path
         FROM products p
         JOIN categories c ON c.id = p.category_id
         JOIN (
-            SELECT product_id, price, discount_price, stock_quantity, reserved_quantity,
+            SELECT product_id, id AS variant_id, price, discount_price, stock_quantity, reserved_quantity,
+                   COUNT(*) OVER (PARTITION BY product_id) AS variant_count,
                    ROW_NUMBER() OVER (
                        PARTITION BY product_id
                        ORDER BY IFNULL(discount_price, price) ASC, id ASC

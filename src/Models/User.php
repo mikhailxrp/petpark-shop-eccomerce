@@ -26,6 +26,26 @@ function userFindByEmail(string $email): ?array
     return $user !== false ? $user : null;
 }
 
+/**
+ * Контакты авторизованного Покупателя для автоподстановки на оформлении
+ * (FR-CHK-001, правило 2) — без password_hash, он здесь не нужен.
+ *
+ * @return array<string, mixed>|null
+ */
+function userFindById(int $id): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, name, email, phone, role
+        FROM users
+        WHERE id = :id
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $id]);
+
+    $user = $stmt->fetch();
+    return $user !== false ? $user : null;
+}
+
 function userUpdatePassword(int $userId, string $passwordHash): void
 {
     $stmt = getPdo()->prepare('
@@ -34,4 +54,25 @@ function userUpdatePassword(int $userId, string $passwordHash): void
         WHERE id = :id
     ');
     $stmt->execute(['password_hash' => $passwordHash, 'id' => $userId]);
+}
+
+/**
+ * Автосоздание аккаунта Покупателя при первом Заказе (FR-AUTH-002,
+ * phase-2.md Таск 5) — вызывается внутри транзакции orderCreate(),
+ * тем же PDO-подключением, чтобы откат Заказа откатил и аккаунт.
+ */
+function userCreateCustomer(string $name, string $email, string $phone, string $passwordHash): int
+{
+    $stmt = getPdo()->prepare('
+        INSERT INTO users (name, email, phone, password_hash, role)
+        VALUES (:name, :email, :phone, :password_hash, \'customer\')
+    ');
+    $stmt->execute([
+        'name'          => $name,
+        'email'         => $email,
+        'phone'         => $phone,
+        'password_hash' => $passwordHash,
+    ]);
+
+    return (int) getPdo()->lastInsertId();
 }
