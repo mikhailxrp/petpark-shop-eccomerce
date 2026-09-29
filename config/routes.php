@@ -26,6 +26,7 @@ return [
         '/product/{slug}'      => ['ProductController', 'show'],
         '/cart'                => ['CartController', 'index'],
         '/checkout'            => ['CheckoutController', 'index'],
+        '/checkout/success/{id}' => ['CheckoutController', 'success'],
         '/sitemap.xml'         => ['SitemapController', 'index'],
     ],
     'POST' => [
@@ -39,6 +40,7 @@ return [
         '/cart/add'                    => ['CartController', 'add'],
         '/cart/update'                 => ['CartController', 'update'],
         '/cart/remove'                 => ['CartController', 'remove'],
+        '/checkout'                    => ['CheckoutController', 'store'],
         '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],
         '/admin/reviews/{id}/reject'   => ['Admin\ReviewController', 'reject'],
     ],

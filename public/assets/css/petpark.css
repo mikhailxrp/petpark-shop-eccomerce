@@ -1190,6 +1190,49 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     }
 }
 
+/*
+ * order-success.php (phase-2.md, Таск 5) — .cart_totals и .checkout-side
+ * здесь стоят друг под другом в одной колонке (на checkout.php они
+ * всегда рядом, в двух разных col-*, поэтому вертикального отступа
+ * между ними в style.css никогда не требовалось). style.css задаёт
+ * .checkout-side { color: white }, но глобальное правило `p { color:
+ * #444 }` там же метит тег <p> напрямую и перебивает унаследованный
+ * белый цвет — на checkout.php это не проявлялось, потому что внутри
+ * .checkout-side используются только ul/li, без <p>.
+ */
+.order-success .checkout-side {
+    margin-top: 24px;
+}
+.checkout-side p {
+    color: #fff;
+}
+/*
+ * .cart_totals/.checkout-side (style.css) рассчитаны на col-lg-6 —
+ * у checkout.php это ровно так. order-success.php отдаёт им только
+ * col-lg-4 (слева ещё таблица состава заказа), а `.checkout-page`
+ * даёт этим блокам padding 54–60px и строкам таблицы — ещё 50px с
+ * каждой стороны (petpark.css выше) — в узкой колонке сумма (980 ₽)
+ * не помещалась в строку и переносилась. Сужено точечно для этой
+ * страницы, checkout.php (col-lg-6) не трогает.
+ */
+.order-success .cart_totals,
+.order-success .checkout-side {
+    padding: 24px;
+}
+.order-success .cart_totals table.shop_table_responsive tr {
+    padding: 0 16px;
+}
+/*
+ * «Спасибо! Заказ №N оформлен» — глобальный h2 (style.css) рассчитан на
+ * большие маркетинговые заголовки секций (60px) и здесь смотрится не как
+ * подтверждение оформления, а как ещё один баннер; уменьшено до размера
+ * заголовка контентного блока (тот же порядок, что `.our-blog h3` — 35px).
+ */
+.order-success__title {
+    margin-bottom: 20px;
+    font-size: 32px;
+}
+
 .checkout-section-title {
     margin-top: 20px;
 }

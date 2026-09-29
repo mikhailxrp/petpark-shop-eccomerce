@@ -201,6 +201,21 @@ function cartReassignItemToUser(array $guestOwner, int $itemId, int $userId, int
 }
 
 /**
+ * Очистка корзины владельца после успешного оформления Заказа
+ * (phase-2.md, Таск 5) — вызывается внутри транзакции orderCreate(),
+ * тем же PDO-подключением.
+ *
+ * @param array{user_id: ?int, session_id: ?string} $owner
+ */
+function cartClearForOwner(array $owner): void
+{
+    ['sql' => $ownerSql, 'param' => $ownerParam] = cartOwnerCondition($owner);
+
+    $stmt = getPdo()->prepare("DELETE ci FROM cart_items ci WHERE {$ownerSql}");
+    $stmt->execute([$ownerParam]);
+}
+
+/**
  * Слияние корзины Гостя с корзиной вошедшего Покупателя (FR-CART-005,
  * Q-049): совпадающие Варианты — количества складываются и ограничены
  * доступным остатком, остальные строки Гостя просто переезжают на

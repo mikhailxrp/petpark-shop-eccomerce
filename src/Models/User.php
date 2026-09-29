@@ -55,3 +55,24 @@ function userUpdatePassword(int $userId, string $passwordHash): void
     ');
     $stmt->execute(['password_hash' => $passwordHash, 'id' => $userId]);
 }
+
+/**
+ * Автосоздание аккаунта Покупателя при первом Заказе (FR-AUTH-002,
+ * phase-2.md Таск 5) — вызывается внутри транзакции orderCreate(),
+ * тем же PDO-подключением, чтобы откат Заказа откатил и аккаунт.
+ */
+function userCreateCustomer(string $name, string $email, string $phone, string $passwordHash): int
+{
+    $stmt = getPdo()->prepare('
+        INSERT INTO users (name, email, phone, password_hash, role)
+        VALUES (:name, :email, :phone, :password_hash, \'customer\')
+    ');
+    $stmt->execute([
+        'name'          => $name,
+        'email'         => $email,
+        'phone'         => $phone,
+        'password_hash' => $passwordHash,
+    ]);
+
+    return (int) getPdo()->lastInsertId();
+}

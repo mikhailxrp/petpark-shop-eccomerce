@@ -30,6 +30,14 @@ const ORDER_ADDRESS_MAX_LENGTH = 255;
 
 const ORDER_KOPECKS_PER_RUBLE = 100;
 
+// 32 байта → 64 hex-символа = ровно CHAR(64) колонки orders.checkout_token
+// (FR-CHK-007, phase-2.md Таск 5) — тот же паттерн, что у CART_GUEST_TOKEN_*
+// в Core/Cart.php. Токен генерируется заново при каждом GET /checkout и не
+// привязан к сессии — идемпотентность проверяется через UNIQUE в БД.
+const ORDER_CHECKOUT_TOKEN_BYTES = 32;
+
+const ORDER_CHECKOUT_TOKEN_PATTERN = '/^[0-9a-f]{64}$/';
+
 /**
  * "1500.00" / "1500.5" / "1500" → 150000 / 150050 / 150000.
  * Отрицательные суммы и больше двух знаков после точки — ошибка вызывающего кода.

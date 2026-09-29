@@ -44,3 +44,42 @@ function sendPasswordResetEmail(string $toEmail, string $toName, string $newPass
         throw new RuntimeException('Не удалось отправить письмо восстановления пароля: ' . $mail->ErrorInfo, 0, $e);
     }
 }
+
+/**
+ * Письмо с паролем нового аккаунта, автосозданного при первом Заказе
+ * (FR-AUTH-002, phase-2.md Таск 5) — отдельное от восстановления
+ * пароля письмо: другой повод и текст, хотя оба несут пароль.
+ */
+function sendNewCustomerAccountEmail(string $toEmail, string $toName, string $password): void
+{
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host       = env('MAIL_HOST');
+        $mail->Port       = (int) env('MAIL_PORT');
+        $mail->SMTPAuth   = true;
+        $mail->Username   = env('MAIL_USERNAME');
+        $mail->Password   = env('MAIL_PASSWORD');
+        $mail->SMTPSecure = env('MAIL_ENCRYPTION') === 'ssl'
+            ? PHPMailer::ENCRYPTION_SMTPS
+            : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->CharSet    = 'UTF-8';
+
+        $mail->setFrom(env('MAIL_FROM'), env('MAIL_FROM_NAME'));
+        $mail->addAddress($toEmail, $toName);
+
+        $mail->Subject = 'Ваш аккаунт создан — ' . SHOP_NAME;
+        $mail->Body    = sprintf(
+            "Здравствуйте, %s!\n\nВы оформили первый заказ на %s, и для вас автоматически создан личный кабинет.\nEmail для входа: %s\nВаш пароль: %s\n\nРекомендуем сменить его после входа.",
+            $toName,
+            SHOP_NAME,
+            $toEmail,
+            $password
+        );
+
+        $mail->send();
+    } catch (PHPMailerException $e) {
+        throw new RuntimeException('Не удалось отправить письмо о новом аккаунте: ' . $mail->ErrorInfo, 0, $e);
+    }
+}

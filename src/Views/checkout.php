@@ -13,13 +13,21 @@ declare(strict_types=1);
  * public/assets/js/checkout.js только переключает готовые строки,
  * денег на клиенте не считает.
  *
- * Форма пока без обработчика — POST /checkout подключит Таск 5.
+ * POST /checkout (phase-2.md, Таск 5) — создание Заказа. Форма несёт
+ * три разных одноразовых поля: `_csrf` (CSRF), `form_token` (антибот,
+ * удаляется при первой проверке) и `checkout_token` (идемпотентность
+ * повторного сабмита, FR-CHK-007, не связан с сессией) — см.
+ * CheckoutController.
  *
  * @var string                        $subtotal     cartSummarize()['subtotal'] — строка DECIMAL
  * @var array{pickup: string, courier: string} $deliveryCost
  * @var array{pickup: string, courier: string} $total
  * @var array{name: string, phone: string, email: string} $contact
  * @var bool                          $isCustomer   авторизован как Покупатель
+ * @var string                        $checkoutToken одноразовый токен идемпотентности (FR-CHK-007)
+ * @var string                        $formToken     одноразовый антибот-токен показа формы
+ * @var string|null                   $notice        flash 'checkout_notice'
+ * @var string|null                   $error         flash 'checkout_error'
  */
 
 $pageTitle = seoTitle('checkout');
@@ -67,8 +75,21 @@ ob_start();
 </section>
 <section class="gap checkout-page">
     <div class="container">
+        <?php if ($error !== null): ?>
+            <div class="alert alert-danger"><?= e($error) ?></div>
+        <?php elseif ($notice !== null): ?>
+            <div class="alert alert-info"><?= e($notice) ?></div>
+        <?php endif; ?>
         <form class="checkout-meta donate-page" method="post" action="/checkout">
             <?= csrfField() ?>
+            <!--
+                Honeypot — скрыт классом .form-honeypot (display:none,
+                petpark.css), не атрибутом hidden (dod-global.md: некоторые
+                боты его пропускают). Заполнение — молчаливый отказ.
+            -->
+            <input type="text" name="website" class="form-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <input type="hidden" name="form_token" value="<?= e($formToken) ?>">
+            <input type="hidden" name="checkout_token" value="<?= e($checkoutToken) ?>">
             <div class="row">
                 <div class="col-lg-8">
                     <h3>Контактные данные</h3>
@@ -116,10 +137,10 @@ ob_start();
 
                         <div id="checkout-address" class="checkout-conditional d-none">
                             <p class="checkout-address__city">Город доставки: Ростов-на-Дону</p>
-                            <input type="text" class="input-text" name="delivery_street" placeholder="Улица *" required>
+                            <input type="text" class="input-text" name="delivery_street" placeholder="Улица *" required disabled>
                             <div class="row">
                                 <div class="col-lg-6">
-                                    <input type="text" class="input-text" name="delivery_house" placeholder="Дом *" required>
+                                    <input type="text" class="input-text" name="delivery_house" placeholder="Дом *" required disabled>
                                 </div>
                                 <div class="col-lg-6">
                                     <input type="text" class="input-text" name="delivery_apartment" placeholder="Квартира/офис">
@@ -169,7 +190,7 @@ ob_start();
                                 <label for="payment-card">Картой на сайте</label>
                             </li>
                             <li>
-                                <input type="radio" id="payment-cash" name="payment_method" value="cash_or_card_on_delivery" required>
+                                <input type="radio" id="payment-cash" name="payment_method" value="cash_or_card_on_delivery" required checked>
                                 <label for="payment-cash">Наличными или картой при получении</label>
                             </li>
                         </ul>
