@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use App\Services\Payment\PaymentGateway;
+use App\Services\Payment\YooMoneyStubGateway;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
+
+require_once ROOT_PATH . '/src/Services/Payment/PaymentGateway.php';
+require_once ROOT_PATH . '/src/Services/Payment/YooMoneyStubGateway.php';
+
+final class YooMoneyStubGatewayTest extends TestCase
+{
+    public function testValidSignatureIsAccepted(): void
+    {
+        $gateway = new YooMoneyStubGateway('secret');
+        $signature = $gateway->sign(42, PaymentGateway::RESULT_PAID);
+
+        $this->assertTrue($gateway->verifySignature(42, PaymentGateway::RESULT_PAID, $signature));
+    }
+
+    public function testSignatureIsBoundToOrderAndResult(): void
+    {
+        $gateway = new YooMoneyStubGateway('secret');
+        $signature = $gateway->sign(42, PaymentGateway::RESULT_DECLINED);
+
+        $this->assertFalse($gateway->verifySignature(42, PaymentGateway::RESULT_PAID, $signature));
+        $this->assertFalse($gateway->verifySignature(43, PaymentGateway::RESULT_DECLINED, $signature));
+    }
+
+    public function testSignatureFromOtherSecretIsRejected(): void
+    {
+        $forged = (new YooMoneyStubGateway('other'))->sign(42, PaymentGateway::RESULT_PAID);
+
+        $this->assertFalse((new YooMoneyStubGateway('secret'))->verifySignature(42, PaymentGateway::RESULT_PAID, $forged));
+        $this->assertFalse((new YooMoneyStubGateway('secret'))->verifySignature(42, PaymentGateway::RESULT_PAID, ''));
+    }
+
+    public function testEmptySecretIsRejected(): void
+    {
+        $this->expectException(RuntimeException::class);
+        new YooMoneyStubGateway('');
+    }
+
+    public function testPaymentUrlPointsToLocalStubPage(): void
+    {
+        $this->assertSame('/payment/7', (new YooMoneyStubGateway('secret'))->paymentUrl(7));
+    }
+}

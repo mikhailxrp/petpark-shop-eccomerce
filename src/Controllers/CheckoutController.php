@@ -89,7 +89,7 @@ final class CheckoutController
 
         $existing = orderFindByCheckoutToken($checkoutToken);
         if ($existing !== null) {
-            redirect('/checkout/success/' . (int) $existing['id']);
+            $this->redirectAfterOrder((int) $existing['id']);
         }
 
         if (tooManyAttempts('checkout', 5, 60)) {
@@ -189,7 +189,7 @@ final class CheckoutController
 
         match ($result['status']) {
             'empty' => redirect('/cart'),
-            'exists' => redirect('/checkout/success/' . $result['order_id']),
+            'exists' => $this->redirectAfterOrder($result['order_id']),
             'unavailable' => $this->rejectUnavailable($result['product_name']),
             'created' => $this->finishCreated($result),
         };
@@ -200,7 +200,7 @@ final class CheckoutController
         $orderId = (int) $id;
         $order = $orderId > 0 ? orderFindById($orderId) : null;
 
-        if ($order === null || !$this->canViewOrder($order)) {
+        if ($order === null || !orderCanBeViewedBySession($order)) {
             http_response_code(404);
             render('errors/404');
             return;
@@ -244,27 +244,27 @@ final class CheckoutController
         ensureSessionStarted();
         $_SESSION['checkout_order_ids'][] = $result['order_id'];
 
-        redirect('/checkout/success/' . $result['order_id']);
+        $this->redirectAfterOrder($result['order_id']);
+    }
+
+    /**
+     * Заказ «картой на сайте» ещё не оплачен — ведём на оплату; иначе
+     * (оплата при получении, уже оплачен/подтверждён) — на страницу успеха.
+     * Тот же выбор и для повторного сабмита (идемпотентность, FR-CHK-007).
+     */
+    private function redirectAfterOrder(int $orderId): never
+    {
+        $order = orderFindById($orderId);
+        $needsPayment = $order !== null
+            && $order['payment_method'] === 'card_online'
+            && $order['payment_status'] === 'unpaid'
+            && $order['status'] === 'new';
+
+        redirect($needsPayment ? '/payment/' . $orderId : '/checkout/success/' . $orderId);
     }
 
     private function normalizeCheckoutToken(mixed $raw): ?string
     {
         return is_string($raw) && preg_match(ORDER_CHECKOUT_TOKEN_PATTERN, $raw) === 1 ? $raw : null;
-    }
-
-    /**
-     * @param array<string, mixed> $order
-     */
-    private function canViewOrder(array $order): bool
-    {
-        ensureSessionStarted();
-
-        $ownedInSession = in_array((int) $order['id'], $_SESSION['checkout_order_ids'] ?? [], true);
-        $isOwner = isAuthenticated()
-            && ($_SESSION['user_role'] ?? null) === 'customer'
-            && $order['user_id'] !== null
-            && (int) $order['user_id'] === (int) $_SESSION['user_id'];
-
-        return $ownedInSession || $isOwner;
     }
 }

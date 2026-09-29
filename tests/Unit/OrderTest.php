@@ -137,4 +137,24 @@ final class OrderTest extends TestCase
 
         $this->assertSame(255, mb_strlen($address));
     }
+
+    public function testOrderIsViewableBySessionThatPlacedIt(): void
+    {
+        $_SESSION = ['checkout_order_ids' => [5]];
+
+        $this->assertTrue(\orderCanBeViewedBySession(['id' => 5, 'user_id' => null]));
+        $this->assertFalse(\orderCanBeViewedBySession(['id' => 6, 'user_id' => null]));
+    }
+
+    public function testOrderIsViewableByItsCustomerOwnerOnly(): void
+    {
+        $_SESSION = ['user_id' => 9, 'user_role' => 'customer'];
+
+        $this->assertTrue(\orderCanBeViewedBySession(['id' => 5, 'user_id' => 9]));
+        $this->assertFalse(\orderCanBeViewedBySession(['id' => 5, 'user_id' => 10]));
+        $this->assertFalse(\orderCanBeViewedBySession(['id' => 5, 'user_id' => null]));
+
+        $_SESSION = ['user_id' => 9, 'user_role' => 'owner'];
+        $this->assertFalse(\orderCanBeViewedBySession(['id' => 5, 'user_id' => 9]));
+    }
 }

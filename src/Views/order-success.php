@@ -135,6 +135,7 @@ ob_start();
                 </div>
             </div>
         </div>
+        <a class="button mt-4" href="/catalog">Назад к покупкам</a>
     </div>
 </section>
 <?php

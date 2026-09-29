@@ -130,6 +130,26 @@ function orderCanTransition(string $from, string $to): bool
 }
 
 /**
+ * Видит ли текущая сессия этот Заказ: либо она его оформила (номер лежит
+ * в $_SESSION['checkout_order_ids']), либо это авторизованный Покупатель-
+ * владелец. Один критерий и для страницы успеха, и для страниц оплаты.
+ *
+ * @param array<string, mixed> $order строка orders (нужны id, user_id)
+ */
+function orderCanBeViewedBySession(array $order): bool
+{
+    ensureSessionStarted();
+
+    $ownedInSession = in_array((int) $order['id'], $_SESSION['checkout_order_ids'] ?? [], true);
+    $isOwner = isAuthenticated()
+        && ($_SESSION['user_role'] ?? null) === 'customer'
+        && $order['user_id'] !== null
+        && (int) $order['user_id'] === (int) $_SESSION['user_id'];
+
+    return $ownedInSession || $isOwner;
+}
+
+/**
  * Адрес курьерской доставки (FR-SHIP-003) в одну строку для
  * orders.delivery_address: город фиксирован, пустые части пропускаются,
  * результат обрезается до длины колонки.

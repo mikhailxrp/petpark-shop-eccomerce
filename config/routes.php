@@ -27,6 +27,8 @@ return [
         '/cart'                => ['CartController', 'index'],
         '/checkout'            => ['CheckoutController', 'index'],
         '/checkout/success/{id}' => ['CheckoutController', 'success'],
+        '/payment/{id}'        => ['PaymentController', 'show'],
+        '/payment/{id}/failed' => ['PaymentController', 'failed'],
         '/sitemap.xml'         => ['SitemapController', 'index'],
     ],
     'POST' => [
@@ -41,6 +43,8 @@ return [
         '/cart/update'                 => ['CartController', 'update'],
         '/cart/remove'                 => ['CartController', 'remove'],
         '/checkout'                    => ['CheckoutController', 'store'],
+        '/payment/{id}/callback'       => ['PaymentController', 'callback'],
+        '/payment/{id}/cancel'         => ['PaymentController', 'cancel'],
         '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],
         '/admin/reviews/{id}/reject'   => ['Admin\ReviewController', 'reject'],
     ],
