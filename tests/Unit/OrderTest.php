@@ -191,4 +191,50 @@ final class OrderTest extends TestCase
         $_SESSION = ['user_id' => 9, 'user_role' => 'owner'];
         $this->assertFalse(\orderCanBeViewedBySession(['id' => 5, 'user_id' => 9]));
     }
+
+    public function testRecalculateTotalsAddsCourierCostBelowThreshold(): void
+    {
+        $totals = \orderRecalculateTotals(
+            [['price' => '900.00', 'quantity' => 2]],
+            'courier',
+            self::FREE_THRESHOLD,
+            self::COURIER_COST
+        );
+
+        $this->assertSame('1800.00', $totals['subtotal']);
+        $this->assertSame('300.00', $totals['delivery_cost']);
+        $this->assertSame('2100.00', $totals['total']);
+    }
+
+    public function testRecalculateTotalsDeliveryChangesAcrossThreshold(): void
+    {
+        $items = [['price' => '1000.00', 'quantity' => 2]];
+
+        $atThreshold = \orderRecalculateTotals($items, 'courier', self::FREE_THRESHOLD, self::COURIER_COST);
+        $this->assertSame('0.00', $atThreshold['delivery_cost']);
+        $this->assertSame('2000.00', $atThreshold['total']);
+
+        $items[0]['quantity'] = 1;
+        $below = \orderRecalculateTotals($items, 'courier', self::FREE_THRESHOLD, self::COURIER_COST);
+        $this->assertSame('300.00', $below['delivery_cost']);
+        $this->assertSame('1300.00', $below['total']);
+    }
+
+    public function testRecalculateTotalsPickupHasNoDeliveryCost(): void
+    {
+        $totals = \orderRecalculateTotals([['price' => '150.50', 'quantity' => 3]], 'pickup', self::FREE_THRESHOLD, self::COURIER_COST);
+
+        $this->assertSame('0.00', $totals['delivery_cost']);
+        $this->assertSame('451.50', $totals['total']);
+    }
+
+    public function testOrderIsEditableOnlyBeforeShipment(): void
+    {
+        foreach (['new', 'confirmed', 'assembled'] as $status) {
+            $this->assertTrue(\orderIsEditable($status), $status);
+        }
+        foreach (['shipped', 'ready_for_pickup', 'delivered', 'picked_up', 'cancelled', 'unknown'] as $status) {
+            $this->assertFalse(\orderIsEditable($status), $status);
+        }
+    }
 }

@@ -49,5 +49,8 @@ return [
         '/payment/{id}/cancel'         => ['PaymentController', 'cancel'],
         '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],
         '/admin/reviews/{id}/reject'   => ['Admin\ReviewController', 'reject'],
+        '/admin/orders/{id}/status'    => ['Admin\OrderController', 'changeStatus'],
+        '/admin/orders/{id}/mark-paid' => ['Admin\OrderController', 'markPaid'],
+        '/admin/orders/{id}/items'     => ['Admin\OrderController', 'editItems'],
     ],
 ];

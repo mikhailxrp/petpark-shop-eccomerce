@@ -228,7 +228,7 @@ function orderFindById(int $id): ?array
 function orderItemsForOrder(int $orderId): array
 {
     $stmt = getPdo()->prepare('
-        SELECT product_name, variant_label, price, quantity
+        SELECT id, product_name, variant_label, price, quantity
         FROM order_items
         WHERE order_id = ?
         ORDER BY id ASC
@@ -454,4 +454,294 @@ function orderFindForAdmin(int $id): ?array
 
     $row = $stmt->fetch();
     return $row !== false ? $row : null;
+}
+
+/**
+ * Отметка «оплачено при получении» (FR-PAY-002): только payment_status,
+ * `orders.status` не меняется. false — Заказ не найден, оплата не «при
+ * получении», уже оплачен или отменён.
+ */
+function orderMarkPaid(int $orderId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE orders
+        SET payment_status = 'paid'
+        WHERE id = :id
+          AND payment_method = 'cash_or_card_on_delivery'
+          AND payment_status = 'unpaid'
+          AND status <> 'cancelled'
+    ");
+    $stmt->execute(['id' => $orderId]);
+
+    return $stmt->rowCount() > 0;
+}
+
+/** payment_status = refunded после успешного возврата денег (FR-PAY-005). */
+function orderMarkRefunded(int $orderId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE orders
+        SET payment_status = 'refunded'
+        WHERE id = :id AND payment_status = 'paid'
+    ");
+    $stmt->execute(['id' => $orderId]);
+
+    return $stmt->rowCount() > 0;
+}
+
+/** Идентификатор сделки заглушки AmoCRM (ADR-023) и время «синхронизации». */
+function orderSetAmoCrm(int $orderId, string $amocrmId): void
+{
+    $stmt = getPdo()->prepare('
+        UPDATE orders
+        SET amocrm_id = :amocrm_id, amocrm_synced_at = NOW()
+        WHERE id = :id
+    ');
+    $stmt->execute(['amocrm_id' => $amocrmId, 'id' => $orderId]);
+}
+
+/**
+ * Правка Позиций Заказа одной транзакцией (FR-ORD-004, FR-ORD-005).
+ * $change['action']:
+ *  - add    — sku, quantity: Вариант по артикулу; если такая Позиция уже
+ *             есть — количество складывается, цена Позиции остаётся прежней;
+ *  - update — item_id, quantity, price;
+ *  - remove — item_id.
+ *
+ * Строка Заказа блокируется FOR UPDATE, статус проверяется под
+ * блокировкой. Остаток: в `new` меняется резерв, в `confirmed`/`assembled`
+ * Списание уже было — меняется stock_quantity. Увеличение — условный
+ * UPDATE по доступности (BR-004), уменьшение возвращает количество.
+ * orders.status не трогается. Пересчитывает delivery_cost и total (BR-006).
+ * Для Заказа, оплаченного на сайте картой, рост итога отклоняется —
+ * доплата в демо не поддерживается.
+ *
+ * @param array<string, mixed> $change
+ * @return array{status: 'ok', old_total: string, new_total: string}
+ *       | array{status: 'not_found'|'not_editable'|'item_not_found'|'variant_not_found'|'last_item'|'surcharge_denied'}
+ *       | array{status: 'unavailable', product_name: string}
+ */
+function orderEditItems(int $orderId, array $change): array
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare('
+            SELECT status, delivery_method, payment_method, payment_status, total
+            FROM orders
+            WHERE id = ?
+            FOR UPDATE
+        ');
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch();
+
+        if ($order === false) {
+            $pdo->rollBack();
+            return ['status' => 'not_found'];
+        }
+
+        if (!orderIsEditable((string) $order['status'])) {
+            $pdo->rollBack();
+            return ['status' => 'not_editable'];
+        }
+
+        $itemsStmt = $pdo->prepare('
+            SELECT id, variant_id, price, quantity
+            FROM order_items
+            WHERE order_id = ?
+            ORDER BY id ASC
+        ');
+        $itemsStmt->execute([$orderId]);
+        $items = $itemsStmt->fetchAll();
+
+        // Вариант, чей остаток меняется (null — Вариант удалён, остаток не
+        // трогаем), и на сколько единиц: > 0 — берём, < 0 — возвращаем.
+        $stockVariantId = null;
+        $delta = 0;
+
+        if ($change['action'] === 'add') {
+            $variantStmt = $pdo->prepare('
+                SELECT v.id, v.sku, v.price, v.discount_price, p.name
+                FROM product_variants v
+                JOIN products p ON p.id = v.product_id
+                WHERE v.sku = ? AND v.is_active = 1 AND p.is_active = 1
+                LIMIT 1
+            ');
+            $variantStmt->execute([(string) $change['sku']]);
+            $variant = $variantStmt->fetch();
+
+            if ($variant === false) {
+                $pdo->rollBack();
+                return ['status' => 'variant_not_found'];
+            }
+
+            $stockVariantId = (int) $variant['id'];
+            $delta = (int) $change['quantity'];
+
+            // Эксклюзивная блокировка Варианта до INSERT в order_items: иначе FK-проверка
+            // берёт shared-блокировку, и два параллельных add одного Варианта уходят в deadlock.
+            $pdo->prepare('SELECT id FROM product_variants WHERE id = ? FOR UPDATE')->execute([$stockVariantId]);
+
+            $existingIndex = null;
+            foreach ($items as $index => $item) {
+                if ($item['variant_id'] !== null && (int) $item['variant_id'] === $stockVariantId) {
+                    $existingIndex = $index;
+                    break;
+                }
+            }
+
+            if ($existingIndex !== null) {
+                $items[$existingIndex]['quantity'] = (int) $items[$existingIndex]['quantity'] + $delta;
+                $pdo->prepare('UPDATE order_items SET quantity = :quantity WHERE id = :id AND order_id = :order_id')
+                    ->execute([
+                        'quantity' => $items[$existingIndex]['quantity'],
+                        'id'       => (int) $items[$existingIndex]['id'],
+                        'order_id' => $orderId,
+                    ]);
+            } else {
+                $attributes = productVariantAttributesForVariants([$stockVariantId])[$stockVariantId] ?? [];
+                $price = orderLineTotal(
+                    (string) $variant['price'],
+                    $variant['discount_price'] !== null ? (string) $variant['discount_price'] : null,
+                    1
+                );
+
+                $pdo->prepare('
+                    INSERT INTO order_items (order_id, variant_id, product_name, variant_label, price, quantity)
+                    VALUES (:order_id, :variant_id, :product_name, :variant_label, :price, :quantity)
+                ')->execute([
+                    'order_id'      => $orderId,
+                    'variant_id'    => $stockVariantId,
+                    'product_name'  => (string) $variant['name'],
+                    'variant_label' => $attributes !== [] ? implode(', ', $attributes) : (string) $variant['sku'],
+                    'price'         => $price,
+                    'quantity'      => $delta,
+                ]);
+                $items[] = ['id' => (int) $pdo->lastInsertId(), 'variant_id' => $stockVariantId, 'price' => $price, 'quantity' => $delta];
+            }
+        } elseif ($change['action'] === 'update' || $change['action'] === 'remove') {
+            $index = null;
+            foreach ($items as $i => $item) {
+                if ((int) $item['id'] === (int) $change['item_id']) {
+                    $index = $i;
+                    break;
+                }
+            }
+
+            if ($index === null) {
+                $pdo->rollBack();
+                return ['status' => 'item_not_found'];
+            }
+
+            $item = $items[$index];
+            $stockVariantId = $item['variant_id'] !== null ? (int) $item['variant_id'] : null;
+
+            if ($change['action'] === 'remove') {
+                if (count($items) === 1) {
+                    $pdo->rollBack();
+                    return ['status' => 'last_item'];
+                }
+
+                $pdo->prepare('DELETE FROM order_items WHERE id = :id AND order_id = :order_id')
+                    ->execute(['id' => (int) $item['id'], 'order_id' => $orderId]);
+                unset($items[$index]);
+                $delta = -(int) $item['quantity'];
+            } else {
+                $items[$index]['quantity'] = (int) $change['quantity'];
+                $items[$index]['price'] = (string) $change['price'];
+                $pdo->prepare('UPDATE order_items SET quantity = :quantity, price = :price WHERE id = :id AND order_id = :order_id')
+                    ->execute([
+                        'quantity' => $items[$index]['quantity'],
+                        'price'    => $items[$index]['price'],
+                        'id'       => (int) $item['id'],
+                        'order_id' => $orderId,
+                    ]);
+                $delta = (int) $change['quantity'] - (int) $item['quantity'];
+            }
+        } else {
+            throw new InvalidArgumentException('Неизвестное действие правки Заказа');
+        }
+
+        if ($stockVariantId !== null && $delta !== 0) {
+            $reserveMode = $order['status'] === 'new';
+            $column = $reserveMode ? 'reserved_quantity' : 'stock_quantity';
+            $qty = abs($delta);
+
+            // Уникальные имена плейсхолдеров — см. orderCreate().
+            if ($delta > 0) {
+                $sign = $reserveMode ? '+' : '-';
+                $stockStmt = $pdo->prepare("
+                    UPDATE product_variants
+                    SET {$column} = {$column} {$sign} :qty
+                    WHERE id = :id AND stock_quantity - reserved_quantity >= :qty_check
+                ");
+                $stockStmt->execute(['qty' => $qty, 'id' => $stockVariantId, 'qty_check' => $qty]);
+            } elseif ($reserveMode) {
+                $stockStmt = $pdo->prepare('
+                    UPDATE product_variants
+                    SET reserved_quantity = reserved_quantity - :qty
+                    WHERE id = :id AND reserved_quantity >= :qty_check
+                ');
+                $stockStmt->execute(['qty' => $qty, 'id' => $stockVariantId, 'qty_check' => $qty]);
+            } else {
+                $stockStmt = $pdo->prepare('
+                    UPDATE product_variants
+                    SET stock_quantity = stock_quantity + :qty
+                    WHERE id = :id
+                ');
+                $stockStmt->execute(['qty' => $qty, 'id' => $stockVariantId]);
+            }
+
+            if ($stockStmt->rowCount() === 0) {
+                if ($delta < 0) {
+                    throw new RuntimeException("Остаток варианта {$stockVariantId} не сходится с Заказом {$orderId}");
+                }
+
+                $nameStmt = $pdo->prepare('
+                    SELECT p.name
+                    FROM product_variants v
+                    JOIN products p ON p.id = v.product_id
+                    WHERE v.id = ?
+                ');
+                $nameStmt->execute([$stockVariantId]);
+                $pdo->rollBack();
+
+                return ['status' => 'unavailable', 'product_name' => (string) $nameStmt->fetchColumn()];
+            }
+        }
+
+        $totals = orderRecalculateTotals(
+            array_map(
+                static fn (array $item): array => ['price' => (string) $item['price'], 'quantity' => (int) $item['quantity']],
+                array_values($items)
+            ),
+            (string) $order['delivery_method'],
+            DELIVERY_FREE_THRESHOLD,
+            DELIVERY_COURIER_COST
+        );
+        $oldTotal = (string) $order['total'];
+
+        if (
+            $order['payment_method'] === 'card_online'
+            && $order['payment_status'] === 'paid'
+            && orderMoneyToKopecks($totals['total']) > orderMoneyToKopecks($oldTotal)
+        ) {
+            $pdo->rollBack();
+            return ['status' => 'surcharge_denied'];
+        }
+
+        $pdo->prepare('UPDATE orders SET delivery_cost = :delivery_cost, total = :total WHERE id = :id')
+            ->execute(['delivery_cost' => $totals['delivery_cost'], 'total' => $totals['total'], 'id' => $orderId]);
+
+        $pdo->commit();
+
+        return ['status' => 'ok', 'old_total' => $oldTotal, 'new_total' => $totals['total']];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
 }

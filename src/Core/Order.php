@@ -26,6 +26,11 @@ const ORDER_STATUS_TRANSITIONS = [
     'cancelled'        => [],
 ];
 
+// Правка состава и цены доступна «до отгрузки» (FR-ORD-004, phase-3.md).
+const ORDER_EDITABLE_STATUSES = ['new', 'confirmed', 'assembled'];
+
+const ORDER_ITEM_MAX_QUANTITY = 999;
+
 const ORDER_ADDRESS_MAX_LENGTH = 255;
 
 const ORDER_KOPECKS_PER_RUBLE = 100;
@@ -118,6 +123,40 @@ function orderDeliveryCost(
             : orderKopecksToMoney(orderMoneyToKopecks($courierCost)),
         default   => throw new InvalidArgumentException("Неизвестный способ доставки: {$deliveryMethod}"),
     };
+}
+
+/**
+ * Итоги Заказа по его Позициям (BR-006): цена Позиции в order_items уже
+ * эффективная (со скидкой), поэтому здесь скидка не учитывается.
+ *
+ * @param array<int, array{price: string, quantity: int}> $items
+ * @return array{subtotal: string, delivery_cost: string, total: string}
+ */
+function orderRecalculateTotals(
+    array $items,
+    string $deliveryMethod,
+    string $freeThreshold,
+    string $courierCost
+): array {
+    $lines = array_map(
+        static fn (array $item): array => ['price' => $item['price'], 'discount_price' => null, 'quantity' => $item['quantity']],
+        $items
+    );
+
+    $subtotal = orderCartSubtotal($lines);
+    $deliveryCost = orderDeliveryCost($deliveryMethod, $subtotal, $freeThreshold, $courierCost);
+
+    return [
+        'subtotal'      => $subtotal,
+        'delivery_cost' => $deliveryCost,
+        'total'         => orderKopecksToMoney(orderMoneyToKopecks($subtotal) + orderMoneyToKopecks($deliveryCost)),
+    ];
+}
+
+/** Можно ли править состав и цены Позиций Заказа в этом статусе. */
+function orderIsEditable(string $status): bool
+{
+    return in_array($status, ORDER_EDITABLE_STATUSES, true);
 }
 
 /**
