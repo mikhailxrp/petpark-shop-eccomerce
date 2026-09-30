@@ -513,3 +513,76 @@ function productFeatured(int $limit): array
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Поиск активных Вариантов для ручного Заказа (FR-ORD-003): артикул — по
+ * префиксу, название Товара — по вхождению. Остаток и цена — живые, из БД.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productSearchVariants(string $query, int $limit): array
+{
+    $escaped = addcslashes($query, '\%_');
+
+    $stmt = getPdo()->prepare('
+        SELECT v.id AS variant_id, v.sku, p.name, v.price, v.discount_price,
+               v.stock_quantity, v.reserved_quantity,
+               (
+                   SELECT GROUP_CONCAT(a.attr_value ORDER BY a.attr_name SEPARATOR \', \')
+                   FROM product_variant_attributes a
+                   WHERE a.variant_id = v.id
+               ) AS attributes_label
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id AND p.is_active = 1
+        WHERE v.is_active = 1 AND (v.sku LIKE :sku_prefix OR p.name LIKE :name_part)
+        ORDER BY p.name ASC, v.id ASC
+        LIMIT :row_limit
+    ');
+    $stmt->bindValue('sku_prefix', $escaped . '%');
+    $stmt->bindValue('name_part', '%' . $escaped . '%');
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    // Подпись Варианта — одним запросом: на удалённой БД каждый лишний
+    // round-trip заметен в живом поиске.
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        $row['variant_label'] = $row['attributes_label'] !== null ? (string) $row['attributes_label'] : (string) $row['sku'];
+        unset($row['attributes_label']);
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/**
+ * Активные Варианты по id (с названием Товара), ключ — variant_id; той же
+ * формы, что cartItemsForOwner(), чтобы ядро создания Заказа работало с
+ * любым источником позиций. Неактивные и несуществующие в результат не
+ * попадают.
+ *
+ * @param array<int, int> $variantIds
+ * @return array<int, array<string, mixed>>
+ */
+function productActiveVariantsByIds(array $variantIds): array
+{
+    if ($variantIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($variantIds), '?'));
+    $stmt = getPdo()->prepare("
+        SELECT v.id AS variant_id, v.sku, p.name, v.price, v.discount_price
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id AND p.is_active = 1
+        WHERE v.is_active = 1 AND v.id IN ({$placeholders})
+    ");
+    $stmt->execute(array_values($variantIds));
+
+    $variants = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $variants[(int) $row['variant_id']] = $row;
+    }
+
+    return $variants;
+}

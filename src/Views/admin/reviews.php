@@ -28,7 +28,10 @@ ob_start();
 </div>
 
 <?php if ($success !== null): ?>
-    <div class="alert alert-success"><?= e($success) ?></div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?= e($success) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+    </div>
 <?php endif; ?>
 
 <div class="card">

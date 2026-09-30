@@ -48,6 +48,9 @@ ob_start();
         <h1 class="mb-0">Заказы</h1>
         <p class="mb-0 text-muted">Найдено: <?= $total ?></p>
     </div>
+    <div class="mt-3 mt-md-0">
+        <a href="/admin/orders/new" class="btn btn-primary">Создать заказ</a>
+    </div>
 </div>
 
 <div class="card">

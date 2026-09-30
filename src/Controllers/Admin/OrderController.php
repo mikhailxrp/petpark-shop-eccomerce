@@ -25,6 +25,12 @@ final class OrderController
     private const ITEM_INPUT_INVALID_ERROR = 'Проверьте артикул, количество и цену — данные некорректны.';
     private const ITEM_EDIT_REJECTED_ERROR = 'Состав Заказа в этом статусе изменить нельзя.';
     private const PARTIAL_REFUND_FAILED_ERROR = 'Состав обновлён, но возврат разницы не прошёл — проверьте платёж вручную.';
+    private const VARIANT_SEARCH_MIN_LENGTH = 2;
+    private const VARIANT_SEARCH_MAX_LENGTH = 64;
+    private const VARIANT_SEARCH_LIMIT = 10;
+    private const MAX_ORDER_LINES = 50;
+    private const CREATE_VALIDATION_ERROR = 'Проверьте форму: контакты, способ получения и оплаты, адрес для курьера и хотя бы одна Позиция обязательны.';
+    private const CREATE_VARIANT_ERROR = 'Один из выбранных Вариантов не найден или снят с продажи.';
     private const MARK_PAID_REJECTED_ERROR = 'Отметить оплату нельзя: способ оплаты другой, Заказ уже оплачен или отменён.';
 
     public function index(): void
@@ -57,6 +63,230 @@ final class OrderController
             'totalPages' => $totalPages,
             'total'      => $total,
         ]);
+    }
+
+    public function createForm(): void
+    {
+        requireRole('shift_admin', 'owner');
+
+        $old = $this->readOldInput();
+        $oldLines = [];
+
+        if ($old !== null) {
+            $variants = productActiveVariantsByIds(array_map(
+                static fn (array $line): int => (int) $line['variant_id'],
+                $old['lines']
+            ));
+
+            foreach ($old['lines'] as $line) {
+                $variant = $variants[(int) $line['variant_id']] ?? null;
+                if ($variant !== null) {
+                    $oldLines[] = [
+                        'variant_id' => (int) $line['variant_id'],
+                        'quantity'   => (int) $line['quantity'],
+                        'name'       => (string) $variant['name'],
+                        'sku'        => (string) $variant['sku'],
+                        'price'      => orderLineTotal(
+                            (string) $variant['price'],
+                            $variant['discount_price'] !== null ? (string) $variant['discount_price'] : null,
+                            1
+                        ),
+                    ];
+                }
+            }
+        }
+
+        $role = (string) $_SESSION['user_role'];
+
+        render('admin/order-create', [
+            'pageTitle'     => 'Новый заказ — PetPark',
+            'roleLabel'     => adminRoleLabel($role),
+            'homeUrl'       => homePathForRole($role),
+            'userRole'      => $role,
+            'form'          => $old['fields'] ?? [],
+            'oldLines'      => $oldLines,
+            'checkoutToken' => bin2hex(random_bytes(ORDER_CHECKOUT_TOKEN_BYTES)),
+            'freeThreshold' => DELIVERY_FREE_THRESHOLD,
+            'courierCost'   => DELIVERY_COURIER_COST,
+            'error'         => getFlash('error'),
+        ]);
+    }
+
+    /** Поиск Вариантов для формы ручного Заказа — JSON для admin-order-create.js. */
+    public function searchVariants(): void
+    {
+        requireRole('shift_admin', 'owner');
+        // Эндпоинт только читает: снимаем блокировку файла сессии, иначе
+        // частые запросы поиска выстраиваются в очередь и подвешивают страницу.
+        session_write_close();
+
+        $query = trim((string) input('q', ''));
+        $variants = [];
+
+        if (mb_strlen($query) >= self::VARIANT_SEARCH_MIN_LENGTH && mb_strlen($query) <= self::VARIANT_SEARCH_MAX_LENGTH) {
+            foreach (productSearchVariants($query, self::VARIANT_SEARCH_LIMIT) as $row) {
+                $variants[] = [
+                    'variant_id' => (int) $row['variant_id'],
+                    'name'       => (string) $row['name'],
+                    'label'      => (string) $row['variant_label'],
+                    'sku'        => (string) $row['sku'],
+                    'price'      => orderLineTotal(
+                        (string) $row['price'],
+                        $row['discount_price'] !== null ? (string) $row['discount_price'] : null,
+                        1
+                    ),
+                    'available'  => max(0, (int) $row['stock_quantity'] - (int) $row['reserved_quantity']),
+                ];
+            }
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['variants' => $variants], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /** Ручное создание Заказа (FR-ORD-003): валидация здесь, транзакция — orderCreateManual(). */
+    public function store(): void
+    {
+        requireRole('shift_admin', 'owner');
+        requireCsrf();
+
+        $token = input('checkout_token');
+        $checkoutToken = is_string($token) && preg_match(ORDER_CHECKOUT_TOKEN_PATTERN, $token) === 1 ? $token : null;
+
+        if ($checkoutToken === null) {
+            setFlash('error', self::CREATE_VALIDATION_ERROR);
+            redirect('/admin/orders/new');
+        }
+
+        $existing = orderFindByCheckoutToken($checkoutToken);
+        if ($existing !== null) {
+            redirect('/admin/orders/' . (int) $existing['id']);
+        }
+
+        $fields = [
+            'contact_name'       => trim((string) input('contact_name')),
+            'contact_phone'      => trim((string) input('contact_phone')),
+            'contact_email'      => trim((string) input('contact_email')),
+            'delivery_method'    => (string) input('delivery_method'),
+            'payment_method'     => (string) input('payment_method'),
+            'customer_note'      => trim((string) input('customer_note')),
+            'delivery_street'    => trim((string) input('delivery_street')),
+            'delivery_house'     => trim((string) input('delivery_house')),
+            'delivery_apartment' => trim((string) input('delivery_apartment')),
+            'delivery_comment'   => trim((string) input('delivery_comment')),
+        ];
+        $lines = $this->parseOrderLines(input('items', []));
+
+        $isValid = $lines !== null
+            && $fields['contact_name'] !== '' && mb_strlen($fields['contact_name']) <= 150
+            && $fields['contact_phone'] !== '' && mb_strlen($fields['contact_phone']) <= 20
+            && $fields['contact_email'] !== '' && mb_strlen($fields['contact_email']) <= 255
+            && filter_var($fields['contact_email'], FILTER_VALIDATE_EMAIL) !== false
+            && in_array($fields['delivery_method'], ['pickup', 'courier'], true)
+            && in_array($fields['payment_method'], ['card_online', 'cash_or_card_on_delivery'], true)
+            && mb_strlen($fields['customer_note']) <= 500
+            && ($fields['delivery_method'] !== 'courier' || ($fields['delivery_street'] !== '' && $fields['delivery_house'] !== ''));
+
+        if (!$isValid) {
+            $this->rememberOldInput($fields, $lines ?? []);
+            setFlash('error', self::CREATE_VALIDATION_ERROR);
+            redirect('/admin/orders/new');
+        }
+
+        $deliveryAddress = $fields['delivery_method'] === 'courier'
+            ? orderBuildDeliveryAddress(
+                SHOP_CITY,
+                $fields['delivery_street'],
+                $fields['delivery_house'],
+                $fields['delivery_apartment'],
+                $fields['delivery_comment']
+            )
+            : null;
+
+        try {
+            $result = orderCreateManual(
+                (int) $_SESSION['user_id'],
+                $lines,
+                ['name' => $fields['contact_name'], 'phone' => $fields['contact_phone'], 'email' => $fields['contact_email']],
+                $fields['delivery_method'],
+                $deliveryAddress,
+                $fields['payment_method'],
+                $fields['customer_note'] !== '' ? $fields['customer_note'] : null,
+                $checkoutToken
+            );
+        } catch (\Throwable $e) {
+            logException($e, ['action' => 'order_create_manual']);
+            $this->rememberOldInput($fields, $lines);
+            setFlash('error', self::ACTION_FAILED_ERROR);
+            redirect('/admin/orders/new');
+        }
+
+        if ($result['status'] === 'variant_not_found' || $result['status'] === 'unavailable') {
+            $this->rememberOldInput($fields, $lines);
+            setFlash('error', $result['status'] === 'unavailable'
+                ? 'Недостаточно товара «' . $result['product_name'] . '» в наличии.'
+                : self::CREATE_VARIANT_ERROR);
+            redirect('/admin/orders/new');
+        }
+
+        setFlash('success', 'Заказ создан, резерв товара начат.');
+        redirect('/admin/orders/' . $result['order_id']);
+    }
+
+    /**
+     * Позиции из POST `items[N][variant_id|quantity]`; null — ввод некорректен.
+     *
+     * @return array<int, array{variant_id: int, quantity: int}>|null
+     */
+    private function parseOrderLines(mixed $raw): ?array
+    {
+        if (!is_array($raw) || $raw === [] || count($raw) > self::MAX_ORDER_LINES) {
+            return null;
+        }
+
+        $lines = [];
+        foreach ($raw as $row) {
+            $variantId = is_array($row) ? ($row['variant_id'] ?? null) : null;
+            $quantity = is_array($row) ? ($row['quantity'] ?? null) : null;
+
+            if (
+                !is_string($variantId) || !ctype_digit($variantId) || (int) $variantId < 1
+                || !is_string($quantity) || !ctype_digit($quantity)
+                || (int) $quantity < 1 || (int) $quantity > ORDER_ITEM_MAX_QUANTITY
+            ) {
+                return null;
+            }
+
+            $lines[] = ['variant_id' => (int) $variantId, 'quantity' => (int) $quantity];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Введённое сохраняется на один показ формы после ошибки — flash хранит
+     * только строки, поэтому JSON.
+     *
+     * @param array<string, string> $fields
+     * @param array<int, array{variant_id: int, quantity: int}> $lines
+     */
+    private function rememberOldInput(array $fields, array $lines): void
+    {
+        setFlash('order_create_old', (string) json_encode(['fields' => $fields, 'lines' => $lines], JSON_UNESCAPED_UNICODE));
+    }
+
+    /** @return array{fields: array<string, string>, lines: array<int, array{variant_id: int, quantity: int}>}|null */
+    private function readOldInput(): ?array
+    {
+        $json = getFlash('order_create_old');
+        $data = $json !== null ? json_decode($json, true) : null;
+
+        if (!is_array($data) || !is_array($data['fields'] ?? null) || !is_array($data['lines'] ?? null)) {
+            return null;
+        }
+
+        return ['fields' => array_map('strval', $data['fields']), 'lines' => $data['lines']];
     }
 
     public function show(string $id): void

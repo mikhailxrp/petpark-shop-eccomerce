@@ -53,10 +53,16 @@ $paymentStatusLabel = match ($order['payment_status']) {
 ob_start();
 ?>
 <?php if ($success !== null): ?>
-    <div class="alert alert-success"><?= e($success) ?></div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?= e($success) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+    </div>
 <?php endif; ?>
 <?php if ($error !== null): ?>
-    <div class="alert alert-danger"><?= e($error) ?></div>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?= e($error) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+    </div>
 <?php endif; ?>
 
 <div class="d-md-flex d-block align-items-center justify-content-between my-4">

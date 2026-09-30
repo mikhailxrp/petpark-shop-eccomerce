@@ -21,6 +21,7 @@ declare(strict_types=1);
 
     <link href="/admin/assets/libs/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="/admin/assets/css/styles.min.css" rel="stylesheet">
+    <link href="/admin/assets/css/icons.min.css" rel="stylesheet">
     <link href="/assets/css/fontawesome.min.css" rel="stylesheet">
 </head>
 <body>
@@ -49,7 +50,10 @@ declare(strict_types=1);
                                         <h6 class="fw-medium mb-4 fs-15 text-muted">Специалист, администратор смены, контент-редактор, владелец</h6>
 
                                         <?php if ($error !== null): ?>
-                                            <div class="alert alert-danger" role="alert"><?= e($error) ?></div>
+                                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                                <?= e($error) ?>
+                                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+                                            </div>
                                         <?php endif; ?>
 
                                         <form method="post" action="/admin/login">
@@ -79,6 +83,7 @@ declare(strict_types=1);
         </div>
     </div>
 
+    <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/password-toggle.js"></script>
 </body>
 </html>

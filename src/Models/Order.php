@@ -7,13 +7,16 @@ declare(strict_types=1);
  * Денежные правила и адрес — в Core/Order.php. phase-2.md, Таск 5:
  * FR-CHK-004/007, FR-AUTH-002, BR-003.
  *
- * orderCreate() — единственное место, где создаётся Заказ: одна
- * транзакция на идемпотентность + автоаккаунт + резерв остатка +
- * order_items + очистку корзины (general.md: многошаговая атомарная
- * запись — один Model-функция, одна транзакция).
+ * orderCreateFromRows() — единственное место, где создаётся Заказ (чекаут
+ * — orderCreate(), персонал — orderCreateManual()): одна транзакция на
+ * идемпотентность + автоаккаунт + резерв остатка + order_items + очистку
+ * корзины (general.md: многошаговая атомарная запись — одна Model-функция,
+ * одна транзакция).
  */
 
 /**
+ * Оформление на сайте: корзина владельца → ядро создания Заказа.
+ *
  * @param array{name: string, phone: string, email: string} $contact
  * @param array{user_id: ?int, session_id: ?string} $owner
  * @return array{status: 'created', order_id: int, new_account: array{name: string, email: string, password: string}|null}
@@ -41,8 +44,110 @@ function orderCreate(
         return ['status' => 'empty'];
     }
 
+    return orderCreateFromRows(
+        $cartRows,
+        $sessionUserId,
+        $contact,
+        $deliveryMethod,
+        $deliveryAddress,
+        $paymentMethod,
+        $customerNote,
+        $checkoutToken,
+        null,
+        $paymentMethod === 'cash_or_card_on_delivery',
+        static function () use ($owner): void {
+            cartClearForOwner($owner);
+        }
+    );
+}
+
+/**
+ * Ручное создание Заказа персоналом (FR-ORD-003): Варианты по id, цена и
+ * остаток берутся из БД. Заказ всегда остаётся в `new` с резервом —
+ * автоподтверждение «при получении» (Q-032) не применяется.
+ *
+ * @param array<int, array{variant_id: int, quantity: int}> $lines
+ * @param array{name: string, phone: string, email: string} $contact
+ * @return array{status: 'created', order_id: int, new_account: array{name: string, email: string, password: string}|null}
+ *       | array{status: 'exists', order_id: int}
+ *       | array{status: 'unavailable', product_name: string}
+ *       | array{status: 'variant_not_found'}
+ */
+function orderCreateManual(
+    int $staffUserId,
+    array $lines,
+    array $contact,
+    string $deliveryMethod,
+    ?string $deliveryAddress,
+    string $paymentMethod,
+    ?string $customerNote,
+    string $checkoutToken
+): array {
+    $quantities = [];
+    foreach ($lines as $line) {
+        $variantId = (int) $line['variant_id'];
+        $quantities[$variantId] = ($quantities[$variantId] ?? 0) + (int) $line['quantity'];
+    }
+
+    $variants = productActiveVariantsByIds(array_keys($quantities));
+    $rows = [];
+    foreach ($quantities as $variantId => $quantity) {
+        if (!isset($variants[$variantId]) || $quantity > ORDER_ITEM_MAX_QUANTITY) {
+            return ['status' => 'variant_not_found'];
+        }
+        $rows[] = $variants[$variantId] + ['quantity' => $quantity];
+    }
+
+    $existing = orderFindByCheckoutToken($checkoutToken);
+    if ($existing !== null) {
+        return ['status' => 'exists', 'order_id' => (int) $existing['id']];
+    }
+
+    return orderCreateFromRows(
+        $rows,
+        null,
+        $contact,
+        $deliveryMethod,
+        $deliveryAddress,
+        $paymentMethod,
+        $customerNote,
+        $checkoutToken,
+        $staffUserId,
+        false,
+        null
+    );
+}
+
+/**
+ * Ядро создания Заказа по списку позиций — единственная транзакция на
+ * идемпотентность + резолв Покупателя + резерв остатка + order_items.
+ * Общее для чекаута и ручного создания.
+ *
+ * $rows — строки вида cartItemsForOwner(): variant_id, sku, name, price,
+ * discount_price, quantity. $beforeCommit выполняется внутри транзакции
+ * после резерва (очистка корзины чекаута).
+ *
+ * @param array<int, array<string, mixed>> $rows
+ * @param array{name: string, phone: string, email: string} $contact
+ * @return array{status: 'created', order_id: int, new_account: array{name: string, email: string, password: string}|null}
+ *       | array{status: 'exists', order_id: int}
+ *       | array{status: 'unavailable', product_name: string}
+ */
+function orderCreateFromRows(
+    array $rows,
+    ?int $sessionUserId,
+    array $contact,
+    string $deliveryMethod,
+    ?string $deliveryAddress,
+    string $paymentMethod,
+    ?string $customerNote,
+    string $checkoutToken,
+    ?int $createdByUserId,
+    bool $autoConfirm,
+    ?callable $beforeCommit
+): array {
     $lines = [];
-    foreach ($cartRows as $row) {
+    foreach ($rows as $row) {
         $lines[] = [
             'price'          => (string) $row['price'],
             'discount_price' => $row['discount_price'] !== null ? (string) $row['discount_price'] : null,
@@ -79,34 +184,35 @@ function orderCreate(
 
         $stmt = $pdo->prepare('
             INSERT INTO orders (
-                user_id, status, payment_status, delivery_method, payment_method,
+                user_id, created_by_user_id, status, payment_status, delivery_method, payment_method,
                 delivery_cost, delivery_address, contact_name, contact_phone, contact_email,
                 customer_note, checkout_token, reserved_until, total
             ) VALUES (
-                :user_id, \'new\', \'unpaid\', :delivery_method, :payment_method,
+                :user_id, :created_by_user_id, \'new\', \'unpaid\', :delivery_method, :payment_method,
                 :delivery_cost, :delivery_address, :contact_name, :contact_phone, :contact_email,
                 :customer_note, :checkout_token, DATE_ADD(NOW(), INTERVAL :reserve_minutes MINUTE), :total
             )
         ');
         $stmt->execute([
-            'user_id'          => $userId,
-            'delivery_method'  => $deliveryMethod,
-            'payment_method'   => $paymentMethod,
-            'delivery_cost'    => $deliveryCost,
-            'delivery_address' => $deliveryAddress,
-            'contact_name'     => $contact['name'],
-            'contact_phone'    => $contact['phone'],
-            'contact_email'    => $contact['email'],
-            'customer_note'    => $customerNote,
-            'checkout_token'   => $checkoutToken,
-            'reserve_minutes'  => ORDER_RESERVE_MINUTES,
-            'total'            => $total,
+            'user_id'            => $userId,
+            'created_by_user_id' => $createdByUserId,
+            'delivery_method'    => $deliveryMethod,
+            'payment_method'     => $paymentMethod,
+            'delivery_cost'      => $deliveryCost,
+            'delivery_address'   => $deliveryAddress,
+            'contact_name'       => $contact['name'],
+            'contact_phone'      => $contact['phone'],
+            'contact_email'      => $contact['email'],
+            'customer_note'      => $customerNote,
+            'checkout_token'     => $checkoutToken,
+            'reserve_minutes'    => ORDER_RESERVE_MINUTES,
+            'total'              => $total,
         ]);
         $orderId = (int) $pdo->lastInsertId();
 
         $variantAttributes = productVariantAttributesForVariants(array_map(
             static fn (array $row): int => (int) $row['variant_id'],
-            $cartRows
+            $rows
         ));
 
         $unavailableProductName = null;
@@ -124,7 +230,7 @@ function orderCreate(
             VALUES (:order_id, :variant_id, :product_name, :variant_label, :price, :quantity)
         ');
 
-        foreach ($cartRows as $row) {
+        foreach ($rows as $row) {
             $variantId = (int) $row['variant_id'];
             $quantity = (int) $row['quantity'];
 
@@ -154,11 +260,13 @@ function orderCreate(
 
         // Оплата при получении: подтверждаем сразу (Q-032), в той же
         // транзакции — orderTransition() присоединяется к уже открытой.
-        if ($paymentMethod === 'cash_or_card_on_delivery' && !orderTransition($orderId, 'confirmed')) {
+        if ($autoConfirm && !orderTransition($orderId, 'confirmed')) {
             throw new RuntimeException("Не удалось подтвердить Заказ {$orderId} при создании");
         }
 
-        cartClearForOwner($owner);
+        if ($beforeCommit !== null) {
+            $beforeCommit();
+        }
 
         $pdo->commit();
 

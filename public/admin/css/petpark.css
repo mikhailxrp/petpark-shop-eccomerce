@@ -78,3 +78,36 @@ button.sidemenu-toggle {
     border-radius: 0;
     appearance: none;
 }
+
+/*
+ * Выпадающий список поиска Варианта (форма ручного Заказа,
+ * /admin/orders/new, admin-order-create.js). Без своего фона и z-index
+ * список рисовался поверх таблицы состава прозрачным (скриншот
+ * пользователя): строки таблицы просвечивали сквозь результаты. Высота
+ * ограничена и прокручивается, чтобы 10 результатов не перекрывали
+ * кнопки под формой.
+ */
+.variant-search__results {
+    --variant-search-max-height: 20rem;
+    --variant-search-z-index: 1000;
+
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: var(--variant-search-z-index);
+    max-height: var(--variant-search-max-height);
+    margin-top: 0.25rem;
+    overflow-y: auto;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.variant-search__results .list-group-item {
+    background-color: var(--bs-body-bg, #fff);
+}
+
+/* Обёртки <li role="option"> вокруг кнопок результатов — без маркеров списка. */
+.variant-search__results li {
+    list-style: none;
+}

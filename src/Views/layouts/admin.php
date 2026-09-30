@@ -120,6 +120,7 @@ declare(strict_types=1);
 
     </div>
 
+    <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/js/admin-layout.js"></script>
 </body>
 </html>
