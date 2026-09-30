@@ -11,16 +11,28 @@ $pageTitle = seoTitle('generic');
 $pageDescription = seoDescription('generic');
 $footerVariant = 'catalog';
 
+$bannerTitle = 'Личный кабинет';
+$breadcrumbs = [
+    ['name' => 'Главная', 'url' => '/'],
+    ['name' => 'Личный кабинет', 'url' => null],
+];
+
 ob_start();
+include __DIR__ . '/../components/page-banner.php';
 ?>
 <section class="gap">
     <div class="container">
-        <h1>Личный кабинет</h1>
-        <p>Вы вошли в личный кабинет. Заказы, записи и избранное появятся здесь позже.</p>
-        <form method="post" action="/logout">
-            <?= csrfField() ?>
-            <button type="submit" class="button">Выйти</button>
-        </form>
+        <div class="row">
+            <div class="col-lg-3">
+                <?php $accountActive = 'overview'; include __DIR__ . '/../components/account-nav.php'; ?>
+            </div>
+            <div class="col-lg-9">
+                <article class="account-card">
+                    <h2 class="account-heading">Добро пожаловать в личный кабинет</h2>
+                    <p>Здесь вы управляете карточками питомцев — они понадобятся для записи на услуги. Заказы, записи и избранное появятся позже.</p>
+                </article>
+            </div>
+        </div>
     </div>
 </section>
 <?php

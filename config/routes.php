@@ -15,6 +15,8 @@ return [
         '/login'               => ['AuthController', 'showLogin'],
         '/forgot-password'     => ['AuthController', 'showForgotPassword'],
         '/account'             => ['AccountController', 'index'],
+        '/account/pets'        => ['AccountController', 'pets'],
+        '/account/pets/{id}/edit' => ['AccountController', 'petEdit'],
         '/admin/login'         => ['Admin\AuthController', 'showLogin'],
         '/admin'               => ['Admin\DashboardController', 'index'],
         '/admin/reviews'       => ['Admin\ReviewController', 'index'],
@@ -39,6 +41,9 @@ return [
     'POST' => [
         '/login'           => ['AuthController', 'login'],
         '/logout'          => ['AuthController', 'logout'],
+        '/account/pets'              => ['AccountController', 'petStore'],
+        '/account/pets/{id}'         => ['AccountController', 'petUpdate'],
+        '/account/pets/{id}/delete'  => ['AccountController', 'petDelete'],
         '/forgot-password' => ['AuthController', 'forgotPassword'],
         '/admin/login'     => ['Admin\AuthController', 'login'],
         '/admin/logout'    => ['Admin\AuthController', 'logout'],

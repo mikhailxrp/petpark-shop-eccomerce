@@ -5,17 +5,234 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 /**
- * Личный кабинет Покупателя — заглушка-приёмник после входа
- * (phase-1.md, Таск 6: "/account в этой фазе только заглушка-приёмник
- * после входа, содержимое — Фаза 7"). Без этого маршрута /login не
- * имеет куда редиректить успешный вход.
+ * Личный кабинет Покупателя. `index` — заглушка-приёмник после входа
+ * (phase-1.md, Таск 6; содержимое — Фаза 7). Питомцы — `FR-ACC-003`
+ * (phase-4.md, Таск 2).
  */
 final class AccountController
 {
+    private const PET_SPECIES = ['Кошка', 'Собака', 'Птица', 'Другое'];
+    private const PET_NAME_MAX = 60;
+    private const PET_BREED_MAX = 80;
+    private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
+    private const PET_FORM_FLASH = 'pet_form';
+
     public function index(): void
     {
         requireRole('customer');
 
         render('account/dashboard', []);
+    }
+
+    public function pets(): void
+    {
+        requireRole('customer');
+
+        $this->renderPets(null);
+    }
+
+    public function petEdit(string $id): void
+    {
+        requireRole('customer');
+
+        $pet = $this->findOwnPet($id);
+        if ($pet === null) {
+            $this->notFound();
+            return;
+        }
+
+        $this->renderPets($pet);
+    }
+
+    public function petStore(): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        [$values, $errors] = $this->validatePet();
+
+        if ($errors !== []) {
+            $this->rememberForm($values, $errors);
+            redirect('/account/pets');
+        }
+
+        petCreate(
+            (int) $_SESSION['user_id'],
+            $values['name'],
+            $values['species'],
+            $values['breed'] === '' ? null : $values['breed'],
+            $values['weight'] === '' ? null : $values['weight'],
+        );
+
+        setFlash('success', 'Питомец добавлен.');
+        redirect('/account/pets');
+    }
+
+    public function petUpdate(string $id): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $pet = $this->findOwnPet($id);
+        if ($pet === null) {
+            $this->notFound();
+            return;
+        }
+
+        $petId = (int) $pet['id'];
+        [$values, $errors] = $this->validatePet();
+
+        if ($errors !== []) {
+            $this->rememberForm($values, $errors);
+            redirect("/account/pets/{$petId}/edit");
+        }
+
+        petUpdate(
+            (int) $_SESSION['user_id'],
+            $petId,
+            $values['name'],
+            $values['species'],
+            $values['breed'] === '' ? null : $values['breed'],
+            $values['weight'] === '' ? null : $values['weight'],
+        );
+
+        setFlash('success', 'Данные питомца сохранены.');
+        redirect('/account/pets');
+    }
+
+    public function petDelete(string $id): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $pet = $this->findOwnPet($id);
+        if ($pet === null) {
+            $this->notFound();
+            return;
+        }
+
+        if (petDeleteIfNoBookings((int) $_SESSION['user_id'], (int) $pet['id'])) {
+            setFlash('success', 'Питомец удалён.');
+        } else {
+            setFlash('error', 'Нельзя удалить питомца, у которого есть записи на услуги.');
+        }
+
+        redirect('/account/pets');
+    }
+
+    /**
+     * @param array<string, mixed>|null $editPet null — режим добавления
+     */
+    private function renderPets(?array $editPet): void
+    {
+        $form = $this->takeForm();
+
+        if ($form !== null) {
+            $values = $form['values'];
+            $errors = $form['errors'];
+        } else {
+            $values = [
+                'name'    => (string) ($editPet['name'] ?? ''),
+                'species' => (string) ($editPet['species'] ?? ''),
+                'breed'   => (string) ($editPet['breed'] ?? ''),
+                'weight'  => $editPet !== null && $editPet['weight'] !== null
+                    ? rtrim(rtrim((string) $editPet['weight'], '0'), '.')
+                    : '',
+            ];
+            $errors = [];
+        }
+
+        render('account/pets', [
+            'pets'       => petsByUser((int) $_SESSION['user_id']),
+            'editPet'    => $editPet,
+            'values'     => $values,
+            'errors'     => $errors,
+            'speciesList' => self::PET_SPECIES,
+            'success'    => getFlash('success'),
+            'error'      => getFlash('error'),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null null — id некорректен, Питомца нет или он чужой
+     */
+    private function findOwnPet(string $id): ?array
+    {
+        if (!ctype_digit($id) || (int) $id < 1) {
+            return null;
+        }
+
+        return petFind((int) $_SESSION['user_id'], (int) $id);
+    }
+
+    private function notFound(): void
+    {
+        http_response_code(404);
+        render('errors/404');
+    }
+
+    /**
+     * @return array{0: array<string, string>, 1: array<string, string>} [значения, ошибки по полям]
+     */
+    private function validatePet(): array
+    {
+        // mb_scrub — битые UTF-8 байты заменяются, иначе json_encode флеша и INSERT падают
+        $values = [
+            'name'    => trim(mb_scrub((string) input('name'))),
+            'species' => mb_scrub((string) input('species')),
+            'breed'   => trim(mb_scrub((string) input('breed'))),
+            'weight'  => str_replace(',', '.', trim(mb_scrub((string) input('weight')))),
+        ];
+        $errors = [];
+
+        if ($values['name'] === '') {
+            $errors['name'] = 'Укажите кличку.';
+        } elseif (mb_strlen($values['name']) > self::PET_NAME_MAX) {
+            $errors['name'] = 'Кличка — не длиннее ' . self::PET_NAME_MAX . ' символов.';
+        }
+
+        if (!in_array($values['species'], self::PET_SPECIES, true)) {
+            $errors['species'] = 'Выберите вид животного.';
+        }
+
+        if (mb_strlen($values['breed']) > self::PET_BREED_MAX) {
+            $errors['breed'] = 'Порода — не длиннее ' . self::PET_BREED_MAX . ' символов.';
+        }
+
+        if ($values['weight'] !== ''
+            && (preg_match(self::PET_WEIGHT_PATTERN, $values['weight']) !== 1 || (float) $values['weight'] <= 0)
+        ) {
+            $errors['weight'] = 'Вес — число от 0.01 до 999.99 кг.';
+        }
+
+        return [$values, $errors];
+    }
+
+    /**
+     * Ошибки и введённое переживают redirect через сессию (POST → redirect).
+     *
+     * @param array<string, string> $values
+     * @param array<string, string> $errors
+     */
+    private function rememberForm(array $values, array $errors): void
+    {
+        setFlash(self::PET_FORM_FLASH, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array{values: array<string, string>, errors: array<string, string>}|null
+     */
+    private function takeForm(): ?array
+    {
+        $raw = getFlash(self::PET_FORM_FLASH);
+        if ($raw === null) {
+            return null;
+        }
+
+        $form = json_decode($raw, true);
+
+        return is_array($form) && is_array($form['values'] ?? null) && is_array($form['errors'] ?? null)
+            ? $form
+            : null;
     }
 }

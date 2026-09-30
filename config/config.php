@@ -55,4 +55,5 @@ require_once ROOT_PATH . '/src/Models/Favorite.php';
 require_once ROOT_PATH . '/src/Models/Cart.php';
 require_once ROOT_PATH . '/src/Models/User.php';
 require_once ROOT_PATH . '/src/Models/Order.php';
+require_once ROOT_PATH . '/src/Models/Pet.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';
