@@ -586,3 +586,89 @@ function productActiveVariantsByIds(array $variantIds): array
 
     return $variants;
 }
+
+/**
+ * Условие и параметры поиска Вариантов для страницы «Склад» (FR-STOCK-001):
+ * артикул — по префиксу, название Товара — по вхождению; пустой запрос — все.
+ *
+ * @return array{0: string, 1: array<string, string>}
+ */
+function productStockSearchCondition(string $query): array
+{
+    if ($query === '') {
+        return ['1 = 1', []];
+    }
+
+    $escaped = addcslashes($query, '\%_');
+
+    return [
+        '(v.sku LIKE :sku_prefix OR p.name LIKE :name_part)',
+        ['sku_prefix' => $escaped . '%', 'name_part' => '%' . $escaped . '%'],
+    ];
+}
+
+function productVariantCountForStock(string $query): int
+{
+    [$where, $params] = productStockSearchCondition($query);
+
+    $stmt = getPdo()->prepare("
+        SELECT COUNT(*)
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE {$where}
+    ");
+    $stmt->execute($params);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Варианты для страницы «Склад»: остаток, резерв, время последней
+ * синхронизации с МойСклад.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productVariantListForStock(string $query, int $limit, int $offset): array
+{
+    [$where, $params] = productStockSearchCondition($query);
+
+    $stmt = getPdo()->prepare("
+        SELECT v.id AS variant_id, v.sku, p.name, v.stock_quantity,
+               v.reserved_quantity, v.moysklad_synced_at
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE {$where}
+        ORDER BY p.name ASC, v.id ASC
+        LIMIT :row_limit OFFSET :row_offset
+    ");
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue('row_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+function productVariantExists(int $variantId): bool
+{
+    $stmt = getPdo()->prepare('SELECT 1 FROM product_variants WHERE id = :id');
+    $stmt->execute(['id' => $variantId]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * Записать остаток из МойСклад и время синхронизации (FR-STOCK-001).
+ * Резерв не трогаем: он принадлежит Заказам, а не внешней системе.
+ */
+function productVariantSetStockFromMoySklad(int $variantId, int $quantity): void
+{
+    $stmt = getPdo()->prepare('
+        UPDATE product_variants
+        SET stock_quantity = :quantity, moysklad_synced_at = NOW()
+        WHERE id = :id
+    ');
+    $stmt->execute(['quantity' => $quantity, 'id' => $variantId]);
+}

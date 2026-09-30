@@ -24,6 +24,16 @@ final class AmoCrm
         return $dealId;
     }
 
+    /**
+     * Создать сделку и записать её id в Заказ. Для подтверждений, которые
+     * идут не через карточку в админке: автоподтверждение при оформлении
+     * (Q-032) и оплата картой (AC-02).
+     */
+    public function registerOrder(int $orderId): void
+    {
+        orderSetAmoCrm($orderId, $this->pushOrder($orderId));
+    }
+
     /** Обновить сделку после смены статуса или правки Заказа. */
     public function updateDeal(string $dealId, string $status, ?string $total = null): bool
     {
