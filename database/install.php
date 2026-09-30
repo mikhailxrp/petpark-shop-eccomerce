@@ -526,6 +526,41 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// Колонки Фазы 4 (ADR-028, planning-log.md): вид Услуги и Депозит Записи в
+// payment_logs. Идут после bookings — FK на неё.
+$servicesKindExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'kind'
+")->fetchColumn();
+
+if ($servicesKindExists === 0) {
+    $pdo->exec("ALTER TABLE services ADD COLUMN kind ENUM('grooming', 'vet') NOT NULL DEFAULT 'grooming' AFTER name");
+}
+
+$paymentLogsBookingExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_logs' AND COLUMN_NAME = 'booking_id'
+")->fetchColumn();
+
+if ($paymentLogsBookingExists === 0) {
+    $pdo->exec("ALTER TABLE payment_logs ADD COLUMN booking_id INT NULL AFTER order_id");
+    $pdo->exec("ALTER TABLE payment_logs ADD KEY idx_payment_logs_booking (booking_id)");
+    $pdo->exec("
+        ALTER TABLE payment_logs
+            ADD CONSTRAINT fk_payment_logs_booking
+            FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE CASCADE
+    ");
+}
+
+$paymentLogsOrderNullable = (string) $pdo->query("
+    SELECT IS_NULLABLE FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_logs' AND COLUMN_NAME = 'order_id'
+")->fetchColumn();
+
+if ($paymentLogsOrderNullable === 'NO') {
+    $pdo->exec("ALTER TABLE payment_logs MODIFY order_id INT NULL");
+}
+
 // ─── order_returns ──────────────────────────────────────────────────────
 
 $pdo->exec("

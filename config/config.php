@@ -35,6 +35,11 @@ define('ORDER_UNCLAIMED_DAYS',    3); // FR-ORD-007: срок ожидания �
 define('SHOP_PICKUP_ADDRESS', env('SHOP_PICKUP_ADDRESS', 'Ростов-на-Дону, адрес магазина уточняется'));
 define('SHOP_PICKUP_HOURS',   '10:00–20:00, без выходных');
 
+// Запись на Услугу (Core/Booking.php) — Q-037, FR-SV-008. Горизонт, шаг сетки
+// и буфер груминга — константы самого Core/Booking.php.
+define('BOOKING_SLOT_HOLD_MINUTES',    30); // FR-SV-009: срок оплаты Депозита
+define('BOOKING_CANCEL_THRESHOLD_HOURS', 3); // FR-SV-008: отмена не позже чем за N часов
+
 require_once ROOT_PATH . '/src/Core/Logger.php';
 require_once ROOT_PATH . '/src/Core/Database.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
@@ -42,6 +47,7 @@ require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Core/Cache.php';
 require_once ROOT_PATH . '/src/Core/Order.php';
 require_once ROOT_PATH . '/src/Core/Cart.php';
+require_once ROOT_PATH . '/src/Core/Booking.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';
