@@ -130,6 +130,31 @@ function orderCanTransition(string $from, string $to): bool
 }
 
 /**
+ * Что переход делает с остатком Вариантов по Позициям Заказа (tz.md §6.3,
+ * BR-003, FR-STOCK-004):
+ *  - stock_deduct    — Резерв → Списание (new → confirmed);
+ *  - reserve_release — резерв снимается, остаток не тронут (new → cancelled);
+ *  - stock_restore   — Списание отменяется, количество возвращается в остаток
+ *                      (отмена из confirmed и дальше);
+ *  - none            — штатное исполнение, остаток не меняется.
+ * Неразрешённая пара — InvalidArgumentException, а не 'none': «ничего не
+ * делать» для запрещённого перехода скрыло бы ошибку вызывающего кода.
+ */
+function orderStockAction(string $from, string $to): string
+{
+    if (!orderCanTransition($from, $to)) {
+        throw new InvalidArgumentException("Переход {$from} → {$to} не разрешён");
+    }
+
+    return match (true) {
+        $from === 'new' && $to === 'confirmed' => 'stock_deduct',
+        $from === 'new' && $to === 'cancelled' => 'reserve_release',
+        $to === 'cancelled'                    => 'stock_restore',
+        default                                => 'none',
+    };
+}
+
+/**
  * Видит ли текущая сессия этот Заказ: либо она его оформила (номер лежит
  * в $_SESSION['checkout_order_ids']), либо это авторизованный Покупатель-
  * владелец. Один критерий и для страницы успеха, и для страниц оплаты.

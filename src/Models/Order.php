@@ -250,9 +250,10 @@ function orderItemsForOrder(int $orderId): array
  * SELECT ... FOR UPDATE, поэтому два одновременных callback'а не
  * спишут остаток дважды.
  *
- * Пока реализованы только переходы из `new`: остаток списывается при
- * `confirmed`, резерв снимается при `cancelled`. Остальные допустимые
- * по карте переходы появятся в Фазе 3 вместе с возвратом остатка.
+ * Действие с остатком определяет orderStockAction(): списание при
+ * `new → confirmed`, снятие резерва при `new → cancelled`, возврат в
+ * остаток при отмене из `confirmed` и дальше; остальное остаток не
+ * трогает. Каждый переход пишет `status_changed_at`.
  *
  * @param string|null $paymentStatus новый orders.payment_status; null — не менять
  */
@@ -277,45 +278,57 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
             return false;
         }
 
-        if ($fromStatus !== 'new') {
-            throw new LogicException("Переход {$fromStatus} → {$toStatus} пока не реализован (Фаза 3)");
-        }
-
-        $itemsStmt = $pdo->prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ? AND variant_id IS NOT NULL');
-        $itemsStmt->execute([$orderId]);
+        $stockAction = orderStockAction((string) $fromStatus, $toStatus);
 
         // Уникальные имена плейсхолдеров — ATTR_EMULATE_PREPARES=false не
         // допускает повтор одного имени в запросе (см. orderCreate()).
-        $stockStmt = match ($toStatus) {
-            'confirmed' => $pdo->prepare('
+        $stockStmt = match ($stockAction) {
+            'stock_deduct' => $pdo->prepare('
                 UPDATE product_variants
                 SET stock_quantity = stock_quantity - :qty_stock,
                     reserved_quantity = reserved_quantity - :qty_reserved
                 WHERE id = :id AND stock_quantity >= :qty_stock_check AND reserved_quantity >= :qty_reserved_check
             '),
-            'cancelled' => $pdo->prepare('
+            'reserve_release' => $pdo->prepare('
                 UPDATE product_variants
                 SET reserved_quantity = reserved_quantity - :qty_reserved
                 WHERE id = :id AND reserved_quantity >= :qty_reserved_check
             '),
+            // Возврат не может уйти в минус — условие в WHERE не нужно;
+            // rowCount() = 0 здесь значит только «Варианта нет».
+            'stock_restore' => $pdo->prepare('
+                UPDATE product_variants
+                SET stock_quantity = stock_quantity + :qty_stock
+                WHERE id = :id
+            '),
+            'none' => null,
         };
 
-        foreach ($itemsStmt->fetchAll() as $item) {
-            $quantity = (int) $item['quantity'];
-            $params = ['id' => (int) $item['variant_id'], 'qty_reserved' => $quantity, 'qty_reserved_check' => $quantity];
-            if ($toStatus === 'confirmed') {
-                $params += ['qty_stock' => $quantity, 'qty_stock_check' => $quantity];
-            }
+        if ($stockStmt !== null) {
+            $itemsStmt = $pdo->prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ? AND variant_id IS NOT NULL');
+            $itemsStmt->execute([$orderId]);
 
-            $stockStmt->execute($params);
-            if ($stockStmt->rowCount() === 0) {
-                throw new RuntimeException("Остаток варианта {$item['variant_id']} не сходится с резервом Заказа {$orderId}");
+            foreach ($itemsStmt->fetchAll() as $item) {
+                $quantity = (int) $item['quantity'];
+                $params = match ($stockAction) {
+                    'stock_deduct'    => ['id' => (int) $item['variant_id'], 'qty_stock' => $quantity, 'qty_reserved' => $quantity,
+                        'qty_stock_check' => $quantity, 'qty_reserved_check' => $quantity],
+                    'reserve_release' => ['id' => (int) $item['variant_id'], 'qty_reserved' => $quantity, 'qty_reserved_check' => $quantity],
+                    'stock_restore'   => ['id' => (int) $item['variant_id'], 'qty_stock' => $quantity],
+                };
+
+                $stockStmt->execute($params);
+                if ($stockStmt->rowCount() === 0) {
+                    throw new RuntimeException("Остаток варианта {$item['variant_id']} не сходится с резервом Заказа {$orderId}");
+                }
             }
         }
 
         $updateStmt = $pdo->prepare('
             UPDATE orders
-            SET status = :status, payment_status = COALESCE(:payment_status, payment_status)
+            SET status = :status,
+                payment_status = COALESCE(:payment_status, payment_status),
+                status_changed_at = NOW()
             WHERE id = :id
         ');
         $updateStmt->execute(['status' => $toStatus, 'payment_status' => $paymentStatus, 'id' => $orderId]);

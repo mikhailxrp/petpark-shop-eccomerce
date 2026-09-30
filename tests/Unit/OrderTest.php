@@ -115,6 +115,40 @@ final class OrderTest extends TestCase
         $this->assertFalse(\orderCanTransition('new', 'paid'));
     }
 
+    public function testStockActionForEveryAllowedTransition(): void
+    {
+        $expected = [
+            'new'              => ['confirmed' => 'stock_deduct', 'cancelled' => 'reserve_release'],
+            'confirmed'        => ['assembled' => 'none', 'cancelled' => 'stock_restore'],
+            'assembled'        => ['shipped' => 'none', 'ready_for_pickup' => 'none', 'cancelled' => 'stock_restore'],
+            'shipped'          => ['delivered' => 'none', 'cancelled' => 'stock_restore'],
+            'ready_for_pickup' => ['picked_up' => 'none', 'cancelled' => 'stock_restore'],
+        ];
+
+        $checked = 0;
+        foreach (ORDER_STATUS_TRANSITIONS as $from => $targets) {
+            foreach ($targets as $to) {
+                $this->assertSame($expected[$from][$to], \orderStockAction($from, $to), "{$from} → {$to}");
+                $checked++;
+            }
+        }
+
+        // Карта и ожидания разошлись — тест не должен молча пропустить пару.
+        $this->assertSame(array_sum(array_map('count', $expected)), $checked);
+    }
+
+    public function testStockActionRejectsForbiddenTransition(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        \orderStockAction('delivered', 'new');
+    }
+
+    public function testStockActionRejectsTransitionFromCancelled(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        \orderStockAction('cancelled', 'confirmed');
+    }
+
     public function testBuildDeliveryAddressFull(): void
     {
         $this->assertSame(
