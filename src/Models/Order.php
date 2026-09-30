@@ -383,3 +383,75 @@ function orderPaymentLogCreate(int $orderId, string $provider, bool $signatureVa
         'payload'         => $payload,
     ]);
 }
+
+/**
+ * Страница списка Заказов для админки (FR-ORD-002): от новых к старым,
+ * с числом Позиций. $status = null — без фильтра. Индексы —
+ * idx_orders_status / idx_orders_created.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function orderListForAdmin(?string $status, int $limit, int $offset): array
+{
+    $sql = '
+        SELECT
+            o.id, o.status, o.delivery_method, o.payment_method, o.payment_status,
+            o.contact_name, o.contact_phone, o.total, o.created_at,
+            (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS items_count
+        FROM orders o
+    ';
+    $params = [];
+
+    if ($status !== null) {
+        $sql .= ' WHERE o.status = :status';
+        $params[':status'] = $status;
+    }
+
+    $sql .= ' ORDER BY o.created_at DESC, o.id DESC LIMIT :limit OFFSET :offset';
+
+    $stmt = getPdo()->prepare($sql);
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+function orderCountForAdmin(?string $status): int
+{
+    if ($status === null) {
+        return (int) getPdo()->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+    }
+
+    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM orders WHERE status = ?');
+    $stmt->execute([$status]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Карточка Заказа для админки (FR-ORD-001) — всё, что отдаёт
+ * orderFindById(), плюс служебные поля.
+ *
+ * @return array<string, mixed>|null
+ */
+function orderFindForAdmin(int $id): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT
+            id, user_id, status, payment_status, delivery_method, payment_method,
+            delivery_cost, delivery_address, contact_name, contact_phone, contact_email,
+            customer_note, total, created_at, reserved_until, status_changed_at,
+            amocrm_id
+        FROM orders
+        WHERE id = ?
+        LIMIT 1
+    ');
+    $stmt->execute([$id]);
+
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
