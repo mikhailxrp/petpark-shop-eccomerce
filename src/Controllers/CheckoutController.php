@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Services\AmoCrm;
+
 /**
  * Оформление заказа — /checkout (phase-2.md, Таск 4 — форма; Таск 5 —
  * создание Заказа: FR-CHK-004/007, FR-AUTH-002, BR-003).
@@ -238,6 +240,12 @@ final class CheckoutController
                 // (php.md: friendly-сообщение юзеру, полный трейс в лог).
                 logException($e, ['order_id' => $result['order_id']]);
             }
+        }
+
+        // Автоподтверждённый Заказ (оплата при получении, Q-032) — сразу в AmoCRM.
+        $created = orderFindById($result['order_id']);
+        if ($created !== null && $created['status'] === 'confirmed') {
+            (new AmoCrm())->registerOrder($result['order_id']);
         }
 
         clearRateLimit('checkout');

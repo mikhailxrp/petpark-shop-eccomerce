@@ -87,6 +87,20 @@ declare(strict_types=1);
                             </a>
                         </li>
                         <?php if (in_array($userRole, ['shift_admin', 'owner'], true)): ?>
+                            <?php $ordersActive = str_starts_with($currentPath, '/admin/orders'); ?>
+                            <li class="slide<?= $ordersActive ? ' active' : '' ?>">
+                                <a href="/admin/orders" class="side-menu__item<?= $ordersActive ? ' active' : '' ?>">
+                                    <i class="fe fe-shopping-cart side-menu__icon"></i>
+                                    <span class="side-menu__label">Заказы</span>
+                                </a>
+                            </li>
+                            <?php $stockActive = str_starts_with($currentPath, '/admin/stock'); ?>
+                            <li class="slide<?= $stockActive ? ' active' : '' ?>">
+                                <a href="/admin/stock" class="side-menu__item<?= $stockActive ? ' active' : '' ?>">
+                                    <i class="fe fe-package side-menu__icon"></i>
+                                    <span class="side-menu__label">Склад</span>
+                                </a>
+                            </li>
                             <li class="slide<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                 <a href="/admin/reviews" class="side-menu__item<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                     <i class="fe fe-star side-menu__icon"></i>
@@ -113,6 +127,7 @@ declare(strict_types=1);
 
     </div>
 
+    <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/js/admin-layout.js"></script>
 </body>
 </html>

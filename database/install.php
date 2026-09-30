@@ -237,6 +237,7 @@ $pdo->exec("
         customer_note      VARCHAR(500) NULL,
         checkout_token     CHAR(64) NULL,
         reserved_until     TIMESTAMP NULL,
+        status_changed_at  TIMESTAMP NULL,
         amocrm_id          VARCHAR(64) NULL,
         amocrm_synced_at   TIMESTAMP NULL,
         total              DECIMAL(10, 2) NOT NULL,
@@ -247,6 +248,7 @@ $pdo->exec("
         KEY idx_orders_status (status),
         KEY idx_orders_created (created_at),
         KEY idx_orders_status_reserved_until (status, reserved_until),
+        KEY idx_orders_status_changed (status, status_changed_at),
         CONSTRAINT fk_orders_user
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
         CONSTRAINT fk_orders_created_by_user
@@ -284,6 +286,26 @@ $checkoutTokenIndexExists = (int) $pdo->query("
 
 if ($checkoutTokenIndexExists === 0) {
     $pdo->exec("ALTER TABLE orders ADD UNIQUE KEY uq_orders_checkout_token (checkout_token)");
+}
+
+// Колонка и индекс Фазы 3 (ADR-024, planning-log.md): время последней смены
+// статуса — отсчёт 3 дней для автоотмены невостребованных Заказов (FR-ORD-007).
+$statusChangedExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'status_changed_at'
+")->fetchColumn();
+
+if ($statusChangedExists === 0) {
+    $pdo->exec("ALTER TABLE orders ADD COLUMN status_changed_at TIMESTAMP NULL AFTER reserved_until");
+}
+
+$statusChangedIndexExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND INDEX_NAME = 'idx_orders_status_changed'
+")->fetchColumn();
+
+if ($statusChangedIndexExists === 0) {
+    $pdo->exec("ALTER TABLE orders ADD KEY idx_orders_status_changed (status, status_changed_at)");
 }
 
 // ─── order_items ────────────────────────────────────────────────────────

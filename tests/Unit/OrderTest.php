@@ -115,6 +115,40 @@ final class OrderTest extends TestCase
         $this->assertFalse(\orderCanTransition('new', 'paid'));
     }
 
+    public function testStockActionForEveryAllowedTransition(): void
+    {
+        $expected = [
+            'new'              => ['confirmed' => 'stock_deduct', 'cancelled' => 'reserve_release'],
+            'confirmed'        => ['assembled' => 'none', 'cancelled' => 'stock_restore'],
+            'assembled'        => ['shipped' => 'none', 'ready_for_pickup' => 'none', 'cancelled' => 'stock_restore'],
+            'shipped'          => ['delivered' => 'none', 'cancelled' => 'stock_restore'],
+            'ready_for_pickup' => ['picked_up' => 'none', 'cancelled' => 'stock_restore'],
+        ];
+
+        $checked = 0;
+        foreach (ORDER_STATUS_TRANSITIONS as $from => $targets) {
+            foreach ($targets as $to) {
+                $this->assertSame($expected[$from][$to], \orderStockAction($from, $to), "{$from} → {$to}");
+                $checked++;
+            }
+        }
+
+        // Карта и ожидания разошлись — тест не должен молча пропустить пару.
+        $this->assertSame(array_sum(array_map('count', $expected)), $checked);
+    }
+
+    public function testStockActionRejectsForbiddenTransition(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        \orderStockAction('delivered', 'new');
+    }
+
+    public function testStockActionRejectsTransitionFromCancelled(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        \orderStockAction('cancelled', 'confirmed');
+    }
+
     public function testBuildDeliveryAddressFull(): void
     {
         $this->assertSame(
@@ -156,5 +190,51 @@ final class OrderTest extends TestCase
 
         $_SESSION = ['user_id' => 9, 'user_role' => 'owner'];
         $this->assertFalse(\orderCanBeViewedBySession(['id' => 5, 'user_id' => 9]));
+    }
+
+    public function testRecalculateTotalsAddsCourierCostBelowThreshold(): void
+    {
+        $totals = \orderRecalculateTotals(
+            [['price' => '900.00', 'quantity' => 2]],
+            'courier',
+            self::FREE_THRESHOLD,
+            self::COURIER_COST
+        );
+
+        $this->assertSame('1800.00', $totals['subtotal']);
+        $this->assertSame('300.00', $totals['delivery_cost']);
+        $this->assertSame('2100.00', $totals['total']);
+    }
+
+    public function testRecalculateTotalsDeliveryChangesAcrossThreshold(): void
+    {
+        $items = [['price' => '1000.00', 'quantity' => 2]];
+
+        $atThreshold = \orderRecalculateTotals($items, 'courier', self::FREE_THRESHOLD, self::COURIER_COST);
+        $this->assertSame('0.00', $atThreshold['delivery_cost']);
+        $this->assertSame('2000.00', $atThreshold['total']);
+
+        $items[0]['quantity'] = 1;
+        $below = \orderRecalculateTotals($items, 'courier', self::FREE_THRESHOLD, self::COURIER_COST);
+        $this->assertSame('300.00', $below['delivery_cost']);
+        $this->assertSame('1300.00', $below['total']);
+    }
+
+    public function testRecalculateTotalsPickupHasNoDeliveryCost(): void
+    {
+        $totals = \orderRecalculateTotals([['price' => '150.50', 'quantity' => 3]], 'pickup', self::FREE_THRESHOLD, self::COURIER_COST);
+
+        $this->assertSame('0.00', $totals['delivery_cost']);
+        $this->assertSame('451.50', $totals['total']);
+    }
+
+    public function testOrderIsEditableOnlyBeforeShipment(): void
+    {
+        foreach (['new', 'confirmed', 'assembled'] as $status) {
+            $this->assertTrue(\orderIsEditable($status), $status);
+        }
+        foreach (['shipped', 'ready_for_pickup', 'delivered', 'picked_up', 'cancelled', 'unknown'] as $status) {
+            $this->assertFalse(\orderIsEditable($status), $status);
+        }
     }
 }

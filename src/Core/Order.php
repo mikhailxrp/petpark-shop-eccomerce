@@ -26,6 +26,11 @@ const ORDER_STATUS_TRANSITIONS = [
     'cancelled'        => [],
 ];
 
+// Правка состава и цены доступна «до отгрузки» (FR-ORD-004, phase-3.md).
+const ORDER_EDITABLE_STATUSES = ['new', 'confirmed', 'assembled'];
+
+const ORDER_ITEM_MAX_QUANTITY = 999;
+
 const ORDER_ADDRESS_MAX_LENGTH = 255;
 
 const ORDER_KOPECKS_PER_RUBLE = 100;
@@ -121,12 +126,71 @@ function orderDeliveryCost(
 }
 
 /**
+ * Итоги Заказа по его Позициям (BR-006): цена Позиции в order_items уже
+ * эффективная (со скидкой), поэтому здесь скидка не учитывается.
+ *
+ * @param array<int, array{price: string, quantity: int}> $items
+ * @return array{subtotal: string, delivery_cost: string, total: string}
+ */
+function orderRecalculateTotals(
+    array $items,
+    string $deliveryMethod,
+    string $freeThreshold,
+    string $courierCost
+): array {
+    $lines = array_map(
+        static fn (array $item): array => ['price' => $item['price'], 'discount_price' => null, 'quantity' => $item['quantity']],
+        $items
+    );
+
+    $subtotal = orderCartSubtotal($lines);
+    $deliveryCost = orderDeliveryCost($deliveryMethod, $subtotal, $freeThreshold, $courierCost);
+
+    return [
+        'subtotal'      => $subtotal,
+        'delivery_cost' => $deliveryCost,
+        'total'         => orderKopecksToMoney(orderMoneyToKopecks($subtotal) + orderMoneyToKopecks($deliveryCost)),
+    ];
+}
+
+/** Можно ли править состав и цены Позиций Заказа в этом статусе. */
+function orderIsEditable(string $status): bool
+{
+    return in_array($status, ORDER_EDITABLE_STATUSES, true);
+}
+
+/**
  * Разрешён ли переход статуса Заказа. Неизвестный статус — не разрешён.
  * Запись в БД — отдельная функция-переход в Model, она обязана вызывать эту.
  */
 function orderCanTransition(string $from, string $to): bool
 {
     return in_array($to, ORDER_STATUS_TRANSITIONS[$from] ?? [], true);
+}
+
+/**
+ * Что переход делает с остатком Вариантов по Позициям Заказа (tz.md §6.3,
+ * BR-003, FR-STOCK-004):
+ *  - stock_deduct    — Резерв → Списание (new → confirmed);
+ *  - reserve_release — резерв снимается, остаток не тронут (new → cancelled);
+ *  - stock_restore   — Списание отменяется, количество возвращается в остаток
+ *                      (отмена из confirmed и дальше);
+ *  - none            — штатное исполнение, остаток не меняется.
+ * Неразрешённая пара — InvalidArgumentException, а не 'none': «ничего не
+ * делать» для запрещённого перехода скрыло бы ошибку вызывающего кода.
+ */
+function orderStockAction(string $from, string $to): string
+{
+    if (!orderCanTransition($from, $to)) {
+        throw new InvalidArgumentException("Переход {$from} → {$to} не разрешён");
+    }
+
+    return match (true) {
+        $from === 'new' && $to === 'confirmed' => 'stock_deduct',
+        $from === 'new' && $to === 'cancelled' => 'reserve_release',
+        $to === 'cancelled'                    => 'stock_restore',
+        default                                => 'none',
+    };
 }
 
 /**

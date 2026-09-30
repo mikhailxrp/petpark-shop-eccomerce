@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Services\AmoCrm;
 use App\Services\Payment\PaymentGateway;
 use App\Services\Payment\YooMoneyStubGateway;
 
@@ -68,7 +69,9 @@ final class PaymentController
 
         if ($result === PaymentGateway::RESULT_PAID) {
             // false = уже подтверждён/отменён: повторное уведомление игнорируем.
-            orderTransition($orderId, 'confirmed', 'paid');
+            if (orderTransition($orderId, 'confirmed', 'paid')) {
+                (new AmoCrm())->registerOrder($orderId);
+            }
             redirect('/checkout/success/' . $orderId);
         }
 

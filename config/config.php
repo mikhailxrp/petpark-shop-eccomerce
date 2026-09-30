@@ -31,6 +31,7 @@ define('APP_LOG_LEVEL', env('APP_LOG_LEVEL', 'error'));
 define('DELIVERY_FREE_THRESHOLD', '2000.00');
 define('DELIVERY_COURIER_COST',   '300.00');
 define('ORDER_RESERVE_MINUTES',   30);
+define('ORDER_UNCLAIMED_DAYS',    3); // FR-ORD-007: срок ожидания получения Заказа
 define('SHOP_PICKUP_ADDRESS', env('SHOP_PICKUP_ADDRESS', 'Ростов-на-Дону, адрес магазина уточняется'));
 define('SHOP_PICKUP_HOURS',   '10:00–20:00, без выходных');
 
