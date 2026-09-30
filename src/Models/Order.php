@@ -475,6 +475,29 @@ function orderFindExpiredIds(): array
 }
 
 /**
+ * Невостребованные Заказы (FR-ORD-007): `ready_for_pickup` (самовывоз) или
+ * `shipped` (курьер) дольше $days суток с момента последней смены статуса.
+ * Только id: отмену и проверку статуса под блокировкой делает
+ * OrderCancellation::cancel() → orderTransition().
+ *
+ * @return array<int, int>
+ */
+function orderFindUnclaimedIds(int $days): array
+{
+    $stmt = getPdo()->prepare("
+        SELECT id
+        FROM orders
+        WHERE status IN ('ready_for_pickup', 'shipped')
+          AND status_changed_at < NOW() - INTERVAL :days DAY
+        ORDER BY id ASC
+    ");
+    $stmt->bindValue('days', $days, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
  * Лог каждого вызова платёжного callback'а (php.md: логировать все
  * вебхуки с id Заказа) — вне зависимости от исхода.
  */
