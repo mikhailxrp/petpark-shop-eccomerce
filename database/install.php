@@ -109,6 +109,17 @@ foreach (['is_featured' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
     }
 }
 
+// description_draft — черновик ИИ-описания (phase-5, Таск 5, FR-AI-002): живёт
+// отдельно от description, на витрину не попадает до публикации Владельцем.
+$draftColumnExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME = 'description_draft'
+")->fetchColumn();
+
+if ($draftColumnExists === 0) {
+    $pdo->exec("ALTER TABLE products ADD COLUMN description_draft TEXT NULL AFTER description");
+}
+
 // ─── product_secondary_categories ──────────────────────────────────────
 // Вторая (необязательная) категория товара — ADR-002.
 

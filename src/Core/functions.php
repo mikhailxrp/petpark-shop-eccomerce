@@ -250,8 +250,9 @@ function verifyCsrfToken(mixed $token): bool
 function requireCsrf(): void
 {
     if (!verifyCsrfToken(input('_csrf'))) {
-        http_response_code(419);
-        exit('419 Неверный CSRF-токен. Обновите страницу и попробуйте снова.');
+        // 419 — нестандартный код (Laravel): Apache отдаёт его как 500.
+        http_response_code(403);
+        exit('403 Неверный CSRF-токен. Обновите страницу и попробуйте снова.');
     }
 }
 

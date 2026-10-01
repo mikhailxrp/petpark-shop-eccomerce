@@ -687,3 +687,251 @@ function productVariantSetStockFromMoySklad(int $variantId, int $quantity): void
     ');
     $stmt->execute(['quantity' => $quantity, 'id' => $variantId]);
 }
+
+// ─── ИИ-описания (FR-AI-002, phase-5 Таск 5) ────────────────────────────
+// Черновик живёт в products.description_draft; description меняет только
+// productDescriptionPublish() — решение Владельца.
+
+/**
+ * Данные Товара для генерации: только то, что допустимо отдать ИИ (название,
+ * Категория, бренд) — цена, остаток и отзывы в выборку не попадают.
+ *
+ * @return array{id: int, name: string, category_name: string, brand_name: string|null}|null
+ */
+function productDescriptionSource(int $productId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT p.id, p.name, c.name AS category_name, b.name AS brand_name
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE p.id = ?
+    ');
+    $stmt->execute([$productId]);
+    $row = $stmt->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
+ * Подтверждённые Характеристики Товара (product_attributes) — не черновики.
+ *
+ * @return array<string, string> attr_name => значение
+ */
+function productConfirmedAttributes(int $productId): array
+{
+    $stmt = getPdo()->prepare('SELECT attr_name, attr_value FROM product_attributes WHERE product_id = ? ORDER BY attr_name, id');
+    $stmt->execute([$productId]);
+
+    $attributes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $attributes[(string) $row['attr_name']] = (string) $row['attr_value'];
+    }
+
+    return $attributes;
+}
+
+/** Записывает (заменяет) только черновик — description не трогается. */
+function productDescriptionDraftSave(int $productId, string $draft): void
+{
+    getPdo()->prepare('UPDATE products SET description_draft = ? WHERE id = ?')
+        ->execute([$draft, $productId]);
+}
+
+/**
+ * Публикация: текст (черновик или его правка) → description, черновик
+ * обнуляется, исход пишется в ai_draft_outcomes — всё атомарно. Публикуется
+ * только при открытом черновике (FOR UPDATE): повтор формы ничего не меняет.
+ *
+ * @param string $text нормализованный итоговый текст
+ * @return string|null исход (accepted / edited); null — открытого черновика нет
+ */
+function productDescriptionPublish(int $productId, string $text): ?string
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('SELECT description_draft FROM products WHERE id = ? FOR UPDATE');
+        $stmt->execute([$productId]);
+        $draft = $stmt->fetchColumn();
+
+        if (!is_string($draft)) {
+            $pdo->rollBack();
+
+            return null;
+        }
+
+        $outcome = descriptionNormalize($draft) === $text ? 'accepted' : 'edited';
+
+        $pdo->prepare('UPDATE products SET description = ?, description_draft = NULL WHERE id = ?')
+            ->execute([$text, $productId]);
+        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, ?)")
+            ->execute([$productId, $outcome]);
+
+        $pdo->commit();
+
+        return $outcome;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Отклонение черновика: обнуляет его и пишет исход rejected.
+ *
+ * @return bool false — открытого черновика нет
+ */
+function productDescriptionDiscard(int $productId): bool
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('UPDATE products SET description_draft = NULL WHERE id = ? AND description_draft IS NOT NULL');
+        $stmt->execute([$productId]);
+
+        if ($stmt->rowCount() === 0) {
+            $pdo->rollBack();
+
+            return false;
+        }
+
+        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, 'rejected')")
+            ->execute([$productId]);
+
+        $pdo->commit();
+
+        return true;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Очередь пакета: активные Товары Категорий без текущего черновика.
+ * Плейсхолдеры: N Категорий.
+ *
+ * @param list<int> $categoryIds
+ */
+function productDescriptionQueueWhere(array $categoryIds): string
+{
+    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+
+    return "p.is_active = 1 AND p.description_draft IS NULL AND p.category_id IN ({$placeholders})";
+}
+
+/**
+ * Порция очереди. Курсор id > $afterId — Товар с ошибкой не берётся повторно
+ * в том же запуске.
+ *
+ * @param list<int> $categoryIds
+ * @return array<int, array{id: int, name: string}>
+ */
+function productDescriptionQueue(array $categoryIds, int $afterId, int $limit): array
+{
+    if ($categoryIds === []) {
+        return [];
+    }
+
+    $stmt = getPdo()->prepare(
+        'SELECT p.id, p.name FROM products p
+         WHERE p.id > ? AND ' . productDescriptionQueueWhere($categoryIds) . '
+         ORDER BY p.id LIMIT ?'
+    );
+    $position = 1;
+    $stmt->bindValue($position++, $afterId, PDO::PARAM_INT);
+    foreach ($categoryIds as $categoryId) {
+        $stmt->bindValue($position++, $categoryId, PDO::PARAM_INT);
+    }
+    $stmt->bindValue($position, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/** @param list<int> $categoryIds */
+function productDescriptionQueueCount(array $categoryIds): int
+{
+    if ($categoryIds === []) {
+        return 0;
+    }
+
+    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM products p WHERE ' . productDescriptionQueueWhere($categoryIds));
+    $stmt->execute($categoryIds);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/** Товаров с открытым черновиком описания. */
+function productDescriptionDraftCount(): int
+{
+    return (int) getPdo()->query('SELECT COUNT(*) FROM products WHERE description_draft IS NOT NULL')->fetchColumn();
+}
+
+/**
+ * Условие списка страницы: Категории (null — все) и/или только с черновиком.
+ *
+ * @param list<int>|null $categoryIds
+ * @return array{0: string, 1: list<int>} условие и значения плейсхолдеров
+ */
+function productDescriptionListWhere(?array $categoryIds, bool $draftsOnly): array
+{
+    $conditions = ['1 = 1'];
+    $params = [];
+
+    if ($categoryIds !== null) {
+        $conditions[] = 'p.category_id IN (' . implode(',', array_fill(0, count($categoryIds), '?')) . ')';
+        array_push($params, ...$categoryIds);
+    }
+    if ($draftsOnly) {
+        $conditions[] = 'p.description_draft IS NOT NULL';
+    }
+
+    return [implode(' AND ', $conditions), $params];
+}
+
+/** @param list<int>|null $categoryIds */
+function productDescriptionListCount(?array $categoryIds, bool $draftsOnly): int
+{
+    if ($categoryIds === []) {
+        return 0;
+    }
+
+    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
+    $stmt = getPdo()->prepare("SELECT COUNT(*) FROM products p WHERE {$where}");
+    $stmt->execute($params);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Страница Товаров для экрана генерации — с текущим описанием и черновиком.
+ *
+ * @param list<int>|null $categoryIds
+ * @return array<int, array{id: int, name: string, description: string|null, description_draft: string|null, category_name: string}>
+ */
+function productDescriptionList(?array $categoryIds, bool $draftsOnly, int $limit, int $offset): array
+{
+    if ($categoryIds === []) {
+        return [];
+    }
+
+    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
+    $stmt = getPdo()->prepare(
+        "SELECT p.id, p.name, p.description, p.description_draft, c.name AS category_name
+         FROM products p
+         JOIN categories c ON c.id = p.category_id
+         WHERE {$where}
+         ORDER BY p.id LIMIT ? OFFSET ?"
+    );
+    $position = 1;
+    foreach ($params as $param) {
+        $stmt->bindValue($position++, $param, PDO::PARAM_INT);
+    }
+    $stmt->bindValue($position++, $limit, PDO::PARAM_INT);
+    $stmt->bindValue($position, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}

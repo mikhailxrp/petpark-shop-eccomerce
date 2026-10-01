@@ -88,6 +88,7 @@ ob_start();
     <div class="card-header">
         <h2 class="card-title" id="ai-assistants-title">Помощники</h2>
         <a href="/admin/ai/attributes" class="btn btn-sm btn-outline-primary ms-auto">Разбор Характеристик</a>
+        <a href="/admin/ai/descriptions" class="btn btn-sm btn-outline-primary ms-2">Генерация описаний</a>
     </div>
     <div class="card-body">
         <div class="table-responsive">

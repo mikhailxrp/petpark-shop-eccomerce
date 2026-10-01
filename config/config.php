@@ -77,3 +77,4 @@ require_once ROOT_PATH . '/src/Services/Ai/OfflineProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/YandexGptProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/AiClient.php';
 require_once ROOT_PATH . '/src/Services/Ai/AttributeExtractor.php';
+require_once ROOT_PATH . '/src/Services/Ai/DescriptionGenerator.php';
