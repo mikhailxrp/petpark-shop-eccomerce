@@ -62,7 +62,7 @@ ob_start();
         <section class="card" aria-labelledby="ai-spend-title">
             <div class="card-header"><h2 class="card-title" id="ai-spend-title">Расход и лимит</h2></div>
             <div class="card-body">
-                <p class="fs-4 mb-2"><?= e($spent) ?> ₽ <span class="text-muted fs-6">из <?= e($limit) ?> ₽ (<?= $percent ?>%)</span></p>
+                <p class="fs-4 mb-2"><?= e(number_format((float) $spent, 2, '.', '')) ?> ₽ <span class="text-muted fs-6">из <?= e(number_format((float) $limit, 2, '.', '')) ?> ₽ (<?= $percent ?>%)</span></p>
                 <progress class="w-100" max="100" value="<?= $barValue ?>" aria-label="Доля лимита расхода"><?= $barValue ?>%</progress>
                 <p class="mb-0 mt-2 text-muted fs-12">
                     Уведомление Владельцу — с <?= AI_LIMIT_NOTIFY_PERCENT ?>%; стоп фоновых помощников — с <?= AI_LIMIT_BACKGROUND_PERCENT ?>%; стоп всех — с <?= AI_LIMIT_LIVE_PERCENT ?>%.

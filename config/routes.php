@@ -76,6 +76,7 @@ return [
         '/booking/{id}/pay/callback'   => ['BookingPaymentController', 'callback'],
         '/booking/{id}/release'        => ['BookingPaymentController', 'release'],
         '/checkout'                    => ['CheckoutController', 'store'],
+        '/chat'                        => ['ChatController', 'send'],
         '/payment/{id}/callback'       => ['PaymentController', 'callback'],
         '/payment/{id}/cancel'         => ['PaymentController', 'cancel'],
         '/admin/reviews/{id}/publish'  => ['Admin\ReviewController', 'publish'],

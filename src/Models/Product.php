@@ -935,3 +935,60 @@ function productDescriptionList(?array $categoryIds, bool $draftsOnly, int $limi
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Подбор активных Товаров под вопрос в чате-консультанте (FR-AI-003): чем больше
+ * основ слов запроса встретилось в названии, Категории, бренде или значении
+ * Характеристики — тем выше. Без точного совпадения вернёт самый похожий
+ * (хотя бы одна основа). Цена и остаток — живые, из БД: цена «от» среди
+ * доступных Вариантов (если все распроданы — среди всех активных).
+ *
+ * @param list<string> $tokens основы слов (consultantSearchTokens())
+ * @return array<int, array{name: string, slug: string, price_from: string, variants_count: int|string, available: int|string}>
+ */
+function productsSearchForChat(array $tokens, int $limit): array
+{
+    if ($tokens === []) {
+        return [];
+    }
+
+    $scoreParts = [];
+    $params = [];
+    foreach ($tokens as $token) {
+        $like = '%' . addcslashes($token, '\%_') . '%';
+        $scoreParts[] = '(p.name LIKE ? OR c.name LIKE ? OR b.name LIKE ? OR EXISTS (
+            SELECT 1 FROM product_attributes a WHERE a.product_id = p.id AND a.attr_value LIKE ?
+        ))';
+        array_push($params, $like, $like, $like, $like);
+    }
+    $score = implode(' + ', $scoreParts);
+
+    $stmt = getPdo()->prepare("
+        SELECT p.name, p.slug,
+               {$score} AS score,
+               COALESCE(
+                   (SELECT MIN(COALESCE(v.discount_price, v.price)) FROM product_variants v
+                    WHERE v.product_id = p.id AND v.is_active = 1 AND v.stock_quantity - v.reserved_quantity > 0),
+                   (SELECT MIN(COALESCE(v.discount_price, v.price)) FROM product_variants v
+                    WHERE v.product_id = p.id AND v.is_active = 1)
+               ) AS price_from,
+               (SELECT COUNT(*) FROM product_variants v
+                WHERE v.product_id = p.id AND v.is_active = 1) AS variants_count,
+               (SELECT COALESCE(SUM(GREATEST(v.stock_quantity - v.reserved_quantity, 0)), 0)
+                FROM product_variants v WHERE v.product_id = p.id AND v.is_active = 1) AS available
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE p.is_active = 1
+        HAVING score > 0 AND price_from IS NOT NULL
+        ORDER BY score DESC, (available > 0) DESC, p.popularity_rank IS NULL, p.popularity_rank ASC, p.id ASC
+        LIMIT ?
+    ");
+    foreach ($params as $i => $value) {
+        $stmt->bindValue($i + 1, $value);
+    }
+    $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
