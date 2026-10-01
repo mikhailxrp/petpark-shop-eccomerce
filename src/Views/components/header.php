@@ -82,7 +82,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                         <a href="#">О компании</a>
                     </li>
                     <li class="navbar-dropdown menu-item-children">
-                        <a href="javascript:void(0)">
+                        <a href="/booking">
                             <i></i>
                             Услуги
                         </a>
@@ -90,6 +90,9 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                             <a href="#">Груминг</a>
                             <a href="#">Ветконсультации</a>
                         </div>
+                    </li>
+                    <li class="navbar-dropdown">
+                        <a href="/booking">Записаться</a>
                     </li>
                     <li class="navbar-dropdown menu-item-children">
                         <a href="/catalog">Каталог</a>
@@ -173,6 +176,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                     <li><a href="#">Ветконсультации</a></li>
                 </ul>
             </li>
+            <li><a href="/booking">Записаться</a></li>
             <li class="menu-item-has-children">
                 <a href="/catalog">Каталог</a>
                 <ul class="sub-menu">

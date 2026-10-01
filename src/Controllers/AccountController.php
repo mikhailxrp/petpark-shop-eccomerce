@@ -11,7 +11,7 @@ namespace App\Controllers;
  */
 final class AccountController
 {
-    private const PET_SPECIES = ['Кошка', 'Собака', 'Птица', 'Другое'];
+    public const PET_SPECIES = ['Кошка', 'Собака', 'Птица', 'Другое'];
     private const PET_NAME_MAX = 60;
     private const PET_BREED_MAX = 80;
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
