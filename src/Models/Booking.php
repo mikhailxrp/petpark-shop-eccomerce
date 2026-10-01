@@ -9,6 +9,8 @@ declare(strict_types=1);
  * `specialist_time_off`).
  */
 
+const BOOKINGS_UPCOMING_LIMIT = 50; // «Мои записи»: потолок списка
+
 /**
  * Занятые интервалы Специалиста на дату в формате, который ждёт
  * bookingFreeSlots(): начало и длина блока (Услуги + буфер груминга).
@@ -355,4 +357,66 @@ function bookingsPendingByPet(int $userId): array
     }
 
     return $byPet;
+}
+
+/**
+ * Переход статуса Записи по карте `BOOKING_STATUS_TRANSITIONS`. Условный
+ * UPDATE по прежнему статусу: из двух параллельных отмен сработает одна.
+ * false — переход недопустим или Запись уже в другом статусе / не найдена.
+ * Единственное место смены статуса подтверждённой Записи (Таски 6–8).
+ */
+function bookingTransition(int $bookingId, string $to): bool
+{
+    $pdo = getPdo();
+
+    $stmt = $pdo->prepare('SELECT status FROM bookings WHERE id = ?');
+    $stmt->execute([$bookingId]);
+    $from = $stmt->fetchColumn();
+
+    if ($from === false || !bookingCanTransition((string) $from, $to)) {
+        return false;
+    }
+
+    $update = $pdo->prepare('UPDATE bookings SET status = ? WHERE id = ? AND status = ?');
+    $update->execute([$to, $bookingId, $from]);
+
+    return $update->rowCount() === 1;
+}
+
+/** Депозит возвращён: `held` → `returned` у отменённой Записи. false — возвращать было нечего. */
+function bookingMarkDepositReturned(int $bookingId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE bookings SET deposit_status = 'returned'
+        WHERE id = ? AND status = 'cancelled' AND deposit_status = 'held'
+    ");
+    $stmt->execute([$bookingId]);
+
+    return $stmt->rowCount() === 1;
+}
+
+/**
+ * Ближайшие подтверждённые Записи Покупателя (FR-SV-008) — не дальше
+ * горизонта записи, поэтому список короткий, но с LIMIT про запас.
+ *
+ * @return list<array<string, mixed>>
+ */
+function bookingsUpcomingByUser(int $userId): array
+{
+    $stmt = getPdo()->prepare("
+        SELECT b.id, b.scheduled_at, b.deposit_amount, b.deposit_status,
+               p.name AS pet_name, u.name AS specialist_name,
+               (SELECT GROUP_CONCAT(bs.service_name ORDER BY bs.sort_order SEPARATOR ', ')
+                FROM booking_services bs WHERE bs.booking_id = b.id) AS service_names
+        FROM bookings b
+        JOIN pets p ON p.id = b.pet_id
+        JOIN specialists sp ON sp.id = b.specialist_id
+        JOIN users u ON u.id = sp.user_id
+        WHERE b.user_id = ? AND b.status = 'confirmed' AND b.scheduled_at >= NOW()
+        ORDER BY b.scheduled_at
+        LIMIT " . BOOKINGS_UPCOMING_LIMIT . '
+    ');
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
 }

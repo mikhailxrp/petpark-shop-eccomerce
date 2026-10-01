@@ -1479,6 +1479,11 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     margin-bottom: var(--account-gap);
 }
 
+.account-card__hint {
+    margin: 0;
+    font-size: 14px;
+}
+
 .pet-card__details {
     display: flex;
     flex-wrap: wrap;

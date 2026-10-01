@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Services\BookingCancellation;
+use App\Services\Payment\YooMoneyStubGateway;
+
 /**
  * Личный кабинет Покупателя. `index` — заглушка-приёмник после входа
  * (phase-1.md, Таск 6; содержимое — Фаза 7). Питомцы — `FR-ACC-003`
- * (phase-4.md, Таск 2).
+ * (phase-4.md, Таск 2). «Мои записи» и отмена Записи — `FR-SV-008` (Таск 6).
  */
 final class AccountController
 {
@@ -16,6 +19,9 @@ final class AccountController
     private const PET_BREED_MAX = 80;
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const PET_FORM_FLASH = 'pet_form';
+    private const CANCEL_TOO_LATE_ERROR = 'Отменить запись можно не позже чем за %d ч до визита. Обратитесь к администратору.';
+    private const CANCEL_NOT_ALLOWED_ERROR = 'Эту запись уже нельзя отменить.';
+    private const CANCEL_REFUND_FAILED_ERROR = 'Запись отменена, но вернуть депозит автоматически не удалось. Администратор свяжется с вами.';
 
     public function index(): void
     {
@@ -118,6 +124,64 @@ final class AccountController
         }
 
         redirect('/account/pets');
+    }
+
+    public function bookings(): void
+    {
+        requireRole('customer');
+
+        $now = new \DateTimeImmutable('now');
+        $bookings = array_map(
+            static fn (array $booking): array => $booking + [
+                'can_cancel' => bookingCanCancelByCustomer(
+                    new \DateTimeImmutable((string) $booking['scheduled_at']),
+                    $now,
+                    BOOKING_CANCEL_THRESHOLD_HOURS
+                ),
+            ],
+            bookingsUpcomingByUser((int) $_SESSION['user_id'])
+        );
+
+        render('account/bookings', [
+            'bookings'       => $bookings,
+            'thresholdHours' => BOOKING_CANCEL_THRESHOLD_HOURS,
+            'success'        => getFlash('success'),
+            'error'          => getFlash('error'),
+        ]);
+    }
+
+    public function bookingCancel(string $id): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $booking = ctype_digit($id) && (int) $id > 0 ? bookingFindById((int) $id) : null;
+        if ($booking === null || (int) $booking['user_id'] !== (int) $_SESSION['user_id']) {
+            $this->notFound();
+            return;
+        }
+
+        $tooLate = !bookingCanCancelByCustomer(
+            new \DateTimeImmutable((string) $booking['scheduled_at']),
+            new \DateTimeImmutable('now'),
+            BOOKING_CANCEL_THRESHOLD_HOURS
+        );
+
+        if ($booking['status'] === 'confirmed' && $tooLate) {
+            setFlash('error', sprintf(self::CANCEL_TOO_LATE_ERROR, BOOKING_CANCEL_THRESHOLD_HOURS));
+            redirect('/account/bookings');
+        }
+
+        $cancellation = new BookingCancellation(new YooMoneyStubGateway(env('PAYMENT_STUB_SECRET')));
+
+        match ($cancellation->cancel((int) $booking['id'])) {
+            BookingCancellation::RESULT_NOT_ALLOWED   => setFlash('error', self::CANCEL_NOT_ALLOWED_ERROR),
+            BookingCancellation::RESULT_REFUND_FAILED => setFlash('error', self::CANCEL_REFUND_FAILED_ERROR),
+            BookingCancellation::RESULT_REFUNDED      => setFlash('success', 'Запись отменена, депозит возвращён.'),
+            BookingCancellation::RESULT_CANCELLED     => setFlash('success', 'Запись отменена.'),
+        };
+
+        redirect('/account/bookings');
     }
 
     /**

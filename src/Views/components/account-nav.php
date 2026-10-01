@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 /**
  * Меню Личного кабинета — одно на все страницы кабинета.
- * @var string $accountActive Раздел: 'overview' | 'pets'
+ * @var string $accountActive Раздел: 'overview' | 'pets' | 'bookings'
  */
 
 $accountLinks = [
     'overview' => ['url' => '/account', 'label' => 'Обзор', 'icon' => 'fa-user'],
     'pets'     => ['url' => '/account/pets', 'label' => 'Мои питомцы', 'icon' => 'fa-paw'],
+    'bookings' => ['url' => '/account/bookings', 'label' => 'Мои записи', 'icon' => 'fa-calendar-check'],
 ];
 ?>
 <nav class="account-nav" aria-label="Разделы кабинета">

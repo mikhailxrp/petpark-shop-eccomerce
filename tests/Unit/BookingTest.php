@@ -145,4 +145,27 @@ final class BookingTest extends TestCase
         $this->assertFalse(\bookingCanTransition('completed', 'cancelled'));
         $this->assertFalse(\bookingCanTransition('unknown', 'confirmed'));
     }
+
+    public function testCustomerCanCancelExactlyAtThreshold(): void
+    {
+        $visit = new DateTimeImmutable('2026-10-05 15:00:00');
+
+        $this->assertTrue(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 12:00:00'), 3));
+        $this->assertTrue(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 11:00:00'), 3));
+    }
+
+    public function testCustomerCannotCancelCloserThanThreshold(): void
+    {
+        $visit = new DateTimeImmutable('2026-10-05 15:00:00');
+
+        $this->assertFalse(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 12:00:01'), 3));
+        $this->assertFalse(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 13:00:00'), 3));
+    }
+
+    public function testCustomerCannotCancelPastVisit(): void
+    {
+        $visit = new DateTimeImmutable('2026-10-05 15:00:00');
+
+        $this->assertFalse(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 16:00:00'), 3));
+    }
 }

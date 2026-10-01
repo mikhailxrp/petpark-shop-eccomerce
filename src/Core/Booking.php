@@ -38,6 +38,16 @@ function bookingCanTransition(string $from, string $to): bool
 }
 
 /**
+ * Может ли Покупатель сам отменить Запись: до визита осталось не меньше
+ * $thresholdHours часов (FR-SV-008; ровно 3:00 — ещё можно). Персонал порог
+ * не проверяет — форс-мажорная отмена (phase-4.md, Таск 7).
+ */
+function bookingCanCancelByCustomer(DateTimeImmutable $scheduledAt, DateTimeImmutable $now, int $thresholdHours): bool
+{
+    return $scheduledAt->getTimestamp() - $now->getTimestamp() >= $thresholdHours * 3600;
+}
+
+/**
  * Сколько минут Специалист занят одной Записью: длительность Услуг плюс
  * буфер, если среди Услуг есть груминг. Буфер ветеринара — 0.
  *
