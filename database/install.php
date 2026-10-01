@@ -709,6 +709,20 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// ─── ai_notifications ───────────────────────────────────────────────────
+// Отметка «письмо Владельцу отправлено» за месяц (phase-5, Таск 2): UNIQUE
+// даёт ровно одно письмо при параллельных заходах на /admin/ai.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_notifications (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        kind       VARCHAR(30) NOT NULL,
+        period     CHAR(7) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ai_notifications_kind_period (kind, period)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 

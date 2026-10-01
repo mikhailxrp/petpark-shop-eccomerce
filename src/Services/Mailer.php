@@ -83,3 +83,41 @@ function sendNewCustomerAccountEmail(string $toEmail, string $toName, string $pa
         throw new RuntimeException('Не удалось отправить письмо о новом аккаунте: ' . $mail->ErrorInfo, 0, $e);
     }
 }
+
+/**
+ * Письмо Владельцу: расход ИИ достиг порога уведомления (phase-5.md, Таск 2;
+ * NFR-AI §11.8). Суммы — строки DECIMAL, не float.
+ */
+function sendAiLimitNotifyEmail(string $toEmail, string $toName, int $percent, string $spent, string $limit): void
+{
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host       = env('MAIL_HOST');
+        $mail->Port       = (int) env('MAIL_PORT');
+        $mail->SMTPAuth   = true;
+        $mail->Username   = env('MAIL_USERNAME');
+        $mail->Password   = env('MAIL_PASSWORD');
+        $mail->SMTPSecure = env('MAIL_ENCRYPTION') === 'ssl'
+            ? PHPMailer::ENCRYPTION_SMTPS
+            : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->CharSet    = 'UTF-8';
+
+        $mail->setFrom(env('MAIL_FROM'), env('MAIL_FROM_NAME'));
+        $mail->addAddress($toEmail, $toName);
+
+        $mail->Subject = 'Расход ИИ-помощников достиг ' . $percent . '% лимита — ' . SHOP_NAME;
+        $mail->Body    = sprintf(
+            "Здравствуйте, %s!\n\nРасход ИИ-помощников за текущий месяц: %s ₽ из %s ₽ (%d%%).\nПри 100%% приостанавливаются разбор Характеристик и генерация описаний, при 120%% — консультант в чате и разбор Обращений.\n\nПодробности — в админке, раздел «ИИ-помощники».",
+            $toName,
+            $spent,
+            $limit,
+            $percent
+        );
+
+        $mail->send();
+    } catch (PHPMailerException $e) {
+        throw new RuntimeException('Не удалось отправить письмо о лимите ИИ: ' . $mail->ErrorInfo, 0, $e);
+    }
+}

@@ -121,6 +121,14 @@ declare(strict_types=1);
                                 </a>
                             </li>
                         <?php endif; ?>
+                        <?php if ($userRole === 'owner'): ?>
+                            <li class="slide<?= $currentPath === '/admin/ai' ? ' active' : '' ?>">
+                                <a href="/admin/ai" class="side-menu__item<?= $currentPath === '/admin/ai' ? ' active' : '' ?>">
+                                    <i class="fe fe-cpu side-menu__icon"></i>
+                                    <span class="side-menu__label">ИИ-помощники</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
                     </ul>
                 </nav>
             </div>

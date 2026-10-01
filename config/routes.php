@@ -26,6 +26,7 @@ return [
         '/admin/orders/variants' => ['Admin\OrderController', 'searchVariants'],
         '/admin/orders/{id}'   => ['Admin\OrderController', 'show'],
         '/admin/stock'         => ['Admin\StockController', 'index'],
+        '/admin/ai'            => ['Admin\AiController', 'index'],
         '/admin/bookings'      => ['Admin\BookingController', 'index'],
         '/admin/bookings/new'  => ['Admin\BookingController', 'create'],
         '/admin/bookings/specialists' => ['Admin\BookingController', 'specialists'],
