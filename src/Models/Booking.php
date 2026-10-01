@@ -15,10 +15,11 @@ const BOOKINGS_UPCOMING_LIMIT = 50; // «Мои записи»: потолок �
  * Занятые интервалы Специалиста на дату в формате, который ждёт
  * bookingFreeSlots(): начало и длина блока (Услуги + буфер груминга).
  * Занимают слот статусы из BOOKING_SLOT_OCCUPYING_STATUSES.
+ * $excludeBookingId — Запись, которую переносят: её собственный слот не мешает.
  *
  * @return list<array{start: string, block_minutes: int}>
  */
-function bookingsBusyForDay(int $specialistId, string $date): array
+function bookingsBusyForDay(int $specialistId, string $date, ?int $excludeBookingId = null): array
 {
     $statuses = BOOKING_SLOT_OCCUPYING_STATUSES;
     $placeholders = implode(',', array_fill(0, count($statuses), '?'));
@@ -34,9 +35,10 @@ function bookingsBusyForDay(int $specialistId, string $date): array
            AND b.status IN ({$placeholders})
            AND b.scheduled_at >= ?
            AND b.scheduled_at < DATE_ADD(?, INTERVAL 1 DAY)
+           AND (? IS NULL OR b.id <> ?)
          GROUP BY b.id, b.scheduled_at"
     );
-    $stmt->execute([$specialistId, ...$statuses, $date, $date]);
+    $stmt->execute([$specialistId, ...$statuses, $date, $date, $excludeBookingId, $excludeBookingId]);
 
     $busy = [];
     foreach ($stmt->fetchAll() as $row) {
@@ -67,6 +69,34 @@ function specialistTimeOffFrom(int $specialistId, string $date): array
     $stmt->execute([$specialistId, $date]);
 
     return $stmt->fetchAll();
+}
+
+/**
+ * Покупатель по email или новый аккаунт (FR-AUTH-002) — общий шаг публичной
+ * и ручной Записи. Вызывается внутри транзакции создания Записи.
+ *
+ * @param array{name: string, phone: string, email: string} $contact
+ * @return array{user_id: int, new_account: array{name: string, email: string, password: string}|null}
+ */
+function bookingResolveCustomer(array $contact): array
+{
+    $existingUser = userFindByEmail($contact['email']);
+    if ($existingUser !== null) {
+        return ['user_id' => (int) $existingUser['id'], 'new_account' => null];
+    }
+
+    $password = generatePassword();
+    $userId = userCreateCustomer(
+        $contact['name'],
+        $contact['email'],
+        $contact['phone'],
+        password_hash($password, PASSWORD_DEFAULT)
+    );
+
+    return [
+        'user_id'     => $userId,
+        'new_account' => ['name' => $contact['name'], 'email' => $contact['email'], 'password' => $password],
+    ];
 }
 
 /**
@@ -136,19 +166,7 @@ function bookingCreate(
         $newAccount = null;
         $userId = $sessionUserId;
         if ($userId === null) {
-            $existingUser = userFindByEmail($contact['email']);
-            if ($existingUser !== null) {
-                $userId = (int) $existingUser['id'];
-            } else {
-                $password = generatePassword();
-                $userId = userCreateCustomer(
-                    $contact['name'],
-                    $contact['email'],
-                    $contact['phone'],
-                    password_hash($password, PASSWORD_DEFAULT)
-                );
-                $newAccount = ['name' => $contact['name'], 'email' => $contact['email'], 'password' => $password];
-            }
+            ['user_id' => $userId, 'new_account' => $newAccount] = bookingResolveCustomer($contact);
         }
 
         if ($newPet !== null) {
@@ -546,4 +564,247 @@ function bookingMarkDepositForfeited(int $bookingId): bool
     $stmt->execute([$bookingId]);
 
     return $stmt->rowCount() === 1;
+}
+
+/**
+ * Услуги Записи для переноса: снэпшоты (цена, длительность) + id и вид
+ * Услуги — для расчёта блока и проверки, что новый Специалист их оказывает.
+ *
+ * @return list<array{service_id: int, service_name: string, price: string, duration_minutes: int, kind: string}>
+ */
+function bookingServiceRows(int $bookingId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT bs.service_id, bs.service_name, bs.price, bs.duration_minutes, s.kind
+        FROM booking_services bs
+        JOIN services s ON s.id = bs.service_id
+        WHERE bs.booking_id = ?
+        ORDER BY bs.sort_order
+    ');
+    $stmt->execute([$bookingId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Свободен ли слот у Специалиста: тот же bookingFreeSlots(), что у выдачи
+ * слотов. Вызывается внутри транзакции, после блокировки строки Специалиста.
+ *
+ * @param array<string, mixed> $specialist строка specialists (график)
+ * @param list<int> $durations длительности Услуг, мин
+ * @param list<string> $kinds виды Услуг
+ */
+function bookingSlotIsFree(array $specialist, string $date, string $time, array $durations, array $kinds): bool
+{
+    $specialistId = (int) $specialist['id'];
+    $freeSlots = bookingFreeSlots(
+        $specialist,
+        $date,
+        bookingBlockMinutes(array_sum($durations), $kinds),
+        bookingsBusyForDay($specialistId, $date),
+        specialistTimeOffFrom($specialistId, $date),
+        new DateTimeImmutable('now')
+    );
+
+    return in_array($time, $freeSlots, true);
+}
+
+/** INSERT подтверждённой Записи персонала; вызывается внутри транзакции. Возвращает id. */
+function bookingInsertConfirmed(
+    int $userId,
+    int $petId,
+    int $specialistId,
+    string $scheduledAt,
+    int $staffUserId,
+    ?string $depositAmount,
+    string $depositStatus
+): int {
+    $pdo = getPdo();
+    $pdo->prepare("
+        INSERT INTO bookings (
+            user_id, pet_id, specialist_id, created_by_user_id, scheduled_at, status,
+            deposit_amount, deposit_status
+        ) VALUES (?, ?, ?, ?, ?, 'confirmed', ?, ?)
+    ")->execute([$userId, $petId, $specialistId, $staffUserId, $scheduledAt, $depositAmount, $depositStatus]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+/**
+ * Ручная Запись по звонку (FR-SV-010): сразу `confirmed`, без Депозита,
+ * `created_by_user_id` — сотрудник. Транзакция и блокировка — как у
+ * bookingCreate(): первым запросом `FOR UPDATE` строки Специалиста.
+ *
+ * @param array<int, array<string, mixed>> $services строки servicesFindActiveByIds()
+ * @param array{name: string, phone: string, email: string} $contact
+ * @param array{name: string, species: string, breed: ?string, weight: ?string}|null $newPet null — выбран существующий Питомец клиента
+ * @return array{status: 'created', booking_id: int, new_account: array{name: string, email: string, password: string}|null}
+ *       | array{status: 'slot_taken'|'invalid'}
+ */
+function bookingCreateManual(
+    int $staffUserId,
+    array $contact,
+    int $specialistId,
+    string $date,
+    string $time,
+    array $services,
+    ?int $petId,
+    ?array $newPet
+): array {
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, work_start, work_end, day_off FROM specialists WHERE id = ? FOR UPDATE');
+        $stmt->execute([$specialistId]);
+        $specialist = $stmt->fetch();
+        if ($specialist === false) {
+            $pdo->rollBack();
+            return ['status' => 'invalid'];
+        }
+
+        bookingReleaseExpired($specialistId);
+
+        $isFree = bookingSlotIsFree(
+            $specialist,
+            $date,
+            $time,
+            array_map(static fn (array $s): int => (int) $s['duration_minutes'], $services),
+            array_column($services, 'kind')
+        );
+        if (!$isFree) {
+            $pdo->rollBack();
+            return ['status' => 'slot_taken'];
+        }
+
+        ['user_id' => $userId, 'new_account' => $newAccount] = bookingResolveCustomer($contact);
+
+        if ($newPet !== null) {
+            $petId = petCreate($userId, $newPet['name'], $newPet['species'], $newPet['breed'], $newPet['weight']);
+        } elseif ($petId === null || petFind($userId, $petId) === null) {
+            $pdo->rollBack();
+            return ['status' => 'invalid'];
+        }
+
+        $bookingId = bookingInsertConfirmed($userId, $petId, $specialistId, $date . ' ' . $time . ':00', $staffUserId, null, 'none');
+
+        $itemStmt = $pdo->prepare('
+            INSERT INTO booking_services (booking_id, service_id, service_name, price, duration_minutes, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ');
+        foreach (array_values($services) as $position => $service) {
+            $itemStmt->execute([
+                $bookingId,
+                (int) $service['id'],
+                (string) $service['name'],
+                (string) $service['price'],
+                (int) $service['duration_minutes'],
+                $position,
+            ]);
+        }
+
+        $pdo->commit();
+
+        return ['status' => 'created', 'booking_id' => $bookingId, 'new_account' => $newAccount];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
+}
+
+/**
+ * Перенос подтверждённой Записи (FR-SV-010): отмена текущей + новая Запись
+ * с теми же Покупателем, Питомцем и Услугами в одной транзакции; Депозит
+ * `held` переезжает на новую (у старой `none`). Старая отменяется ДО
+ * проверки слота, поэтому перенос на соседнее время не упирается в её
+ * собственный слот; при занятом слоте откатывается всё.
+ *
+ * @return array{status: 'rescheduled', booking_id: int}
+ *       | array{status: 'slot_taken'|'not_allowed'|'invalid'}
+ */
+function bookingReschedule(int $bookingId, int $specialistId, string $date, string $time, int $staffUserId): array
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, work_start, work_end, day_off FROM specialists WHERE id = ? FOR UPDATE');
+        $stmt->execute([$specialistId]);
+        $specialist = $stmt->fetch();
+        if ($specialist === false) {
+            $pdo->rollBack();
+            return ['status' => 'invalid'];
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT user_id, pet_id, deposit_amount, deposit_status
+            FROM bookings WHERE id = ? AND status = 'confirmed' FOR UPDATE
+        ");
+        $stmt->execute([$bookingId]);
+        $old = $stmt->fetch();
+        if ($old === false) {
+            $pdo->rollBack();
+            return ['status' => 'not_allowed'];
+        }
+
+        $services = bookingServiceRows($bookingId);
+        $offered = array_map('intval', array_column(specialistsForServices(array_column($services, 'service_id')), 'id'));
+        if ($services === [] || !in_array($specialistId, $offered, true)) {
+            $pdo->rollBack();
+            return ['status' => 'invalid'];
+        }
+
+        bookingReleaseExpired($specialistId);
+
+        if (!bookingTransition($bookingId, 'cancelled')) {
+            $pdo->rollBack();
+            return ['status' => 'not_allowed'];
+        }
+
+        $isFree = bookingSlotIsFree(
+            $specialist,
+            $date,
+            $time,
+            array_map(static fn (array $s): int => (int) $s['duration_minutes'], $services),
+            array_column($services, 'kind')
+        );
+        if (!$isFree) {
+            $pdo->rollBack();
+            return ['status' => 'slot_taken'];
+        }
+
+        $newId = bookingInsertConfirmed(
+            (int) $old['user_id'],
+            (int) $old['pet_id'],
+            $specialistId,
+            $date . ' ' . $time . ':00',
+            $staffUserId,
+            $old['deposit_amount'] !== null ? (string) $old['deposit_amount'] : null,
+            (string) $old['deposit_status']
+        );
+
+        $pdo->prepare('
+            INSERT INTO booking_services (booking_id, service_id, service_name, price, duration_minutes, sort_order)
+            SELECT ?, service_id, service_name, price, duration_minutes, sort_order
+            FROM booking_services WHERE booking_id = ?
+        ')->execute([$newId, $bookingId]);
+
+        $pdo->prepare("
+            UPDATE bookings SET deposit_status = 'none', deposit_amount = NULL
+            WHERE id = ? AND deposit_status = 'held'
+        ")->execute([$bookingId]);
+
+        $pdo->commit();
+
+        return ['status' => 'rescheduled', 'booking_id' => $newId];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
 }

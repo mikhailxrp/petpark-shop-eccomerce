@@ -140,6 +140,7 @@ ob_start();
                     <?= csrfField() ?>
                     <button type="submit" class="btn btn-sm btn-outline-secondary">Неявка</button>
                 </form>
+                <a href="<?= e($actionBase) ?>/reschedule" class="btn btn-sm btn-outline-primary">Перенести</a>
                 <form method="post" action="<?= e($actionBase) ?>/cancel">
                     <?= csrfField() ?>
                     <button type="submit" class="btn btn-sm btn-outline-danger">Отменить</button>
