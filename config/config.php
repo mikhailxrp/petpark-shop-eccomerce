@@ -85,6 +85,7 @@ require_once ROOT_PATH . '/src/Models/Booking.php';
 require_once ROOT_PATH . '/src/Models/Specialist.php';
 require_once ROOT_PATH . '/src/Models/AiCall.php';
 require_once ROOT_PATH . '/src/Models/AttributeDraft.php';
+require_once ROOT_PATH . '/src/Models/Conversation.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';
 require_once ROOT_PATH . '/src/Services/Ai/AiProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/OfflineProvider.php';

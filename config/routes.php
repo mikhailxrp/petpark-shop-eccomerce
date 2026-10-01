@@ -26,6 +26,8 @@ return [
         '/admin/orders/variants' => ['Admin\OrderController', 'searchVariants'],
         '/admin/orders/{id}'   => ['Admin\OrderController', 'show'],
         '/admin/stock'         => ['Admin\StockController', 'index'],
+        '/admin/inbox'         => ['Admin\InboxController', 'index'],
+        '/admin/inbox/{id}'    => ['Admin\InboxController', 'show'],
         '/admin/ai'            => ['Admin\AiController', 'index'],
         '/admin/ai/attributes' => ['Admin\AiAttributesController', 'index'],
         '/admin/ai/attributes/drafts' => ['Admin\AiAttributesController', 'drafts'],

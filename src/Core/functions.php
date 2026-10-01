@@ -378,3 +378,23 @@ function clearRateLimit(string $action): void
         unlink($path);
     }
 }
+
+/**
+ * Телефон РФ → `+7XXXXXXXXXX` (для сопоставления Обращения с Покупателем,
+ * phase-5.md, Таск 7). Принимает +7 / 8 / 10 цифр без кода, пробелы, скобки,
+ * дефисы; всё остальное — null (ник в Telegram, чужой формат).
+ */
+function normalizePhone(string $raw): ?string
+{
+    $digits = preg_replace('/\D+/', '', $raw) ?? '';
+
+    if (strlen($digits) === 11 && ($digits[0] === '7' || $digits[0] === '8')) {
+        return '+7' . substr($digits, 1);
+    }
+
+    if (strlen($digits) === 10 && $digits[0] === '9') {
+        return '+7' . $digits;
+    }
+
+    return null;
+}

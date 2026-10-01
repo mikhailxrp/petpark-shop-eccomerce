@@ -628,6 +628,35 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// phase-5, Таск 7 (FR-CHANNELS-001): флаг «прочитано», имя отправителя из Канала
+// и уникальность треда в Канале (идемпотентный сид, приём входящих по external id).
+foreach ([
+    'is_read'     => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER order_id',
+    'sender_name' => 'VARCHAR(120) NULL AFTER contact_identifier',
+] as $column => $definition) {
+    $columnExists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversations' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($columnExists === 0) {
+        $pdo->exec("ALTER TABLE conversations ADD COLUMN {$column} {$definition}");
+    }
+}
+
+$uniqueExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversations'
+      AND INDEX_NAME = 'uq_conversations_channel_external'
+")->fetchColumn();
+
+if ($uniqueExists === 0) {
+    $pdo->exec('
+        ALTER TABLE conversations
+        ADD UNIQUE KEY uq_conversations_channel_external (channel, external_conversation_id)
+    ');
+}
+
 // ─── conversation_messages ──────────────────────────────────────────────
 
 $pdo->exec("

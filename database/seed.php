@@ -146,3 +146,115 @@ foreach ($seedSpecialists as $specialist) {
 
 echo "✅ Услуги и специалисты созданы/обновлены (" . count($seedServices) . " услуг, "
     . count($seedSpecialists) . " специалиста).\n";
+
+// Обращения единого инбокса (phase-5.md, Таск 7; FR-CHANNELS-001). Каналы —
+// заглушка (ADR-001): тестовая переписка. Идемпотентно по (channel,
+// external_conversation_id) — сообщения тредов пересоздаются, время считается
+// от «сейчас», чтобы список выглядел свежим. Телефон Покупателя записан в
+// разных форматах — сопоставление идёт через normalizePhone().
+// minutes_ago — возраст сообщения; direction: in / out.
+$seedConversations = [
+    [
+        'channel' => 'telegram', 'external' => 'tg-demo-1', 'contact' => '8 (900) 000-00-00',
+        'sender' => 'Тестовый', 'is_read' => 0,
+        'messages' => [
+            ['in', 'Здравствуйте! Есть корм для стерилизованной кошки, 2 кг?', 35],
+            ['out', 'Добрый день! Да, посмотрите в разделе «Корма для кошек».', 30],
+            ['in', 'Хочу заказать два пакета, можно через вас?', 4],
+        ],
+    ],
+    [
+        'channel' => 'vk', 'external' => 'vk-demo-1', 'contact' => '+7 900 000-00-00',
+        'sender' => 'Тест Т.', 'is_read' => 1,
+        'messages' => [
+            ['in', 'Подскажите, до скольки работает груминг в субботу?', 180],
+            ['out', 'В субботу принимаем с 10:00 до 19:00.', 170],
+        ],
+    ],
+    [
+        'channel' => 'telegram', 'external' => 'tg-demo-2', 'contact' => '@marina_cat',
+        'sender' => 'Марина', 'is_read' => 0,
+        'messages' => [
+            ['in', 'Добрый вечер! Нужен наполнитель комкующийся, 10 литров.', 12],
+        ],
+    ],
+    [
+        'channel' => 'max', 'external' => 'max-demo-1', 'contact' => '+7 918 555-12-34',
+        'sender' => 'Алексей', 'is_read' => 0,
+        'messages' => [
+            ['in', 'Привет! Привезёте корм для собаки до Западного микрорайона?', 95],
+            ['out', 'Здравствуйте! Да, доставка по Ростову курьером.', 90],
+            ['in', 'Отлично, тогда оформляю. Крупные гранулы, 12 кг.', 60],
+        ],
+    ],
+    [
+        'channel' => 'avito', 'external' => 'avito-demo-1', 'contact' => 'Объявление №48213',
+        'sender' => 'Ольга (Avito)', 'is_read' => 1,
+        'messages' => [
+            ['in', 'Клетка для попугая ещё в наличии?', 1500],
+            ['out', 'Здравствуйте! Да, есть, самовывоз или доставка.', 1440],
+        ],
+    ],
+    [
+        'channel' => 'avito', 'external' => 'avito-demo-2', 'contact' => 'Объявление №48977',
+        'sender' => 'Дмитрий (Avito)', 'is_read' => 0,
+        'messages' => [
+            ['in', 'Сколько стоит когтеточка и можно ли забрать сегодня?', 22],
+        ],
+    ],
+    [
+        'channel' => 'vk', 'external' => 'vk-demo-2', 'contact' => null,
+        'sender' => null, 'is_read' => 1,
+        'messages' => [
+            ['in', 'Принимаете ли вы щенков на первую стрижку?', 2880],
+            ['out', 'Да, записывайтесь через сайт, подберём мастера.', 2800],
+        ],
+    ],
+];
+
+$upsertConversation = $pdo->prepare('
+    INSERT INTO conversations (channel, external_conversation_id, user_id, contact_identifier, sender_name, is_read)
+    VALUES (:channel, :external, :user_id, :contact, :sender, :is_read)
+    ON DUPLICATE KEY UPDATE
+        user_id            = VALUES(user_id),
+        contact_identifier = VALUES(contact_identifier),
+        sender_name        = VALUES(sender_name),
+        is_read            = VALUES(is_read)
+');
+$findConversation = $pdo->prepare('
+    SELECT id FROM conversations WHERE channel = :channel AND external_conversation_id = :external
+');
+$clearMessages = $pdo->prepare('DELETE FROM conversation_messages WHERE conversation_id = :id');
+$insertMessage = $pdo->prepare('
+    INSERT INTO conversation_messages (conversation_id, direction, body, sent_at)
+    VALUES (:id, :direction, :body, NOW() - INTERVAL :minutes MINUTE)
+');
+
+foreach ($seedConversations as $conversation) {
+    $userId = $conversation['contact'] !== null
+        ? conversationFindUserIdByPhone($conversation['contact'])
+        : null;
+
+    $upsertConversation->execute([
+        'channel'  => $conversation['channel'],
+        'external' => $conversation['external'],
+        'user_id'  => $userId,
+        'contact'  => $conversation['contact'],
+        'sender'   => $conversation['sender'],
+        'is_read'  => $conversation['is_read'],
+    ]);
+
+    $findConversation->execute(['channel' => $conversation['channel'], 'external' => $conversation['external']]);
+    $conversationId = (int) $findConversation->fetchColumn();
+
+    $clearMessages->execute(['id' => $conversationId]);
+    foreach ($conversation['messages'] as [$direction, $body, $minutesAgo]) {
+        $insertMessage->bindValue('id', $conversationId, PDO::PARAM_INT);
+        $insertMessage->bindValue('direction', $direction);
+        $insertMessage->bindValue('body', $body);
+        $insertMessage->bindValue('minutes', $minutesAgo, PDO::PARAM_INT);
+        $insertMessage->execute();
+    }
+}
+
+echo "✅ Обращения инбокса созданы/обновлены (" . count($seedConversations) . ").\n";
