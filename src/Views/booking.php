@@ -7,8 +7,8 @@ declare(strict_types=1);
  * Экрана записи в макете нет (screens.md SCR-11, Q-053) — форма собрана
  * на компонентах темы Patte. Список Услуг рендерится здесь, на сервере;
  * Специалистов и слоты подгружает public/assets/js/booking.js из
- * /booking/specialists и /booking/slots. Отправки формы пока нет —
- * POST /booking появится в Таске 4, кнопка недоступна.
+ * /booking/specialists и /booking/slots. Форма уходит в POST /booking
+ * (Таск 4): три разных поля — `_csrf`, `form_token` (антибот), honeypot.
  *
  * @var array<int, array<string, mixed>> $services    BookingController: активные Услуги
  * @var bool                             $isCustomer  авторизован как Покупатель
@@ -16,6 +16,9 @@ declare(strict_types=1);
  * @var array<int, string>               $speciesList виды животных
  * @var string                           $dateMin     первая доступная дата, Y-m-d
  * @var string                           $dateMax     последняя доступная дата, Y-m-d
+ * @var string                           $formToken   антибот-токен показа формы
+ * @var string|null                      $notice      flash 'booking_notice'
+ * @var string|null                      $error       flash 'booking_error'
  */
 
 $pageTitle = seoTitle('booking');
@@ -42,8 +45,15 @@ include __DIR__ . '/components/page-banner.php';
         <form class="booking-form" id="booking-form" method="post" action="/booking"
               data-date-min="<?= e($dateMin) ?>" data-date-max="<?= e($dateMax) ?>">
             <?= csrfField() ?>
+            <input type="text" name="website" class="form-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <input type="hidden" name="form_token" value="<?= e($formToken) ?>">
             <div class="row">
                 <div class="col-lg-8">
+                    <?php if ($error !== null): ?>
+                        <div class="alert alert-danger" role="alert"><?= e($error) ?></div>
+                    <?php elseif ($notice !== null): ?>
+                        <div class="alert alert-info" role="status"><?= e($notice) ?></div>
+                    <?php endif; ?>
                     <div id="booking-alert" class="alert alert-danger d-none" role="alert"></div>
 
                     <fieldset class="booking-form__step" id="booking-step-services">
@@ -149,8 +159,7 @@ include __DIR__ . '/components/page-banner.php';
                             <dt>Питомец</dt>
                             <dd id="booking-summary-pet">—</dd>
                         </dl>
-                        <button type="submit" class="button" disabled>Записаться</button>
-                        <p class="booking-form__hint">Отправка записи будет доступна позже.</p>
+                        <button type="submit" class="button" id="booking-submit" disabled>Записаться</button>
                     </aside>
                 </div>
             </div>

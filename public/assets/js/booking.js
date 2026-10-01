@@ -14,6 +14,7 @@
     const slotsBox = document.getElementById('booking-slots');
     const dateInput = document.getElementById('booking-date');
     const newPetBox = document.getElementById('booking-new-pet');
+    const submitButton = document.getElementById('booking-submit');
 
     const summary = {
         services: document.getElementById('booking-summary-services'),
@@ -107,6 +108,29 @@
         } else {
             summary.pet.textContent = petName || EMPTY_SUMMARY;
         }
+
+        updateSubmitState();
+    };
+
+    const filled = (name) => form.querySelector(`[name="${name}"]`)?.value.trim() !== '';
+
+    const isFormReady = () => {
+        if (checkedServices().length === 0 || !selectedSpecialist() || !selectedSlot()) {
+            return false;
+        }
+
+        const pet = form.querySelector('input[name="pet_id"]:checked');
+        const isNewPet = !pet || pet.value === 'new';
+        if (isNewPet && (!filled('pet_name') || !filled('pet_species'))) {
+            return false;
+        }
+
+        // Блок контактов есть только у Гостя
+        return !stepContacts || ['contact_name', 'contact_phone', 'contact_email'].every(filled);
+    };
+
+    const updateSubmitState = () => {
+        submitButton.disabled = !isFormReady();
     };
 
     const revealPetSteps = () => {
@@ -210,6 +234,7 @@
 
     form.addEventListener('change', (event) => {
         const target = event.target;
+        updateSubmitState();
 
         if (target.matches('input[name="services[]"]')) {
             loadSpecialists();
@@ -233,11 +258,18 @@
         }
     });
 
-    // Кнопка отправки недоступна до Таска 4 (POST /booking) — случайный
-    // Enter в поле не должен слать форму в несуществующий обработчик.
+    // Серверная проверка в BookingController::store() главная; здесь только
+    // не даём отправить заведомо неполную форму и повторный клик.
     form.addEventListener('submit', (event) => {
-        event.preventDefault();
+        if (!isFormReady() || submitButton.dataset.sending === '1') {
+            event.preventDefault();
+            return;
+        }
+        submitButton.dataset.sending = '1';
+        submitButton.disabled = true;
     });
+
+    form.addEventListener('input', updateSubmitState);
 
     updateSummary();
 })();
