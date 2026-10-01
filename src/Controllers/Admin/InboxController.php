@@ -116,9 +116,77 @@ final class InboxController
             'replyUrl'       => self::INBOX_URL . '/' . $conversation['id'] . '/reply',
             'maxLength'      => CHANNEL_REPLY_MAX_LENGTH,
             'replyDraft'     => getFlash('reply_draft') ?? '',
+            'orderDraft'     => $this->orderDraftView($conversation['order_draft'] ?? null),
+            'draftUrl'       => self::INBOX_URL . '/' . $conversation['id'] . '/draft',
+            'attributeCoverage' => productConfirmedAttributesCoverage(),
             'success'        => getFlash('success'),
             'error'          => getFlash('error'),
         ]);
+    }
+
+    /** Разбор Обращения в черновик Заказа (FR-AI-004): по кнопке, Заказ не создаётся. */
+    public function draft(string $id): void
+    {
+        if ($this->authorize() === null) {
+            return;
+        }
+
+        $conversation = $this->findEnabled($id);
+        if ($conversation === null) {
+            $this->notFound();
+            return;
+        }
+
+        requireCsrf();
+
+        $backUrl = self::INBOX_URL . '/' . $conversation['id'];
+
+        try {
+            $result = orderDraftGenerate(conversationMessages((int) $conversation['id']));
+            if ($result['status'] === 'ok' && $result['draft'] !== null) {
+                conversationSaveOrderDraft((int) $conversation['id'], $result['draft']);
+            }
+        } catch (Throwable $e) {
+            logError('Черновик Заказа не создан', ['conversation_id' => (int) $conversation['id'], 'error' => $e->getMessage()]);
+            $result = ['status' => 'error', 'draft' => null];
+        }
+
+        match ($result['status']) {
+            'ok'      => setFlash('success', 'Черновик готов — проверьте состав перед оформлением Заказа.'),
+            'empty'   => setFlash('error', 'В Обращении нет сообщений покупателя — разбирать нечего.'),
+            'blocked' => setFlash('error', 'Лимит расходов на ИИ исчерпан. Оформите Заказ вручную из текста Обращения.'),
+            default   => setFlash('error', 'ИИ сейчас недоступен. Оформите Заказ вручную из текста Обращения.'),
+        };
+
+        redirect($backUrl);
+    }
+
+    /**
+     * Сохранённый JSON черновика → данные для View (цены отформатированы).
+     *
+     * @return array{items: list<array{name: string, label: string, price: string, quantity: int}>, note: string, generated_at: string}|null
+     */
+    private function orderDraftView(mixed $json): ?array
+    {
+        if (!is_string($json) || $json === '') {
+            return null;
+        }
+
+        $draft = json_decode($json, true);
+        if (!is_array($draft) || !is_array($draft['items'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'items' => array_map(static fn (array $item): array => [
+                'name'     => (string) $item['name'],
+                'label'    => (string) $item['label'],
+                'price'    => cartFormatMoney((string) $item['price']),
+                'quantity' => (int) $item['quantity'],
+            ], $draft['items']),
+            'note'         => (string) ($draft['note'] ?? ''),
+            'generated_at' => date('d.m.Y H:i', (int) strtotime((string) ($draft['generated_at'] ?? ''))),
+        ];
     }
 
     /** Ответ из панели (FR-CHANNELS-002): валидация → ChannelGateway → исходящее сообщение. */

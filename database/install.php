@@ -633,6 +633,8 @@ $pdo->exec("
 foreach ([
     'is_read'     => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER order_id',
     'sender_name' => 'VARCHAR(120) NULL AFTER contact_identifier',
+    // phase-5, Таск 9 (FR-AI-004): черновик Заказа от ИИ, JSON; без телефона и адреса
+    'order_draft' => 'TEXT NULL AFTER is_read',
 ] as $column => $definition) {
     $columnExists = (int) $pdo->query("
         SELECT COUNT(*) FROM information_schema.COLUMNS

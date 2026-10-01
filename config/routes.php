@@ -90,6 +90,7 @@ return [
         '/admin/orders/{id}/items'     => ['Admin\OrderController', 'editItems'],
         '/admin/inbox/simulate'        => ['Admin\InboxController', 'simulate'],
         '/admin/inbox/{id}/reply'      => ['Admin\InboxController', 'reply'],
+        '/admin/inbox/{id}/draft'      => ['Admin\InboxController', 'draft'],
         '/admin/stock/{id}/sync'       => ['Admin\StockController', 'sync'],
         '/admin/ai/attributes/run'     => ['Admin\AiAttributesController', 'run'],
         '/admin/ai/attributes/drafts/decide' => ['Admin\AiAttributesController', 'decide'],

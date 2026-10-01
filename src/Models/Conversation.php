@@ -169,7 +169,7 @@ function conversationFind(int $id): ?array
 {
     $stmt = getPdo()->prepare('
         SELECT
-            c.id, c.channel, c.contact_identifier, c.sender_name, c.is_read, c.user_id,
+            c.id, c.channel, c.contact_identifier, c.sender_name, c.is_read, c.user_id, c.order_draft,
             u.name AS customer_name
         FROM conversations c
         LEFT JOIN users u ON u.id = c.user_id
@@ -179,6 +179,18 @@ function conversationFind(int $id): ?array
     $row = $stmt->fetch();
 
     return $row === false ? null : $row;
+}
+
+/**
+ * Сохраняет (заменяет) черновик Заказа Обращения как JSON (FR-AI-004).
+ * Заказ не создаётся и `order_id` не трогается.
+ *
+ * @param array<string, mixed> $draft
+ */
+function conversationSaveOrderDraft(int $id, array $draft): void
+{
+    $stmt = getPdo()->prepare('UPDATE conversations SET order_draft = :draft WHERE id = :id');
+    $stmt->execute(['draft' => json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'id' => $id]);
 }
 
 /** @return array<int, array<string, mixed>> */

@@ -992,3 +992,69 @@ function productsSearchForChat(array $tokens, int $limit): array
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Варианты-кандидаты для черновика Заказа из Обращения (FR-AI-004, Q-060):
+ * чем больше основ слов запроса встретилось в названии Товара, Категории,
+ * бренде, подтверждённой Характеристике или Характеристике Варианта (вес,
+ * вкус) — тем выше. `product_attributes` содержит только подтверждённые
+ * значения (черновики лежат отдельно), поэтому неподтверждённое сюда не попадает.
+ * Цена — живая, из БД (со скидкой, если есть).
+ *
+ * @param list<string> $tokens основы слов (consultantSearchTokens())
+ * @return array<int, array{variant_id: int|string, name: string, price: string, score: int|string}>
+ */
+function productVariantCandidates(array $tokens, int $limit): array
+{
+    if ($tokens === []) {
+        return [];
+    }
+
+    $scoreParts = [];
+    $params = [];
+    foreach ($tokens as $token) {
+        $like = '%' . addcslashes($token, '\%_') . '%';
+        $scoreParts[] = '(p.name LIKE ? OR c.name LIKE ? OR b.name LIKE ?
+            OR EXISTS (SELECT 1 FROM product_attributes a WHERE a.product_id = p.id AND a.attr_value LIKE ?)
+            OR EXISTS (SELECT 1 FROM product_variant_attributes va WHERE va.variant_id = v.id AND va.attr_value LIKE ?))';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    $score = implode(' + ', $scoreParts);
+
+    $stmt = getPdo()->prepare("
+        SELECT v.id AS variant_id, p.name, COALESCE(v.discount_price, v.price) AS price, {$score} AS score
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id AND p.is_active = 1
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE v.is_active = 1
+        HAVING score > 0
+        ORDER BY score DESC, p.id ASC, v.id ASC
+        LIMIT ?
+    ");
+    foreach ($params as $i => $value) {
+        $stmt->bindValue($i + 1, $value);
+    }
+    $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Сколько активных Товаров имеют хотя бы одну подтверждённую Характеристику —
+ * от этого зависит точность сопоставления в черновике Заказа (Q-060).
+ *
+ * @return array{total: int, confirmed: int}
+ */
+function productConfirmedAttributesCoverage(): array
+{
+    $row = getPdo()->query('
+        SELECT COUNT(*) AS total,
+               COALESCE(SUM(EXISTS (SELECT 1 FROM product_attributes a WHERE a.product_id = p.id)), 0) AS confirmed
+        FROM products p
+        WHERE p.is_active = 1
+    ')->fetch();
+
+    return ['total' => (int) $row['total'], 'confirmed' => (int) $row['confirmed']];
+}
