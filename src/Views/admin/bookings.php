@@ -32,6 +32,7 @@ ob_start();
     </div>
     <div class="mt-3 mt-md-0 d-flex flex-wrap gap-2">
         <a href="/admin/bookings/new" class="btn btn-primary btn-sm">Новая запись</a>
+        <a href="/admin/time-off" class="btn btn-outline-primary btn-sm">Закрытие слотов</a>
         <a href="<?= e($prevWeekUrl) ?>" class="btn btn-outline-secondary btn-sm">&larr; Предыдущая</a>
         <a href="<?= e($todayUrl) ?>" class="btn btn-outline-secondary btn-sm">Сегодня</a>
         <a href="<?= e($nextWeekUrl) ?>" class="btn btn-outline-secondary btn-sm">Следующая &rarr;</a>

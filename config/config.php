@@ -58,4 +58,5 @@ require_once ROOT_PATH . '/src/Models/Order.php';
 require_once ROOT_PATH . '/src/Models/Pet.php';
 require_once ROOT_PATH . '/src/Models/Service.php';
 require_once ROOT_PATH . '/src/Models/Booking.php';
+require_once ROOT_PATH . '/src/Models/Specialist.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';

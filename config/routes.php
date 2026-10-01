@@ -33,6 +33,7 @@ return [
         '/admin/bookings/pets' => ['Admin\BookingController', 'pets'],
         '/admin/bookings/{id}' => ['Admin\BookingController', 'show'],
         '/admin/bookings/{id}/reschedule' => ['Admin\BookingController', 'rescheduleForm'],
+        '/admin/time-off'      => ['Admin\TimeOffController', 'index'],
         '/specialist'         => ['Admin\DashboardController', 'specialist'],
         '/catalog'             => ['CatalogController', 'index'],
         '/catalog/{cat}'       => ['CatalogController', 'category'],
@@ -85,5 +86,7 @@ return [
         '/admin/bookings/{id}/complete' => ['Admin\BookingController', 'complete'],
         '/admin/bookings/{id}/no-show' => ['Admin\BookingController', 'noShow'],
         '/admin/bookings/{id}/cancel'  => ['Admin\BookingController', 'cancel'],
+        '/admin/time-off'              => ['Admin\TimeOffController', 'store'],
+        '/admin/time-off/{id}/delete'  => ['Admin\TimeOffController', 'delete'],
     ],
 ];
