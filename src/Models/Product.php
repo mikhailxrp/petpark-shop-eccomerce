@@ -239,6 +239,21 @@ function productListByFilters(
 }
 
 /**
+ * Записывает подтверждённую Характеристику Товара: существующая с тем же
+ * названием заменяется, дубля нет (UNIQUE на таблице нет). Атомарность
+ * обеспечивает вызывающий — функция зовётся внутри его транзакции.
+ */
+function productAttributeReplace(int $productId, string $name, string $value): void
+{
+    $pdo = getPdo();
+
+    $pdo->prepare('DELETE FROM product_attributes WHERE product_id = ? AND attr_name = ?')
+        ->execute([$productId, $name]);
+    $pdo->prepare('INSERT INTO product_attributes (product_id, attr_name, attr_value) VALUES (?, ?, ?)')
+        ->execute([$productId, $name, $value]);
+}
+
+/**
  * Доступные Характеристики для сайдбара фильтра (FR-CAT-002) — из обоих
  * источников: product_attributes (уровень Товара, напр. вид_животного)
  * и product_variant_attributes (уровень Варианта, напр. вес упаковки/
@@ -671,4 +686,375 @@ function productVariantSetStockFromMoySklad(int $variantId, int $quantity): void
         WHERE id = :id
     ');
     $stmt->execute(['quantity' => $quantity, 'id' => $variantId]);
+}
+
+// ─── ИИ-описания (FR-AI-002, phase-5 Таск 5) ────────────────────────────
+// Черновик живёт в products.description_draft; description меняет только
+// productDescriptionPublish() — решение Владельца.
+
+/**
+ * Данные Товара для генерации: только то, что допустимо отдать ИИ (название,
+ * Категория, бренд) — цена, остаток и отзывы в выборку не попадают.
+ *
+ * @return array{id: int, name: string, category_name: string, brand_name: string|null}|null
+ */
+function productDescriptionSource(int $productId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT p.id, p.name, c.name AS category_name, b.name AS brand_name
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE p.id = ?
+    ');
+    $stmt->execute([$productId]);
+    $row = $stmt->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
+ * Подтверждённые Характеристики Товара (product_attributes) — не черновики.
+ *
+ * @return array<string, string> attr_name => значение
+ */
+function productConfirmedAttributes(int $productId): array
+{
+    $stmt = getPdo()->prepare('SELECT attr_name, attr_value FROM product_attributes WHERE product_id = ? ORDER BY attr_name, id');
+    $stmt->execute([$productId]);
+
+    $attributes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $attributes[(string) $row['attr_name']] = (string) $row['attr_value'];
+    }
+
+    return $attributes;
+}
+
+/** Записывает (заменяет) только черновик — description не трогается. */
+function productDescriptionDraftSave(int $productId, string $draft): void
+{
+    getPdo()->prepare('UPDATE products SET description_draft = ? WHERE id = ?')
+        ->execute([$draft, $productId]);
+}
+
+/**
+ * Публикация: текст (черновик или его правка) → description, черновик
+ * обнуляется, исход пишется в ai_draft_outcomes — всё атомарно. Публикуется
+ * только при открытом черновике (FOR UPDATE): повтор формы ничего не меняет.
+ *
+ * @param string $text нормализованный итоговый текст
+ * @return string|null исход (accepted / edited); null — открытого черновика нет
+ */
+function productDescriptionPublish(int $productId, string $text): ?string
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('SELECT description_draft FROM products WHERE id = ? FOR UPDATE');
+        $stmt->execute([$productId]);
+        $draft = $stmt->fetchColumn();
+
+        if (!is_string($draft)) {
+            $pdo->rollBack();
+
+            return null;
+        }
+
+        $outcome = descriptionNormalize($draft) === $text ? 'accepted' : 'edited';
+
+        $pdo->prepare('UPDATE products SET description = ?, description_draft = NULL WHERE id = ?')
+            ->execute([$text, $productId]);
+        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, ?)")
+            ->execute([$productId, $outcome]);
+
+        $pdo->commit();
+
+        return $outcome;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Отклонение черновика: обнуляет его и пишет исход rejected.
+ *
+ * @return bool false — открытого черновика нет
+ */
+function productDescriptionDiscard(int $productId): bool
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('UPDATE products SET description_draft = NULL WHERE id = ? AND description_draft IS NOT NULL');
+        $stmt->execute([$productId]);
+
+        if ($stmt->rowCount() === 0) {
+            $pdo->rollBack();
+
+            return false;
+        }
+
+        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, 'rejected')")
+            ->execute([$productId]);
+
+        $pdo->commit();
+
+        return true;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Очередь пакета: активные Товары Категорий без текущего черновика.
+ * Плейсхолдеры: N Категорий.
+ *
+ * @param list<int> $categoryIds
+ */
+function productDescriptionQueueWhere(array $categoryIds): string
+{
+    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+
+    return "p.is_active = 1 AND p.description_draft IS NULL AND p.category_id IN ({$placeholders})";
+}
+
+/**
+ * Порция очереди. Курсор id > $afterId — Товар с ошибкой не берётся повторно
+ * в том же запуске.
+ *
+ * @param list<int> $categoryIds
+ * @return array<int, array{id: int, name: string}>
+ */
+function productDescriptionQueue(array $categoryIds, int $afterId, int $limit): array
+{
+    if ($categoryIds === []) {
+        return [];
+    }
+
+    $stmt = getPdo()->prepare(
+        'SELECT p.id, p.name FROM products p
+         WHERE p.id > ? AND ' . productDescriptionQueueWhere($categoryIds) . '
+         ORDER BY p.id LIMIT ?'
+    );
+    $position = 1;
+    $stmt->bindValue($position++, $afterId, PDO::PARAM_INT);
+    foreach ($categoryIds as $categoryId) {
+        $stmt->bindValue($position++, $categoryId, PDO::PARAM_INT);
+    }
+    $stmt->bindValue($position, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/** @param list<int> $categoryIds */
+function productDescriptionQueueCount(array $categoryIds): int
+{
+    if ($categoryIds === []) {
+        return 0;
+    }
+
+    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM products p WHERE ' . productDescriptionQueueWhere($categoryIds));
+    $stmt->execute($categoryIds);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/** Товаров с открытым черновиком описания. */
+function productDescriptionDraftCount(): int
+{
+    return (int) getPdo()->query('SELECT COUNT(*) FROM products WHERE description_draft IS NOT NULL')->fetchColumn();
+}
+
+/**
+ * Условие списка страницы: Категории (null — все) и/или только с черновиком.
+ *
+ * @param list<int>|null $categoryIds
+ * @return array{0: string, 1: list<int>} условие и значения плейсхолдеров
+ */
+function productDescriptionListWhere(?array $categoryIds, bool $draftsOnly): array
+{
+    $conditions = ['1 = 1'];
+    $params = [];
+
+    if ($categoryIds !== null) {
+        $conditions[] = 'p.category_id IN (' . implode(',', array_fill(0, count($categoryIds), '?')) . ')';
+        array_push($params, ...$categoryIds);
+    }
+    if ($draftsOnly) {
+        $conditions[] = 'p.description_draft IS NOT NULL';
+    }
+
+    return [implode(' AND ', $conditions), $params];
+}
+
+/** @param list<int>|null $categoryIds */
+function productDescriptionListCount(?array $categoryIds, bool $draftsOnly): int
+{
+    if ($categoryIds === []) {
+        return 0;
+    }
+
+    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
+    $stmt = getPdo()->prepare("SELECT COUNT(*) FROM products p WHERE {$where}");
+    $stmt->execute($params);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Страница Товаров для экрана генерации — с текущим описанием и черновиком.
+ *
+ * @param list<int>|null $categoryIds
+ * @return array<int, array{id: int, name: string, description: string|null, description_draft: string|null, category_name: string}>
+ */
+function productDescriptionList(?array $categoryIds, bool $draftsOnly, int $limit, int $offset): array
+{
+    if ($categoryIds === []) {
+        return [];
+    }
+
+    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
+    $stmt = getPdo()->prepare(
+        "SELECT p.id, p.name, p.description, p.description_draft, c.name AS category_name
+         FROM products p
+         JOIN categories c ON c.id = p.category_id
+         WHERE {$where}
+         ORDER BY p.id LIMIT ? OFFSET ?"
+    );
+    $position = 1;
+    foreach ($params as $param) {
+        $stmt->bindValue($position++, $param, PDO::PARAM_INT);
+    }
+    $stmt->bindValue($position++, $limit, PDO::PARAM_INT);
+    $stmt->bindValue($position, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Подбор активных Товаров под вопрос в чате-консультанте (FR-AI-003): чем больше
+ * основ слов запроса встретилось в названии, Категории, бренде или значении
+ * Характеристики — тем выше. Без точного совпадения вернёт самый похожий
+ * (хотя бы одна основа). Цена и остаток — живые, из БД: цена «от» среди
+ * доступных Вариантов (если все распроданы — среди всех активных).
+ *
+ * @param list<string> $tokens основы слов (consultantSearchTokens())
+ * @return array<int, array{name: string, slug: string, price_from: string, variants_count: int|string, available: int|string}>
+ */
+function productsSearchForChat(array $tokens, int $limit): array
+{
+    if ($tokens === []) {
+        return [];
+    }
+
+    $scoreParts = [];
+    $params = [];
+    foreach ($tokens as $token) {
+        $like = '%' . addcslashes($token, '\%_') . '%';
+        $scoreParts[] = '(p.name LIKE ? OR c.name LIKE ? OR b.name LIKE ? OR EXISTS (
+            SELECT 1 FROM product_attributes a WHERE a.product_id = p.id AND a.attr_value LIKE ?
+        ))';
+        array_push($params, $like, $like, $like, $like);
+    }
+    $score = implode(' + ', $scoreParts);
+
+    $stmt = getPdo()->prepare("
+        SELECT p.name, p.slug,
+               {$score} AS score,
+               COALESCE(
+                   (SELECT MIN(COALESCE(v.discount_price, v.price)) FROM product_variants v
+                    WHERE v.product_id = p.id AND v.is_active = 1 AND v.stock_quantity - v.reserved_quantity > 0),
+                   (SELECT MIN(COALESCE(v.discount_price, v.price)) FROM product_variants v
+                    WHERE v.product_id = p.id AND v.is_active = 1)
+               ) AS price_from,
+               (SELECT COUNT(*) FROM product_variants v
+                WHERE v.product_id = p.id AND v.is_active = 1) AS variants_count,
+               (SELECT COALESCE(SUM(GREATEST(v.stock_quantity - v.reserved_quantity, 0)), 0)
+                FROM product_variants v WHERE v.product_id = p.id AND v.is_active = 1) AS available
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE p.is_active = 1
+        HAVING score > 0 AND price_from IS NOT NULL
+        ORDER BY score DESC, (available > 0) DESC, p.popularity_rank IS NULL, p.popularity_rank ASC, p.id ASC
+        LIMIT ?
+    ");
+    foreach ($params as $i => $value) {
+        $stmt->bindValue($i + 1, $value);
+    }
+    $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Варианты-кандидаты для черновика Заказа из Обращения (FR-AI-004, Q-060):
+ * чем больше основ слов запроса встретилось в названии Товара, Категории,
+ * бренде, подтверждённой Характеристике или Характеристике Варианта (вес,
+ * вкус) — тем выше. `product_attributes` содержит только подтверждённые
+ * значения (черновики лежат отдельно), поэтому неподтверждённое сюда не попадает.
+ * Цена — живая, из БД (со скидкой, если есть).
+ *
+ * @param list<string> $tokens основы слов (consultantSearchTokens())
+ * @return array<int, array{variant_id: int|string, name: string, price: string, score: int|string}>
+ */
+function productVariantCandidates(array $tokens, int $limit): array
+{
+    if ($tokens === []) {
+        return [];
+    }
+
+    $scoreParts = [];
+    $params = [];
+    foreach ($tokens as $token) {
+        $like = '%' . addcslashes($token, '\%_') . '%';
+        $scoreParts[] = '(p.name LIKE ? OR c.name LIKE ? OR b.name LIKE ?
+            OR EXISTS (SELECT 1 FROM product_attributes a WHERE a.product_id = p.id AND a.attr_value LIKE ?)
+            OR EXISTS (SELECT 1 FROM product_variant_attributes va WHERE va.variant_id = v.id AND va.attr_value LIKE ?))';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    $score = implode(' + ', $scoreParts);
+
+    $stmt = getPdo()->prepare("
+        SELECT v.id AS variant_id, p.name, COALESCE(v.discount_price, v.price) AS price, {$score} AS score
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id AND p.is_active = 1
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE v.is_active = 1
+        HAVING score > 0
+        ORDER BY score DESC, p.id ASC, v.id ASC
+        LIMIT ?
+    ");
+    foreach ($params as $i => $value) {
+        $stmt->bindValue($i + 1, $value);
+    }
+    $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Сколько активных Товаров имеют хотя бы одну подтверждённую Характеристику —
+ * от этого зависит точность сопоставления в черновике Заказа (Q-060).
+ *
+ * @return array{total: int, confirmed: int}
+ */
+function productConfirmedAttributesCoverage(): array
+{
+    $row = getPdo()->query('
+        SELECT COUNT(*) AS total,
+               COALESCE(SUM(EXISTS (SELECT 1 FROM product_attributes a WHERE a.product_id = p.id)), 0) AS confirmed
+        FROM products p
+        WHERE p.is_active = 1
+    ')->fetch();
+
+    return ['total' => (int) $row['total'], 'confirmed' => (int) $row['confirmed']];
 }

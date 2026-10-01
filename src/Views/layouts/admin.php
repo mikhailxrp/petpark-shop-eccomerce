@@ -114,10 +114,25 @@ declare(strict_types=1);
                                     <span class="side-menu__label">Склад</span>
                                 </a>
                             </li>
+                            <?php $inboxActive = str_starts_with($currentPath, '/admin/inbox'); ?>
+                            <li class="slide<?= $inboxActive ? ' active' : '' ?>">
+                                <a href="/admin/inbox" class="side-menu__item<?= $inboxActive ? ' active' : '' ?>">
+                                    <i class="fe fe-message-circle side-menu__icon"></i>
+                                    <span class="side-menu__label">Обращения</span>
+                                </a>
+                            </li>
                             <li class="slide<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                 <a href="/admin/reviews" class="side-menu__item<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                     <i class="fe fe-star side-menu__icon"></i>
                                     <span class="side-menu__label">Отзывы</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
+                        <?php if ($userRole === 'owner'): ?>
+                            <li class="slide<?= $currentPath === '/admin/ai' ? ' active' : '' ?>">
+                                <a href="/admin/ai" class="side-menu__item<?= $currentPath === '/admin/ai' ? ' active' : '' ?>">
+                                    <i class="fe fe-cpu side-menu__icon"></i>
+                                    <span class="side-menu__label">ИИ-помощники</span>
                                 </a>
                             </li>
                         <?php endif; ?>
@@ -142,5 +157,6 @@ declare(strict_types=1);
 
     <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/js/admin-layout.js"></script>
+    <script type="module" src="/assets/js/alerts.js"></script>
 </body>
 </html>

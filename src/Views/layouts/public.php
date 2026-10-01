@@ -60,6 +60,10 @@ $footerVariant ??= 'two';
 
     <?php include __DIR__ . '/../components/' . ($footerVariant === 'catalog' ? 'footer-catalog' : 'footer') . '.php'; ?>
 
+    <?php if (!str_starts_with((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/checkout')): ?>
+        <?php include __DIR__ . '/../components/chat-widget.php'; ?>
+    <?php endif; ?>
+
     <div id="progress">
         <span id="progress-value"><i class="fa-solid fa-up-long"></i></span>
     </div>
@@ -75,5 +79,7 @@ $footerVariant ??= 'two';
     <script src="/assets/js/booking.js"></script>
     <script src="/assets/js/password-toggle.js"></script>
     <script src="/assets/js/hero-nav.js"></script>
+    <script type="module" src="/assets/js/chat.js"></script>
+    <script type="module" src="/assets/js/alerts.js"></script>
 </body>
 </html>

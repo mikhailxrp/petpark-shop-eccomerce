@@ -1938,3 +1938,205 @@ table.shop_table td.product-quantity input.cart-item__quantity {
         font-size: 40px;
     }
 }
+
+/*
+ * Виджет консультанта (FR-AI-003) — плавающая кнопка и панель чата.
+ * Скрыт до инициализации chat.js (атрибут hidden), без JS не показывается.
+ */
+.chat-widget {
+    --chat-gap: 1rem;
+    /* Над кнопкой «вверх» (#progress: bottom 20px + высота 60px) + зазор */
+    --chat-bottom-offset: calc(20px + 60px + var(--chat-gap));
+    --chat-panel-width: 22rem;
+    --chat-panel-height: 30rem;
+    --chat-radius: 0.75rem;
+    --chat-border: #e2e2e2;
+    --chat-user-bg: #fff1ed;
+    --chat-bot-bg: var(--color-bg-light);
+
+    position: fixed;
+    right: var(--chat-gap);
+    bottom: var(--chat-bottom-offset);
+    z-index: 1040;
+    overflow: visible; /* style.css задаёт section { overflow: hidden } — обрежет панель чата */
+}
+
+.chat-widget[hidden],
+.chat-widget__panel[hidden],
+.chat-widget__fallback[hidden] {
+    display: none;
+}
+
+.chat-widget__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border: 0;
+    border-radius: 2rem;
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.chat-widget__panel {
+    position: absolute;
+    right: 0;
+    bottom: 3.5rem;
+    display: flex;
+    flex-direction: column;
+    width: calc(100vw - 2 * var(--chat-gap));
+    max-width: var(--chat-panel-width);
+    height: var(--chat-panel-height);
+    max-height: calc(100vh - var(--chat-bottom-offset) - 4.5rem);
+    border: 1px solid var(--chat-border);
+    border-radius: var(--chat-radius);
+    background: #fff;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.chat-widget__header {
+    position: static; /* style.css: header { position: absolute; width: 100% } — иначе шапка чата выпадает из потока */
+    z-index: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.chat-widget__title {
+    margin: 0;
+    font-size: 1rem;
+    color: inherit;
+}
+
+.chat-widget__close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.chat-widget__messages {
+    flex: 1 1 auto;
+    padding: 0.75rem;
+    overflow-y: auto;
+}
+
+.chat-widget__message {
+    max-width: 85%;
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--chat-radius);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.chat-widget__message--bot {
+    background: var(--chat-bot-bg);
+}
+
+.chat-widget__message--user {
+    margin-left: auto;
+    background: var(--chat-user-bg);
+}
+
+.chat-widget__message--typing {
+    background: var(--chat-bot-bg);
+    color: #777;
+    font-style: italic;
+}
+
+.chat-widget__message--error {
+    background: #fdecea;
+    color: #8a1f11;
+}
+
+.chat-widget__cards {
+    margin: 0 0 0.5rem;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-widget__card {
+    display: block;
+    margin-bottom: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--chat-border);
+    border-radius: var(--chat-radius);
+}
+
+.chat-widget__card-link {
+    display: block;
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.chat-widget__card-meta {
+    display: block;
+    font-size: 0.8rem;
+    color: #555;
+}
+
+.chat-widget__fallback {
+    padding: 0.75rem;
+    border-top: 1px solid var(--chat-border);
+    background: #fff8e5;
+    font-size: 0.85rem;
+}
+
+.chat-widget__fallback-text {
+    margin: 0 0 0.35rem;
+}
+
+.chat-widget__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-widget__link {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.chat-widget__form {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 1px solid var(--chat-border);
+}
+
+.chat-widget__send {
+    flex: 0 0 auto;
+    padding: 0 1rem;
+    border: 0;
+    border-radius: var(--chat-radius);
+    background: var(--color-primary);
+    color: #fff;
+    cursor: pointer;
+}
+
+.chat-widget__send:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 575.98px) {
+    .chat-widget__toggle-text {
+        display: none;
+    }
+}

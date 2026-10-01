@@ -250,8 +250,9 @@ function verifyCsrfToken(mixed $token): bool
 function requireCsrf(): void
 {
     if (!verifyCsrfToken(input('_csrf'))) {
-        http_response_code(419);
-        exit('419 Неверный CSRF-токен. Обновите страницу и попробуйте снова.');
+        // 419 — нестандартный код (Laravel): Apache отдаёт его как 500.
+        http_response_code(403);
+        exit('403 Неверный CSRF-токен. Обновите страницу и попробуйте снова.');
     }
 }
 
@@ -376,4 +377,45 @@ function clearRateLimit(string $action): void
     if (is_file($path)) {
         unlink($path);
     }
+}
+
+/**
+ * Телефон РФ → `+7XXXXXXXXXX` (для сопоставления Обращения с Покупателем,
+ * phase-5.md, Таск 7). Принимает +7 / 8 / 10 цифр без кода, пробелы, скобки,
+ * дефисы; всё остальное — null (ник в Telegram, чужой формат).
+ */
+function normalizePhone(string $raw): ?string
+{
+    $digits = preg_replace('/\D+/', '', $raw) ?? '';
+
+    if (strlen($digits) === 11 && ($digits[0] === '7' || $digits[0] === '8')) {
+        return '+7' . substr($digits, 1);
+    }
+
+    if (strlen($digits) === 10 && $digits[0] === '9') {
+        return '+7' . $digits;
+    }
+
+    return null;
+}
+
+/**
+ * Включённые Каналы инбокса из строки конфига `max,telegram,…`
+ * (FR-CHANNELS-005): пробелы и регистр не важны, неизвестные коды и
+ * повторы отбрасываются, порядок сохраняется.
+ *
+ * @param array<int, string> $known
+ * @return array<int, string>
+ */
+function enabledChannels(string $configured, array $known = ['max', 'telegram', 'vk', 'avito']): array
+{
+    $codes = array_map(
+        static fn (string $code): string => strtolower(trim($code)),
+        explode(',', $configured)
+    );
+
+    return array_values(array_unique(array_filter(
+        $codes,
+        static fn (string $code): bool => in_array($code, $known, true)
+    )));
 }

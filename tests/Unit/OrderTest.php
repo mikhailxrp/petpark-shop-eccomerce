@@ -237,4 +237,29 @@ final class OrderTest extends TestCase
             $this->assertFalse(\orderIsEditable($status), $status);
         }
     }
+
+    public function testDraftOutcomeAcceptedWhenLinesMatchRegardlessOfOrder(): void
+    {
+        $draft = [['variant_id' => 5, 'quantity' => 2], ['variant_id' => 7, 'quantity' => 1]];
+        $lines = [['variant_id' => 7, 'quantity' => 1], ['variant_id' => 5, 'quantity' => 2]];
+
+        $this->assertSame('accepted', \orderDraftOutcome($draft, $lines, 'draft'));
+    }
+
+    public function testDraftOutcomeEditedWhenLinesChanged(): void
+    {
+        $draft = [['variant_id' => 5, 'quantity' => 2]];
+
+        $this->assertSame('edited', \orderDraftOutcome($draft, [['variant_id' => 5, 'quantity' => 3]], 'draft'));
+        $this->assertSame('edited', \orderDraftOutcome($draft, [['variant_id' => 6, 'quantity' => 2]], 'draft'));
+    }
+
+    public function testDraftOutcomeRejectedOnManualPathAndNullWithoutDraft(): void
+    {
+        $draft = [['variant_id' => 5, 'quantity' => 2]];
+
+        $this->assertSame('rejected', \orderDraftOutcome($draft, $draft, 'manual'));
+        $this->assertNull(\orderDraftOutcome([], $draft, 'draft'));
+        $this->assertNull(\orderDraftOutcome([], $draft, 'manual'));
+    }
 }

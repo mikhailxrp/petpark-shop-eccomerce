@@ -109,6 +109,17 @@ foreach (['is_featured' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
     }
 }
 
+// description_draft — черновик ИИ-описания (phase-5, Таск 5, FR-AI-002): живёт
+// отдельно от description, на витрину не попадает до публикации Владельцем.
+$draftColumnExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME = 'description_draft'
+")->fetchColumn();
+
+if ($draftColumnExists === 0) {
+    $pdo->exec("ALTER TABLE products ADD COLUMN description_draft TEXT NULL AFTER description");
+}
+
 // ─── product_secondary_categories ──────────────────────────────────────
 // Вторая (необязательная) категория товара — ADR-002.
 
@@ -617,6 +628,37 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// phase-5, Таск 7 (FR-CHANNELS-001): флаг «прочитано», имя отправителя из Канала
+// и уникальность треда в Канале (идемпотентный сид, приём входящих по external id).
+foreach ([
+    'is_read'     => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER order_id',
+    'sender_name' => 'VARCHAR(120) NULL AFTER contact_identifier',
+    // phase-5, Таск 9 (FR-AI-004): черновик Заказа от ИИ, JSON; без телефона и адреса
+    'order_draft' => 'TEXT NULL AFTER is_read',
+] as $column => $definition) {
+    $columnExists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversations' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($columnExists === 0) {
+        $pdo->exec("ALTER TABLE conversations ADD COLUMN {$column} {$definition}");
+    }
+}
+
+$uniqueExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversations'
+      AND INDEX_NAME = 'uq_conversations_channel_external'
+")->fetchColumn();
+
+if ($uniqueExists === 0) {
+    $pdo->exec('
+        ALTER TABLE conversations
+        ADD UNIQUE KEY uq_conversations_channel_external (channel, external_conversation_id)
+    ');
+}
+
 // ─── conversation_messages ──────────────────────────────────────────────
 
 $pdo->exec("
@@ -673,6 +715,83 @@ $pdo->exec("
         CONSTRAINT fk_marketplace_listings_variant
             FOREIGN KEY (variant_id) REFERENCES product_variants (id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── ai_calls ───────────────────────────────────────────────────────────
+// Журнал вызовов ИИ (phase-5, Таск 1): расход для лимита, промпт для проверки
+// «в промпте нет телефона». Срок хранения — AI_RETENTION_MONTHS (Core/Ai.php).
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_calls (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        task       VARCHAR(30) NOT NULL,
+        task_class ENUM('anonymous', 'personal') NOT NULL,
+        provider   VARCHAR(30) NOT NULL,
+        prompt     MEDIUMTEXT NOT NULL,
+        tokens     INT NOT NULL DEFAULT 0,
+        cost       DECIMAL(10, 4) NOT NULL DEFAULT 0,
+        status     ENUM('ok', 'unavailable', 'blocked', 'error') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ai_calls_created (created_at),
+        KEY idx_ai_calls_class_created (task_class, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── ai_draft_outcomes ──────────────────────────────────────────────────
+// Исход черновика ИИ: принят / принят с правкой / отклонён (доля правок, §11.8).
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_draft_outcomes (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        kind       ENUM('attributes', 'description', 'order_draft') NOT NULL,
+        ref_id     INT NOT NULL,
+        outcome    ENUM('accepted', 'edited', 'rejected') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ai_draft_outcomes_kind_created (kind, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── ai_notifications ───────────────────────────────────────────────────
+// Отметка «письмо Владельцу отправлено» за месяц (phase-5, Таск 2): UNIQUE
+// даёт ровно одно письмо при параллельных заходах на /admin/ai.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_notifications (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        kind       VARCHAR(30) NOT NULL,
+        period     CHAR(7) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ai_notifications_kind_period (kind, period)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── product_attribute_drafts ───────────────────────────────────────────
+// Черновики ИИ-разбора Характеристик (phase-5, Таск 3, FR-AI-001). Отдельно
+// от product_attributes: фильтр каталога читает только подтверждённое.
+// status 'empty' — в тексте не найдено (attr_value NULL); строка нужна, чтобы
+// Товар считался обработанным и не возвращался в очередь.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS product_attribute_drafts (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        attr_name  VARCHAR(60) NOT NULL,
+        attr_value VARCHAR(150) NULL,
+        status     ENUM('pending', 'needs_decision', 'empty') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_attribute_drafts_product_name (product_id, attr_name),
+        KEY idx_attribute_drafts_status (status),
+        CONSTRAINT fk_attribute_drafts_product
+            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// Таск 4: решённые черновики не удаляются, а получают confirmed/rejected —
+// иначе отклонённый Товар вернулся бы в очередь Таска 3 и снова ушёл в ИИ.
+// MODIFY с тем же списком безопасен при повторном запуске.
+$pdo->exec("
+    ALTER TABLE product_attribute_drafts
+        MODIFY status ENUM('pending', 'needs_decision', 'empty', 'confirmed', 'rejected') NOT NULL
 ");
 
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
