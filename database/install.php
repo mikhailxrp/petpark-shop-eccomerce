@@ -744,6 +744,14 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// Таск 4: решённые черновики не удаляются, а получают confirmed/rejected —
+// иначе отклонённый Товар вернулся бы в очередь Таска 3 и снова ушёл в ИИ.
+// MODIFY с тем же списком безопасен при повторном запуске.
+$pdo->exec("
+    ALTER TABLE product_attribute_drafts
+        MODIFY status ENUM('pending', 'needs_decision', 'empty', 'confirmed', 'rejected') NOT NULL
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 

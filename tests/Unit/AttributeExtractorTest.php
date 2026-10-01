@@ -82,4 +82,41 @@ final class AttributeExtractorTest extends TestCase
         $this->assertStringContainsString('Беззерновой', $prompt);
         $this->assertStringContainsString('кошка, собака', $prompt);
     }
+
+    public function testConfirmTakesDraftValueAsAccepted(): void
+    {
+        $decision = attributeDecisionResolve(ATTRIBUTE_ACTION_CONFIRM, 'кошка', 'игнорируется');
+
+        $this->assertSame(['error' => null, 'value' => 'кошка', 'outcome' => 'accepted'], $decision);
+    }
+
+    public function testConfirmWithoutDraftValueIsError(): void
+    {
+        $this->assertNotNull(attributeDecisionResolve(ATTRIBUTE_ACTION_CONFIRM, null, '')['error']);
+        $this->assertNotNull(attributeDecisionResolve(ATTRIBUTE_ACTION_CONFIRM, '  ', '')['error']);
+    }
+
+    public function testEditTrimsInputAndIsEdited(): void
+    {
+        $decision = attributeDecisionResolve(ATTRIBUTE_ACTION_EDIT, 'кошка', '  котёнок ');
+
+        $this->assertSame(['error' => null, 'value' => 'котёнок', 'outcome' => 'edited'], $decision);
+    }
+
+    public function testEditRejectsEmptyAndTooLongValue(): void
+    {
+        $this->assertNotNull(attributeDecisionResolve(ATTRIBUTE_ACTION_EDIT, 'кошка', '   ')['error']);
+        $this->assertNotNull(attributeDecisionResolve(ATTRIBUTE_ACTION_EDIT, 'кошка', str_repeat('я', ATTRIBUTE_VALUE_MAX_LENGTH + 1))['error']);
+        $this->assertNull(attributeDecisionResolve(ATTRIBUTE_ACTION_EDIT, 'кошка', str_repeat('я', ATTRIBUTE_VALUE_MAX_LENGTH))['error']);
+    }
+
+    public function testRejectWritesNothing(): void
+    {
+        $this->assertSame(['error' => null, 'value' => null, 'outcome' => 'rejected'], attributeDecisionResolve(ATTRIBUTE_ACTION_REJECT, 'кошка', ''));
+    }
+
+    public function testUnknownActionIsError(): void
+    {
+        $this->assertNotNull(attributeDecisionResolve('drop', 'кошка', 'x')['error']);
+    }
 }

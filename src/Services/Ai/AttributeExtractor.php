@@ -15,7 +15,14 @@ const ATTRIBUTE_STATUS_PENDING  = 'pending';        // значение из с�
 const ATTRIBUTE_STATUS_DECISION = 'needs_decision'; // значения нет в справочнике
 const ATTRIBUTE_STATUS_EMPTY    = 'empty';          // в тексте не найдено
 
+const ATTRIBUTE_STATUS_CONFIRMED = 'confirmed';     // Владелец подтвердил/поправил
+const ATTRIBUTE_STATUS_REJECTED  = 'rejected';      // Владелец отклонил
+
 const ATTRIBUTE_VALUE_MAX_LENGTH = 150; // product_attributes.attr_value
+
+const ATTRIBUTE_ACTION_CONFIRM = 'confirm';
+const ATTRIBUTE_ACTION_EDIT    = 'edit';
+const ATTRIBUTE_ACTION_REJECT  = 'reject';
 
 const ATTRIBUTE_SYSTEM_PROMPT = 'Ты извлекаешь характеристики товара зоомагазина из его описания. '
     . 'Не выдумывай: если характеристики нет в тексте — верни null. Отвечай только JSON-объектом.';
@@ -85,6 +92,37 @@ function attributeDraftsFromResponse(string $text, array $names, array $dictiona
     }
 
     return $drafts;
+}
+
+/**
+ * Проверка решения Владельца по черновику. Чистая функция.
+ * confirm — значение черновика как есть (outcome accepted); edit — значение
+ * из формы, 1–150 символов (edited); reject — ничего не пишется (rejected).
+ *
+ * @return array{error: string|null, value: string|null, outcome: string|null}
+ */
+function attributeDecisionResolve(string $action, ?string $draftValue, string $input): array
+{
+    $fail = static fn (string $message): array => ['error' => $message, 'value' => null, 'outcome' => null];
+
+    return match ($action) {
+        ATTRIBUTE_ACTION_CONFIRM => ($draftValue === null || trim($draftValue) === '')
+            ? $fail('У черновика нет значения — подтверждать нечего.')
+            : ['error' => null, 'value' => $draftValue, 'outcome' => 'accepted'],
+        ATTRIBUTE_ACTION_EDIT => (static function () use ($input, $fail): array {
+            $value = trim($input);
+            if ($value === '') {
+                return $fail('Укажите значение Характеристики.');
+            }
+            if (mb_strlen($value) > ATTRIBUTE_VALUE_MAX_LENGTH) {
+                return $fail('Значение не длиннее ' . ATTRIBUTE_VALUE_MAX_LENGTH . ' символов.');
+            }
+
+            return ['error' => null, 'value' => $value, 'outcome' => 'edited'];
+        })(),
+        ATTRIBUTE_ACTION_REJECT => ['error' => null, 'value' => null, 'outcome' => 'rejected'],
+        default => $fail('Неизвестное действие.'),
+    };
 }
 
 /**

@@ -16,6 +16,8 @@ final class AiAttributesController
 {
     private const BATCH_SIZE = 5;
     private const QUEUE_PREVIEW_LIMIT = 20;
+    private const DRAFTS_PER_PAGE = 10;
+    private const DRAFTS_URL = '/admin/ai/attributes/drafts';
 
     private const STOP_UNAVAILABLE = 'unavailable';
     private const STOP_BLOCKED = 'blocked';
@@ -37,8 +39,105 @@ final class AiAttributesController
             'counts'     => $this->counts(),
             'queue'      => attributeDraftQueue(ATTRIBUTE_EXTRACT_NAMES, 0, self::QUEUE_PREVIEW_LIMIT),
             'runUrl'     => '/admin/ai/attributes/run',
+            'draftsUrl'  => self::DRAFTS_URL,
             'allowed'    => aiTaskAllowed(AI_TASK_ATTRIBUTES, aiLimitPercent(aiCallsMonthSpent(), AI_MONTHLY_LIMIT_RUB)),
         ]);
+    }
+
+    /** Черновики Характеристик на решение Владельца (FR-AI-001), по Товарам, с пагинацией. */
+    public function drafts(): void
+    {
+        $role = $this->ownerRole();
+
+        $total = attributeDraftOpenProductCount();
+        $totalPages = max(1, (int) ceil($total / self::DRAFTS_PER_PAGE));
+        $page = $this->pageFromInput($totalPages);
+
+        $products = attributeDraftOpenProducts(self::DRAFTS_PER_PAGE, ($page - 1) * self::DRAFTS_PER_PAGE);
+        $draftsByProduct = [];
+        foreach (attributeDraftsOpenForProducts(array_map(static fn (array $p): int => (int) $p['id'], $products)) as $draft) {
+            $draftsByProduct[(int) $draft['product_id']][] = $draft;
+        }
+
+        render('admin/ai-attributes', [
+            'pageTitle'       => 'Черновики Характеристик — PetPark',
+            'roleLabel'       => adminRoleLabel($role),
+            'homeUrl'         => homePathForRole($role),
+            'userRole'        => $role,
+            'products'        => $products,
+            'draftsByProduct' => $draftsByProduct,
+            'dictionary'      => attributeDictionary(ATTRIBUTE_EXTRACT_NAMES),
+            'page'            => $page,
+            'totalPages'      => $totalPages,
+            'total'           => $total,
+            'decideUrl'       => self::DRAFTS_URL . '/decide',
+            'draftsUrl'       => self::DRAFTS_URL,
+            'maxLength'       => ATTRIBUTE_VALUE_MAX_LENGTH,
+            'success'         => getFlash('success'),
+            'error'           => getFlash('error'),
+            'errorDraftId'    => (int) (getFlash('error_draft_id') ?? 0),
+        ]);
+    }
+
+    /** Решение по одному черновику: confirm / edit / reject. Всегда redirect() обратно в список. */
+    public function decide(): void
+    {
+        $this->ownerRole();
+        requireCsrf();
+
+        $draftIdInput = input('draft_id', '');
+        $draftId = is_string($draftIdInput) && ctype_digit($draftIdInput) ? (int) $draftIdInput : 0;
+        $pageInput = input('page', '1');
+        $backUrl = is_string($pageInput) && ctype_digit($pageInput) && (int) $pageInput > 1
+            ? self::DRAFTS_URL . '?page=' . (int) $pageInput
+            : self::DRAFTS_URL;
+
+        $actionInput = input('action', '');
+        $action = is_string($actionInput) ? $actionInput : '';
+        $valueInput = input('value', '');
+
+        // confirm берёт значение самого черновика — читаем его из БД, не из формы.
+        $draftValue = $action === ATTRIBUTE_ACTION_CONFIRM ? attributeDraftOpenValue($draftId) : null;
+        if ($action === ATTRIBUTE_ACTION_CONFIRM && $draftValue === null) {
+            setFlash('error', 'Черновик уже обработан или не найден.');
+            redirect($backUrl);
+        }
+
+        $decision = attributeDecisionResolve($action, $draftValue, is_string($valueInput) ? $valueInput : '');
+
+        if ($draftId === 0 || $decision['error'] !== null) {
+            setFlash('error', $decision['error'] ?? 'Черновик не найден.');
+            setFlash('error_draft_id', (string) $draftId);
+            redirect($backUrl);
+        }
+
+        try {
+            $applied = attributeDraftDecide($draftId, $decision['value'], (string) $decision['outcome']);
+        } catch (Throwable $e) {
+            logError('Решение по черновику Характеристики не записано', ['draft_id' => $draftId, 'error' => $e->getMessage()]);
+            setFlash('error', 'Не удалось сохранить решение. Попробуйте ещё раз.');
+            redirect($backUrl);
+        }
+
+        if ($applied) {
+            setFlash('success', match ($decision['outcome']) {
+                'rejected' => 'Черновик отклонён.',
+                default    => 'Характеристика сохранена — Товар найдётся в фильтре каталога.',
+            });
+        } else {
+            setFlash('error', 'Черновик уже обработан.');
+        }
+
+        redirect($backUrl);
+    }
+
+    private function pageFromInput(int $totalPages): int
+    {
+        $pageInput = input('page', '1');
+
+        return is_string($pageInput) && ctype_digit($pageInput)
+            ? min(max(1, (int) $pageInput), $totalPages)
+            : 1;
     }
 
     /** Одна порция: JSON с прогрессом. Курсор after_id — чтобы Товар с ошибкой не брался снова. */

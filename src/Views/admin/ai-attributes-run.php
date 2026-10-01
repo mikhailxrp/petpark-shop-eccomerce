@@ -13,6 +13,7 @@ declare(strict_types=1);
  * @var array{queue: int, processed: int, pending: int, needs_decision: int} $counts
  * @var array<int, array{id: int, name: string, description: string|null}> $queue Начало очереди
  * @var string $runUrl
+ * @var string $draftsUrl Экран подтверждения черновиков
  * @var bool $allowed Помощник не приостановлен лимитом
  */
 
@@ -69,6 +70,7 @@ ob_start();
             <?= csrfField() ?>
             <button type="submit" class="btn btn-primary" id="ai-batch-start"<?= $allowed && $counts['queue'] > 0 ? '' : ' disabled' ?>>Запустить разбор</button>
             <button type="button" class="btn btn-outline-secondary" id="ai-batch-stop" hidden>Остановить</button>
+            <a href="<?= e($draftsUrl) ?>" class="btn btn-outline-primary">Проверить черновики (<span id="ai-batch-open-drafts"><?= $counts['pending'] + $counts['needs_decision'] ?></span>)</a>
         </form>
         <p class="mb-0 mt-3 text-muted" id="ai-batch-status" role="status" aria-live="polite">
             Товары обрабатываются порциями, пока эта страница открыта. Закроете страницу — необработанные останутся в очереди.

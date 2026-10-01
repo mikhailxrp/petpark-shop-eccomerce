@@ -239,6 +239,21 @@ function productListByFilters(
 }
 
 /**
+ * Записывает подтверждённую Характеристику Товара: существующая с тем же
+ * названием заменяется, дубля нет (UNIQUE на таблице нет). Атомарность
+ * обеспечивает вызывающий — функция зовётся внутри его транзакции.
+ */
+function productAttributeReplace(int $productId, string $name, string $value): void
+{
+    $pdo = getPdo();
+
+    $pdo->prepare('DELETE FROM product_attributes WHERE product_id = ? AND attr_name = ?')
+        ->execute([$productId, $name]);
+    $pdo->prepare('INSERT INTO product_attributes (product_id, attr_name, attr_value) VALUES (?, ?, ?)')
+        ->execute([$productId, $name, $value]);
+}
+
+/**
  * Доступные Характеристики для сайдбара фильтра (FR-CAT-002) — из обоих
  * источников: product_attributes (уровень Товара, напр. вид_животного)
  * и product_variant_attributes (уровень Варианта, напр. вес упаковки/
