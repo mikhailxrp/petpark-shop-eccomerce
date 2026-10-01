@@ -23,7 +23,15 @@ final class DashboardController
     {
         requireRole('specialist');
 
-        $this->renderDashboard();
+        // Календарь своих Записей (phase-4.md, Таск 7); без профиля Специалиста
+        // календарю не по чему фильтровать — остаётся пустая сводка.
+        $specialistId = bookingSpecialistIdByUser((int) $_SESSION['user_id']);
+        if ($specialistId === null) {
+            $this->renderDashboard();
+            return;
+        }
+
+        (new BookingController())->specialistWeek($specialistId);
     }
 
     private function renderDashboard(): void

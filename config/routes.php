@@ -26,6 +26,8 @@ return [
         '/admin/orders/variants' => ['Admin\OrderController', 'searchVariants'],
         '/admin/orders/{id}'   => ['Admin\OrderController', 'show'],
         '/admin/stock'         => ['Admin\StockController', 'index'],
+        '/admin/bookings'      => ['Admin\BookingController', 'index'],
+        '/admin/bookings/{id}' => ['Admin\BookingController', 'show'],
         '/specialist'         => ['Admin\DashboardController', 'specialist'],
         '/catalog'             => ['CatalogController', 'index'],
         '/catalog/{cat}'       => ['CatalogController', 'category'],
@@ -73,5 +75,8 @@ return [
         '/admin/orders/{id}/mark-paid' => ['Admin\OrderController', 'markPaid'],
         '/admin/orders/{id}/items'     => ['Admin\OrderController', 'editItems'],
         '/admin/stock/{id}/sync'       => ['Admin\StockController', 'sync'],
+        '/admin/bookings/{id}/complete' => ['Admin\BookingController', 'complete'],
+        '/admin/bookings/{id}/no-show' => ['Admin\BookingController', 'noShow'],
+        '/admin/bookings/{id}/cancel'  => ['Admin\BookingController', 'cancel'],
     ],
 ];

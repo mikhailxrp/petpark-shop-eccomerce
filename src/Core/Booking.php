@@ -64,6 +64,29 @@ function bookingBlockMinutes(int $durationMinutes, array $kinds): int
     return $durationMinutes + $buffer;
 }
 
+/**
+ * Границы недели (понедельник–воскресенье, ISO) для любой даты внутри неё —
+ * календарь Записей персонала (FR-SV-010).
+ *
+ * @param string $date "Y-m-d"
+ * @return array{from: string, to: string} оба "Y-m-d", включительно
+ */
+function bookingWeekBounds(string $date): array
+{
+    $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+
+    if ($day === false || $day->format('Y-m-d') !== $date) {
+        throw new InvalidArgumentException("Некорректная дата «{$date}»");
+    }
+
+    $monday = $day->modify('-' . ((int) $day->format('N') - 1) . ' days');
+
+    return [
+        'from' => $monday->format('Y-m-d'),
+        'to'   => $monday->modify('+6 days')->format('Y-m-d'),
+    ];
+}
+
 /** "10:00" / "10:00:00" → минуты от полуночи. */
 function bookingTimeToMinutes(string $time): int
 {

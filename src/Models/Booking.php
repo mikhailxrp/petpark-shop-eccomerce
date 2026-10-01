@@ -420,3 +420,130 @@ function bookingsUpcomingByUser(int $userId): array
 
     return $stmt->fetchAll();
 }
+
+/** Статусы Записей, которые видит персонал в календаре; `slot_released` — освобождённый слот, не показываем. */
+const BOOKING_CALENDAR_STATUSES = ['slot_selected', 'confirmed', 'completed', 'no_show', 'cancelled'];
+
+/** specialists.id по логину специалиста; null — у пользователя нет профиля Специалиста. */
+function bookingSpecialistIdByUser(int $userId): ?int
+{
+    $stmt = getPdo()->prepare('SELECT id FROM specialists WHERE user_id = ?');
+    $stmt->execute([$userId]);
+    $id = $stmt->fetchColumn();
+
+    return $id === false ? null : (int) $id;
+}
+
+/**
+ * Специалисты для фильтра календаря.
+ *
+ * @return list<array{id: int, name: string}>
+ */
+function bookingSpecialistsForFilter(): array
+{
+    $rows = getPdo()->query('
+        SELECT sp.id, u.name
+        FROM specialists sp
+        JOIN users u ON u.id = sp.user_id
+        ORDER BY u.name
+    ')->fetchAll();
+
+    return array_map(
+        static fn (array $row): array => ['id' => (int) $row['id'], 'name' => (string) $row['name']],
+        $rows
+    );
+}
+
+/**
+ * Записи за неделю для календаря персонала (FR-SV-010) — один запрос без
+ * N+1: Услуги склеены подзапросом. $specialistId — фильтр (null = все).
+ *
+ * @param string $from "Y-m-d", начало недели (включительно)
+ * @param string $to   "Y-m-d", конец недели (включительно)
+ * @return list<array<string, mixed>>
+ */
+function bookingsForWeek(string $from, string $to, ?int $specialistId): array
+{
+    $statuses = BOOKING_CALENDAR_STATUSES;
+    $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+    $params = [...$statuses, $from, $to];
+
+    $specialistSql = '';
+    if ($specialistId !== null) {
+        $specialistSql = 'AND b.specialist_id = ?';
+        $params[] = $specialistId;
+    }
+
+    $stmt = getPdo()->prepare("
+        SELECT b.id, b.scheduled_at, b.status, b.deposit_status, b.specialist_id,
+               p.name AS pet_name, c.name AS customer_name, su.name AS specialist_name,
+               (SELECT GROUP_CONCAT(bs.service_name ORDER BY bs.sort_order SEPARATOR ', ')
+                FROM booking_services bs WHERE bs.booking_id = b.id) AS service_names
+        FROM bookings b
+        JOIN pets p ON p.id = b.pet_id
+        JOIN users c ON c.id = b.user_id
+        JOIN specialists sp ON sp.id = b.specialist_id
+        JOIN users su ON su.id = sp.user_id
+        WHERE b.status IN ({$placeholders})
+          AND b.scheduled_at >= ?
+          AND b.scheduled_at < DATE_ADD(?, INTERVAL 1 DAY)
+          {$specialistSql}
+        ORDER BY b.scheduled_at, b.id
+    ");
+    $stmt->execute($params);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Запись для карточки персонала: клиент, Питомец, Специалист (с
+ * `specialist_id` для проверки владельца), Услуги, Депозит. Статус не
+ * фильтруется — решает вызывающий код.
+ *
+ * @return array<string, mixed>|null
+ */
+function bookingFindForStaff(int $id): ?array
+{
+    $pdo = getPdo();
+    $stmt = $pdo->prepare('
+        SELECT b.id, b.scheduled_at, b.status, b.deposit_amount, b.deposit_status,
+               b.amocrm_id, b.specialist_id, b.created_by_user_id,
+               p.name AS pet_name, p.species AS pet_species,
+               c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email,
+               su.name AS specialist_name
+        FROM bookings b
+        JOIN pets p ON p.id = b.pet_id
+        JOIN users c ON c.id = b.user_id
+        JOIN specialists sp ON sp.id = b.specialist_id
+        JOIN users su ON su.id = sp.user_id
+        WHERE b.id = ?
+    ');
+    $stmt->execute([$id]);
+    $booking = $stmt->fetch();
+    if ($booking === false) {
+        return null;
+    }
+
+    $itemsStmt = $pdo->prepare('
+        SELECT service_name, price, duration_minutes
+        FROM booking_services
+        WHERE booking_id = ?
+        ORDER BY sort_order
+    ');
+    $itemsStmt->execute([$id]);
+    $booking['services'] = $itemsStmt->fetchAll();
+
+    return $booking;
+}
+
+/** Неявка: Депозит не возвращается — `held` → `forfeited` у Записи в `no_show`. false — удерживать было нечего. */
+function bookingMarkDepositForfeited(int $bookingId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE bookings SET deposit_status = 'forfeited'
+        WHERE id = ? AND status = 'no_show' AND deposit_status = 'held'
+    ");
+    $stmt->execute([$bookingId]);
+
+    return $stmt->rowCount() === 1;
+}

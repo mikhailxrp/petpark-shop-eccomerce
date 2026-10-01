@@ -168,4 +168,27 @@ final class BookingTest extends TestCase
 
         $this->assertFalse(\bookingCanCancelByCustomer($visit, new DateTimeImmutable('2026-10-05 16:00:00'), 3));
     }
+
+    public function testWeekBoundsFromMidWeek(): void
+    {
+        $this->assertSame(['from' => '2026-10-05', 'to' => '2026-10-11'], bookingWeekBounds('2026-10-07'));
+    }
+
+    public function testWeekBoundsOnMondayAndSunday(): void
+    {
+        $this->assertSame(['from' => '2026-10-05', 'to' => '2026-10-11'], bookingWeekBounds(self::MONDAY));
+        $this->assertSame(['from' => '2026-10-05', 'to' => '2026-10-11'], bookingWeekBounds(self::SUNDAY));
+    }
+
+    public function testWeekBoundsAcrossMonthAndYear(): void
+    {
+        $this->assertSame(['from' => '2026-12-28', 'to' => '2027-01-03'], bookingWeekBounds('2027-01-01'));
+    }
+
+    public function testWeekBoundsRejectInvalidDate(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        bookingWeekBounds('2026-02-30');
+    }
 }
