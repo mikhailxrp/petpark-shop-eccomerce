@@ -675,6 +675,40 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// ─── ai_calls ───────────────────────────────────────────────────────────
+// Журнал вызовов ИИ (phase-5, Таск 1): расход для лимита, промпт для проверки
+// «в промпте нет телефона». Срок хранения — AI_RETENTION_MONTHS (Core/Ai.php).
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_calls (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        task       VARCHAR(30) NOT NULL,
+        task_class ENUM('anonymous', 'personal') NOT NULL,
+        provider   VARCHAR(30) NOT NULL,
+        prompt     MEDIUMTEXT NOT NULL,
+        tokens     INT NOT NULL DEFAULT 0,
+        cost       DECIMAL(10, 4) NOT NULL DEFAULT 0,
+        status     ENUM('ok', 'unavailable', 'blocked', 'error') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ai_calls_created (created_at),
+        KEY idx_ai_calls_class_created (task_class, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── ai_draft_outcomes ──────────────────────────────────────────────────
+// Исход черновика ИИ: принят / принят с правкой / отклонён (доля правок, §11.8).
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS ai_draft_outcomes (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        kind       ENUM('attributes', 'description', 'order_draft') NOT NULL,
+        ref_id     INT NOT NULL,
+        outcome    ENUM('accepted', 'edited', 'rejected') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ai_draft_outcomes_kind_created (kind, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 

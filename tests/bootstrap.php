@@ -13,3 +13,4 @@ require_once ROOT_PATH . '/src/Core/Cache.php';
 require_once ROOT_PATH . '/src/Core/Order.php';
 require_once ROOT_PATH . '/src/Core/Cart.php';
 require_once ROOT_PATH . '/src/Core/Booking.php';
+require_once ROOT_PATH . '/src/Core/Ai.php';
