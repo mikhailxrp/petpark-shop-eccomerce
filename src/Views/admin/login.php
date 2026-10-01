@@ -85,5 +85,6 @@ declare(strict_types=1);
 
     <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/password-toggle.js"></script>
+    <script type="module" src="/assets/js/alerts.js"></script>
 </body>
 </html>

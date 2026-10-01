@@ -157,5 +157,6 @@ declare(strict_types=1);
 
     <script src="/admin/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/js/admin-layout.js"></script>
+    <script type="module" src="/assets/js/alerts.js"></script>
 </body>
 </html>

@@ -398,3 +398,24 @@ function normalizePhone(string $raw): ?string
 
     return null;
 }
+
+/**
+ * Включённые Каналы инбокса из строки конфига `max,telegram,…`
+ * (FR-CHANNELS-005): пробелы и регистр не важны, неизвестные коды и
+ * повторы отбрасываются, порядок сохраняется.
+ *
+ * @param array<int, string> $known
+ * @return array<int, string>
+ */
+function enabledChannels(string $configured, array $known = ['max', 'telegram', 'vk', 'avito']): array
+{
+    $codes = array_map(
+        static fn (string $code): string => strtolower(trim($code)),
+        explode(',', $configured)
+    );
+
+    return array_values(array_unique(array_filter(
+        $codes,
+        static fn (string $code): bool => in_array($code, $known, true)
+    )));
+}

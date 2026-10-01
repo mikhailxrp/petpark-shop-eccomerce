@@ -80,5 +80,6 @@ $footerVariant ??= 'two';
     <script src="/assets/js/password-toggle.js"></script>
     <script src="/assets/js/hero-nav.js"></script>
     <script type="module" src="/assets/js/chat.js"></script>
+    <script type="module" src="/assets/js/alerts.js"></script>
 </body>
 </html>

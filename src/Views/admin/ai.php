@@ -42,7 +42,7 @@ foreach (array_unique([1, $page - 1, $page, $page + 1, $totalPages]) as $number)
 ob_start();
 ?>
 <?php if ($notify): ?>
-    <div class="alert alert-warning" role="alert">
+    <div class="alert alert-warning" role="alert" data-alert-persist>
         Расход ИИ-помощников достиг <?= $percent ?>% месячного лимита.
         <?php if ($percent >= AI_LIMIT_LIVE_PERCENT): ?>
             Все помощники приостановлены.

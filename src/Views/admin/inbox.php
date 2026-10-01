@@ -13,6 +13,14 @@ declare(strict_types=1);
  * @var int $page
  * @var int $totalPages
  * @var int $total
+ * @var int $perPage
+ * @var string $pollUrl
+ * @var int $pollIntervalMs
+ * @var int $sinceMessageId
+ * @var string $simulateUrl
+ * @var array<string, string> $simulateChannels Включённые Каналы: код => название
+ * @var string|null $success
+ * @var string|null $error
  */
 
 $pageUrl = static fn (int $targetPage): string => '/admin/inbox' . ($targetPage > 1 ? '?page=' . $targetPage : '');
@@ -38,19 +46,46 @@ ob_start();
     <p class="mb-0 text-muted">Сообщения из MAX, Telegram, ВКонтакте и Avito в одном списке.</p>
 </div>
 
-<div class="alert alert-info" role="status">
+<div class="alert alert-info" role="status" data-alert-persist>
     Демо: интеграции с каналами не подключены, переписка — тестовые данные.
 </div>
 
-<section class="card" aria-labelledby="inbox-title">
-    <div class="card-header"><h2 class="card-title" id="inbox-title">Список Обращений (<?= $total ?>)</h2></div>
+<?php if ($success !== null): ?>
+    <div class="alert alert-success" role="status"><?= e($success) ?></div>
+<?php endif; ?>
+<?php if ($error !== null): ?>
+    <div class="alert alert-danger" role="alert"><?= e($error) ?></div>
+<?php endif; ?>
+
+<?php if ($simulateChannels !== []): ?>
+    <form method="post" action="<?= e($simulateUrl) ?>" class="row g-2 align-items-end mb-3" id="inbox-simulate">
+        <?= csrfField() ?>
+        <div class="col-12 col-sm-auto">
+            <label for="inbox-simulate-channel" class="form-label mb-1">Канал</label>
+            <select name="channel" id="inbox-simulate-channel" class="form-select">
+                <?php foreach ($simulateChannels as $code => $label): ?>
+                    <option value="<?= e($code) ?>"><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-12 col-sm-auto">
+            <button type="submit" class="btn btn-outline-primary">Сымитировать входящее</button>
+        </div>
+    </form>
+<?php endif; ?>
+
+<section class="card" aria-labelledby="inbox-title"<?php if ($page === 1): ?>
+    data-inbox-poll
+    data-poll-url="<?= e($pollUrl) ?>"
+    data-interval="<?= $pollIntervalMs ?>"
+    data-since="<?= $sinceMessageId ?>"
+    data-per-page="<?= $perPage ?>"<?php endif; ?>>
+    <div class="card-header"><h2 class="card-title" id="inbox-title">Список Обращений (<span id="inbox-total"><?= $total ?></span>)</h2></div>
     <div class="card-body p-0">
-        <?php if ($conversations === []): ?>
-            <p class="m-3 text-muted">Обращений пока нет.</p>
-        <?php else: ?>
-            <ul class="inbox-list list-unstyled mb-0">
+        <p class="m-3 text-muted" id="inbox-empty"<?= $conversations === [] ? '' : ' hidden' ?>>Обращений пока нет.</p>
+        <ul class="inbox-list list-unstyled mb-0" id="inbox-list">
                 <?php foreach ($conversations as $item): ?>
-                    <li>
+                    <li data-conversation-id="<?= $item['id'] ?>">
                         <a href="/admin/inbox/<?= $item['id'] ?>" class="inbox-item<?= $item['unread'] ? ' inbox-item--unread' : '' ?>">
                             <span class="badge bg-light text-dark inbox-item__channel"><?= e($item['channel']) ?></span>
                             <span class="inbox-item__body">
@@ -69,8 +104,7 @@ ob_start();
                         </a>
                     </li>
                 <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
+        </ul>
     </div>
     <?php if ($totalPages > 1): ?>
         <div class="card-footer">
@@ -96,6 +130,7 @@ ob_start();
         </div>
     <?php endif; ?>
 </section>
+<script type="module" src="/admin/js/inbox.js"></script>
 <?php
 $content = (string) ob_get_clean();
 

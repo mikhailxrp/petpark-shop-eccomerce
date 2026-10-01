@@ -63,6 +63,12 @@ define('CHAT_FALLBACK_LINKS', [
     'VK'       => env('CHAT_LINK_VK', ''),
 ]);
 
+// Единый инбокс (FR-CHANNELS-002/005). Включённые Каналы — .env: Канал без
+// подтверждённого доступа к API не показывается в панели (FR-CHANNELS-005).
+define('CHANNELS_ENABLED',                  env('CHANNELS_ENABLED', 'max,telegram,vk,avito'));
+define('CHANNEL_POLL_INTERVAL_SECONDS',     5);
+define('CHANNEL_REPLY_MAX_LENGTH',          2000);
+
 require_once ROOT_PATH . '/src/Core/Logger.php';
 require_once ROOT_PATH . '/src/Core/Database.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
@@ -87,6 +93,7 @@ require_once ROOT_PATH . '/src/Models/AiCall.php';
 require_once ROOT_PATH . '/src/Models/AttributeDraft.php';
 require_once ROOT_PATH . '/src/Models/Conversation.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';
+require_once ROOT_PATH . '/src/Services/ChannelGateway.php';
 require_once ROOT_PATH . '/src/Services/Ai/AiProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/OfflineProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/YandexGptProvider.php';

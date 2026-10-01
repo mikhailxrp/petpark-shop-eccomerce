@@ -61,7 +61,7 @@ ob_start();
     </div>
 <?php endif; ?>
 <?php if (!$allowed): ?>
-    <div class="alert alert-warning" role="alert">Генерация описаний приостановлена: достигнут месячный лимит расхода на ИИ.</div>
+    <div class="alert alert-warning" role="alert" data-alert-persist>Генерация описаний приостановлена: достигнут месячный лимит расхода на ИИ.</div>
 <?php endif; ?>
 
 <section class="card" aria-labelledby="ai-batch-run-title">

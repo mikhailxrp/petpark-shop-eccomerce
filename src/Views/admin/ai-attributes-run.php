@@ -25,7 +25,7 @@ ob_start();
 </div>
 
 <?php if (!$allowed): ?>
-    <div class="alert alert-warning" role="alert">Разбор Характеристик приостановлен: достигнут месячный лимит расхода на ИИ.</div>
+    <div class="alert alert-warning" role="alert" data-alert-persist>Разбор Характеристик приостановлен: достигнут месячный лимит расхода на ИИ.</div>
 <?php endif; ?>
 
 <div class="row">
