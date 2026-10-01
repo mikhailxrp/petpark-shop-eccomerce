@@ -7,6 +7,7 @@ declare(strict_types=1);
  * (`FR-ACC-003`, phase-4.md, Таск 2). Одна страница на список и форму:
  * `$editPet === null` — добавление, иначе правка.
  * @var array<int, array<string, mixed>> $pets        Питомцы Покупателя
+ * @var array<int, list<array<string, mixed>>> $pendingBookings Записи, ждущие оплаты Депозита, по id Питомца
  * @var array<string, mixed>|null        $editPet     Редактируемый Питомец
  * @var array<string, string>            $values      Значения полей формы
  * @var array<string, string>            $errors      Ошибки по полям
@@ -67,6 +68,28 @@ include __DIR__ . '/../components/page-banner.php';
                                             <dd><?= e(rtrim(rtrim((string) $pet['weight'], '0'), '.')) ?> кг</dd>
                                         <?php endif; ?>
                                     </dl>
+                                    <?php foreach ($pendingBookings[(int) $pet['id']] ?? [] as $pending): ?>
+                                        <?php
+                                        $pendingAt = new DateTimeImmutable((string) $pending['scheduled_at']);
+                                        $pendingUntil = new DateTimeImmutable((string) $pending['slot_hold_expires_at']);
+                                        ?>
+                                        <div class="booking-done__notice" role="status">
+                                            <p>
+                                                <strong>Ждёт оплаты:</strong> запись №<?= (int) $pending['id'] ?> на
+                                                <?= e($pendingAt->format('d.m.Y')) ?> в <?= e($pendingAt->format('H:i')) ?>.
+                                                Депозит <?= e(cartFormatMoney((string) $pending['deposit_amount'])) ?> ₽,
+                                                время закреплено до <?= e($pendingUntil->format('H:i')) ?>.
+                                            </p>
+                                        </div>
+                                        <div class="pet-card__actions">
+                                            <a class="button" href="/booking/<?= (int) $pending['id'] ?>/pay">Оплатить</a>
+                                            <form method="post" action="/booking/<?= (int) $pending['id'] ?>/release">
+                                                <?= csrfField() ?>
+                                                <input type="hidden" name="return" value="pets">
+                                                <button type="submit" class="pet-card__delete">Отменить запись</button>
+                                            </form>
+                                        </div>
+                                    <?php endforeach; ?>
                                     <div class="pet-card__actions">
                                         <a class="button" href="/account/pets/<?= (int) $pet['id'] ?>/edit">Изменить</a>
                                         <form method="post" action="/account/pets/<?= (int) $pet['id'] ?>/delete">

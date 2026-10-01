@@ -1856,6 +1856,7 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    row-gap: 12px;
 }
 
 .booking-done__actions .button {

@@ -111,6 +111,9 @@ function bookingCreate(
             return ['status' => 'invalid'];
         }
 
+        // Истёкшее удержание не должно занимать слот (FR-SV-009, без cron).
+        bookingReleaseExpired($specialistId);
+
         $block = bookingBlockMinutes(
             array_sum(array_map(static fn (array $s): int => (int) $s['duration_minutes'], $services)),
             array_column($services, 'kind')
@@ -256,4 +259,100 @@ function bookingSetAmoCrm(int $bookingId, string $amocrmId): void
 {
     getPdo()->prepare('UPDATE bookings SET amocrm_id = ?, amocrm_synced_at = NOW() WHERE id = ?')
         ->execute([$amocrmId, $bookingId]);
+}
+
+/**
+ * Освобождает удержания, оплата которых не пришла за BOOKING_SLOT_HOLD_MINUTES
+ * (FR-SV-009). Вместо cron вызывается «лениво» — там, где слот читают или
+ * занимают. Идемпотентно; $specialistId сужает выборку до одного Специалиста.
+ * Возвращает число освобождённых Записей.
+ */
+function bookingReleaseExpired(?int $specialistId = null): int
+{
+    $stmt = getPdo()->prepare("
+        UPDATE bookings SET status = 'slot_released'
+        WHERE status = 'slot_selected'
+          AND slot_hold_expires_at < NOW()
+          AND (:specialist_id IS NULL OR specialist_id = :specialist_id2)
+    ");
+    $stmt->execute(['specialist_id' => $specialistId, 'specialist_id2' => $specialistId]);
+
+    return $stmt->rowCount();
+}
+
+/**
+ * Оплата Депозита прошла: `slot_selected` → `confirmed`, Депозит удержан.
+ * false — Запись уже подтверждена, отпущена или удержание истекло (повторный
+ * callback и оплата «после срока» — не ошибка, статус не меняется).
+ */
+function bookingConfirmWithDeposit(int $bookingId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE bookings SET status = 'confirmed', deposit_status = 'held', slot_hold_expires_at = NULL
+        WHERE id = ? AND status = 'slot_selected' AND slot_hold_expires_at > NOW()
+    ");
+    $stmt->execute([$bookingId]);
+
+    return $stmt->rowCount() === 1;
+}
+
+/**
+ * Покупатель отказался от неоплаченного удержания: `slot_selected` →
+ * `slot_released`. Депозит не вносился — возвращать нечего. false — Запись
+ * уже оплачена или отпущена. Отмена подтверждённой Записи — Таск 6.
+ */
+function bookingReleaseHold(int $bookingId): bool
+{
+    $stmt = getPdo()->prepare("
+        UPDATE bookings SET status = 'slot_released'
+        WHERE id = ? AND status = 'slot_selected'
+    ");
+    $stmt->execute([$bookingId]);
+
+    return $stmt->rowCount() === 1;
+}
+
+/**
+ * Лог каждого callback'а оплаты Депозита (php.md: логировать все вебхуки).
+ * В `payment_logs` заполнено ровно одно из `order_id` / `booking_id`: здесь
+ * `order_id` всегда NULL, у Заказа — `orderPaymentLogCreate()` с NULL в
+ * `booking_id`; поэтому функции две, а не одна с двумя необязательными id.
+ */
+function bookingPaymentLogCreate(int $bookingId, string $provider, bool $signatureValid, string $payload): void
+{
+    $stmt = getPdo()->prepare('
+        INSERT INTO payment_logs (order_id, booking_id, provider, signature_valid, payload)
+        VALUES (NULL, :booking_id, :provider, :signature_valid, :payload)
+    ');
+    $stmt->execute([
+        'booking_id'      => $bookingId,
+        'provider'        => $provider,
+        'signature_valid' => $signatureValid ? 1 : 0,
+        'payload'         => $payload,
+    ]);
+}
+
+/**
+ * Ждущие оплаты Депозита Записи Покупателя с неистёкшим удержанием,
+ * сгруппированные по Питомцу: [pet_id => список Записей]. Для карточек
+ * Питомцев в кабинете.
+ *
+ * @return array<int, list<array<string, mixed>>>
+ */
+function bookingsPendingByPet(int $userId): array
+{
+    $stmt = getPdo()->prepare("
+        SELECT id, pet_id, scheduled_at, slot_hold_expires_at, deposit_amount
+        FROM bookings
+        WHERE user_id = ? AND status = 'slot_selected' AND slot_hold_expires_at > NOW()
+        ORDER BY scheduled_at
+    ");
+    $stmt->execute([$userId]);
+
+    $byPet = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $byPet[(int) $row['pet_id']][] = $row;
+    }
+
+    return $byPet;
 }

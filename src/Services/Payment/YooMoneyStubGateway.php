@@ -48,4 +48,24 @@ final class YooMoneyStubGateway implements PaymentGateway
     {
         return true;
     }
+
+    public function bookingPaymentUrl(int $bookingId): string
+    {
+        return '/booking/' . $bookingId . '/pay';
+    }
+
+    public function signBooking(int $bookingId, string $result): string
+    {
+        return hash_hmac(self::SIGNATURE_ALGO, 'booking:' . $bookingId . ':' . $result, $this->secret);
+    }
+
+    public function verifyBookingSignature(int $bookingId, string $result, string $signature): bool
+    {
+        return hash_equals($this->signBooking($bookingId, $result), $signature);
+    }
+
+    public function refundBooking(int $bookingId, string $amount): bool
+    {
+        return true;
+    }
 }

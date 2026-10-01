@@ -142,8 +142,12 @@ final class AccountController
             $errors = [];
         }
 
+        // Истёкшее удержание не должно висеть в карточке «Ждёт оплаты» (FR-SV-009, без cron).
+        bookingReleaseExpired();
+
         render('account/pets', [
             'pets'       => petsByUser((int) $_SESSION['user_id']),
+            'pendingBookings' => bookingsPendingByPet((int) $_SESSION['user_id']),
             'editPet'    => $editPet,
             'values'     => $values,
             'errors'     => $errors,

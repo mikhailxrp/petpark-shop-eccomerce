@@ -49,6 +49,8 @@ function seoTitle(string $type, array $entity = []): string
         'order-success' => sprintf('Заказ оформлен — %s', SHOP_NAME),
         'payment' => sprintf('Оплата заказа — %s', SHOP_NAME),
         'payment-failed' => sprintf('Оплата не прошла — %s', SHOP_NAME),
+        'booking-payment' => sprintf('Оплата депозита за запись — %s', SHOP_NAME),
+        'booking-payment-failed' => sprintf('Оплата депозита не прошла — %s', SHOP_NAME),
         default => sprintf('%s — зоомагазин и центр ухода за питомцами, %s', SHOP_NAME, SHOP_CITY),
     };
 }
@@ -86,6 +88,8 @@ function seoDescription(string $type, array $entity = []): string
         'order-success' => sprintf('Заказ успешно оформлен в %s, %s.', SHOP_NAME, SHOP_CITY),
         'payment' => sprintf('Оплата заказа картой в %s, %s.', SHOP_NAME, SHOP_CITY),
         'payment-failed' => sprintf('Оплата заказа в %s, %s, не прошла: повторите попытку или отмените заказ.', SHOP_NAME, SHOP_CITY),
+        'booking-payment' => sprintf('Оплата депозита за запись на услуги в %s, %s.', SHOP_NAME, SHOP_CITY),
+        'booking-payment-failed' => sprintf('Оплата депозита за запись в %s, %s, не прошла: повторите попытку или отмените запись.', SHOP_NAME, SHOP_CITY),
         default => sprintf(
             '%s — доставка и самовывоз, груминг и ветконсультации, %s.',
             SHOP_NAME,

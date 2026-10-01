@@ -25,6 +25,7 @@ $breadcrumbs = [
 ];
 
 $needsDeposit = $booking['status'] === 'slot_selected';
+$isReleased = $booking['status'] === 'slot_released';
 $scheduledAt = new DateTimeImmutable((string) $booking['scheduled_at']);
 
 $monthNames = [
@@ -64,17 +65,19 @@ include __DIR__ . '/components/page-banner.php';
             <div class="col-lg-7">
                 <div class="booking-done__card">
                     <div class="booking-done__badge">
-                        <i class="fa-solid <?= $needsDeposit ? 'fa-clock' : 'fa-check' ?> booking-done__badge-icon" aria-hidden="true"></i>
+                        <i class="fa-solid <?= $isReleased ? 'fa-xmark' : ($needsDeposit ? 'fa-clock' : 'fa-check') ?> booking-done__badge-icon" aria-hidden="true"></i>
                         <svg class="booking-done__badge-ring" width="138" height="138" viewBox="0 0 673 673" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path fill-rule="evenodd" clip-rule="evenodd" d="M9.82698 416.603C-19.0352 298.701 18.5108 173.372 107.497 90.7633L110.607 96.5197C24.3117 177.199 -12.311 298.935 15.0502 413.781L9.82698 416.603ZM89.893 565.433C172.674 654.828 298.511 692.463 416.766 663.224L414.077 658.245C298.613 686.363 175.954 649.666 94.9055 562.725L89.893 565.433ZM656.842 259.141C685.039 374.21 648.825 496.492 562.625 577.656L565.413 582.817C654.501 499.935 691.9 374.187 662.536 256.065L656.842 259.141ZM581.945 107.518C499.236 18.8371 373.997 -18.4724 256.228 10.5134L259.436 16.4515C373.888 -10.991 495.248 25.1518 576.04 110.708L581.945 107.518Z" fill="#000"></path>
                         </svg>
                     </div>
 
                     <h2 class="booking-done__title">
-                        <?= $needsDeposit ? 'Время удержано за вами' : 'Вы записаны!' ?>
+                        <?= $isReleased ? 'Запись не состоялась' : ($needsDeposit ? 'Время удержано за вами' : 'Вы записаны!') ?>
                     </h2>
                     <p class="booking-done__lead">
-                        <?php if ($needsDeposit): ?>
+                        <?php if ($isReleased): ?>
+                            Депозит не поступил вовремя или запись отменена — время снова доступно другим. Запишитесь заново.
+                        <?php elseif ($needsDeposit): ?>
                             Осталось внести депозит — и запись подтвердится автоматически.
                         <?php else: ?>
                             Запись №<?= (int) $booking['id'] ?> подтверждена. Ждём вас и вашего питомца
@@ -89,7 +92,6 @@ include __DIR__ . '/components/page-banner.php';
                                 Слот закреплён за вами на <?= (int) BOOKING_SLOT_HOLD_MINUTES ?> минут<?= $holdUntil !== null ? ' — до ' . e($holdUntil) : '' ?>.
                                 Депозит <strong><?= e(cartFormatMoney((string) $booking['deposit_amount'])) ?> ₽</strong>
                                 вернём полностью при отмене не позже чем за <?= (int) BOOKING_CANCEL_THRESHOLD_HOURS ?> часа до визита.
-                                Оплата станет доступна на следующем шаге.
                             </p>
                         </div>
                     <?php endif; ?>
@@ -108,6 +110,11 @@ include __DIR__ . '/components/page-banner.php';
                     </ul>
 
                     <div class="booking-done__actions">
+                        <?php if ($needsDeposit): ?>
+                            <a class="button" href="/booking/<?= (int) $booking['id'] ?>/pay">Оплатить депозит</a>
+                        <?php elseif ($isReleased): ?>
+                            <a class="button" href="/booking">Записаться заново</a>
+                        <?php endif; ?>
                         <a class="button" href="/">На главную</a>
                         <a class="booking-done__link" href="/catalog">Заглянуть в каталог</a>
                     </div>

@@ -152,6 +152,7 @@ final class BookingController
     public function success(string $id): void
     {
         $bookingId = (int) $id;
+        bookingReleaseExpired();
         $booking = $bookingId > 0 ? bookingFindById($bookingId) : null;
 
         if ($booking === null || !$this->canView($booking)) {
@@ -213,6 +214,9 @@ final class BookingController
             array_sum(array_map(static fn (array $s): int => (int) $s['duration_minutes'], $services)),
             array_column($services, 'kind')
         );
+
+        // Истёкшее удержание не должно прятать слот (FR-SV-009, без cron).
+        bookingReleaseExpired($specialistId);
 
         $slots = bookingFreeSlots(
             $specialist,
