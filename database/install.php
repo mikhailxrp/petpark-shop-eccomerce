@@ -723,6 +723,27 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// ─── product_attribute_drafts ───────────────────────────────────────────
+// Черновики ИИ-разбора Характеристик (phase-5, Таск 3, FR-AI-001). Отдельно
+// от product_attributes: фильтр каталога читает только подтверждённое.
+// status 'empty' — в тексте не найдено (attr_value NULL); строка нужна, чтобы
+// Товар считался обработанным и не возвращался в очередь.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS product_attribute_drafts (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        attr_name  VARCHAR(60) NOT NULL,
+        attr_value VARCHAR(150) NULL,
+        status     ENUM('pending', 'needs_decision', 'empty') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_attribute_drafts_product_name (product_id, attr_name),
+        KEY idx_attribute_drafts_status (status),
+        CONSTRAINT fk_attribute_drafts_product
+            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 
