@@ -169,7 +169,7 @@ function conversationFind(int $id): ?array
 {
     $stmt = getPdo()->prepare('
         SELECT
-            c.id, c.channel, c.contact_identifier, c.sender_name, c.is_read, c.user_id, c.order_draft,
+            c.id, c.channel, c.contact_identifier, c.sender_name, c.is_read, c.user_id, c.order_draft, c.order_id,
             u.name AS customer_name
         FROM conversations c
         LEFT JOIN users u ON u.id = c.user_id
@@ -191,6 +191,29 @@ function conversationSaveOrderDraft(int $id, array $draft): void
 {
     $stmt = getPdo()->prepare('UPDATE conversations SET order_draft = :draft WHERE id = :id');
     $stmt->execute(['draft' => json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'id' => $id]);
+}
+
+/**
+ * Привязывает созданный Заказ к Обращению и пишет исход черновика
+ * (FR-CHANNELS-003). Вызывается внутри транзакции создания Заказа: если
+ * Обращение уже связано с другим Заказом — исключение, Заказ откатывается.
+ *
+ * @param string|null $outcome accepted / edited / rejected; null — черновика не было
+ */
+function conversationAttachOrder(int $conversationId, int $orderId, ?string $outcome): void
+{
+    $pdo = getPdo();
+    $stmt = $pdo->prepare('UPDATE conversations SET order_id = :order_id WHERE id = :id AND order_id IS NULL');
+    $stmt->execute(['order_id' => $orderId, 'id' => $conversationId]);
+
+    if ($stmt->rowCount() === 0) {
+        throw new RuntimeException('Обращение уже связано с Заказом: ' . $conversationId);
+    }
+
+    if ($outcome !== null) {
+        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('order_draft', ?, ?)")
+            ->execute([$conversationId, $outcome]);
+    }
 }
 
 /** @return array<int, array<string, mixed>> */

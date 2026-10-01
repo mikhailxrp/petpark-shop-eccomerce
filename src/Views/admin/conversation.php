@@ -26,6 +26,10 @@ declare(strict_types=1);
  * @var string $replyDraft Текст неотправленного ответа (после ошибки)
  * @var array{items: list<array{name: string, label: string, price: string, quantity: int}>, note: string, generated_at: string}|null $orderDraft
  * @var string $draftUrl
+ * @var int|null $linkedOrderId Заказ, созданный из Обращения
+ * @var string $confirmDraftUrl форма Заказа по черновику ИИ
+ * @var string $manualOrderUrl форма Заказа вручную
+ * @var bool $hasDraftItems в черновике есть Позиции
  * @var array{total: int, confirmed: int} $attributeCoverage
  * @var string|null $success
  * @var string|null $error
@@ -132,6 +136,22 @@ ob_start();
             <?= csrfField() ?>
             <button type="submit" class="btn btn-outline-primary"><?= $orderDraft === null ? 'Разобрать с ИИ' : 'Разобрать заново' ?></button>
         </form>
+        <hr>
+        <?php if ($linkedOrderId !== null): ?>
+            <p class="mb-0">Заказ создан: <a href="/admin/orders/<?= $linkedOrderId ?>">№<?= $linkedOrderId ?></a>.</p>
+        <?php else: ?>
+            <div class="d-flex flex-wrap gap-2">
+                <?php if ($hasDraftItems): ?>
+                    <a href="<?= e($confirmDraftUrl) ?>" class="btn btn-primary">Подтвердить черновик</a>
+                <?php else: ?>
+                    <span class="d-inline-block" tabindex="0" title="Сначала получите черновик с Позициями">
+                        <button type="button" class="btn btn-primary" disabled>Подтвердить черновик</button>
+                    </span>
+                <?php endif; ?>
+                <a href="<?= e($manualOrderUrl) ?>" class="btn btn-outline-secondary">Создать вручную</a>
+            </div>
+            <p class="form-text mb-0">Откроется форма Заказа: проверьте состав и укажите email Покупателя.</p>
+        <?php endif; ?>
     </div>
 </section>
 <script type="module" src="/admin/js/inbox.js"></script>

@@ -65,6 +65,8 @@ function orderCreate(
  * Ручное создание Заказа персоналом (FR-ORD-003): Варианты по id, цена и
  * остаток берутся из БД. Заказ всегда остаётся в `new` с резервом —
  * автоподтверждение «при получении» (Q-032) не применяется.
+ * $beforeCommit(int $orderId) выполняется внутри транзакции создания
+ * (привязка Заказа к Обращению, FR-CHANNELS-003); исключение откатывает Заказ.
  *
  * @param array<int, array{variant_id: int, quantity: int}> $lines
  * @param array{name: string, phone: string, email: string} $contact
@@ -81,7 +83,8 @@ function orderCreateManual(
     ?string $deliveryAddress,
     string $paymentMethod,
     ?string $customerNote,
-    string $checkoutToken
+    string $checkoutToken,
+    ?callable $beforeCommit = null
 ): array {
     $quantities = [];
     foreach ($lines as $line) {
@@ -114,7 +117,7 @@ function orderCreateManual(
         $checkoutToken,
         $staffUserId,
         false,
-        null
+        $beforeCommit
     );
 }
 
@@ -265,7 +268,7 @@ function orderCreateFromRows(
         }
 
         if ($beforeCommit !== null) {
-            $beforeCommit();
+            $beforeCommit($orderId);
         }
 
         $pdo->commit();

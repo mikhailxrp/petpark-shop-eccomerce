@@ -240,3 +240,35 @@ function orderBuildDeliveryAddress(
 
     return mb_substr($address, 0, ORDER_ADDRESS_MAX_LENGTH);
 }
+
+/**
+ * Исход черновика Заказа из Обращения для ai_draft_outcomes (FR-CHANNELS-003):
+ * путь «вручную» при готовом черновике — rejected; путь «по черновику» —
+ * accepted, если состав (Вариант → количество) не изменён, иначе edited.
+ * Черновика нет (или в нём нет Позиций) — null, исход не пишется.
+ *
+ * @param array<int, array{variant_id: int, quantity: int}> $draftItems
+ * @param array<int, array{variant_id: int, quantity: int}> $lines
+ */
+function orderDraftOutcome(array $draftItems, array $lines, string $source): ?string
+{
+    if ($draftItems === []) {
+        return null;
+    }
+
+    if ($source !== 'draft') {
+        return 'rejected';
+    }
+
+    $toMap = static function (array $rows): array {
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row['variant_id']] = ($map[(int) $row['variant_id']] ?? 0) + (int) $row['quantity'];
+        }
+        ksort($map);
+
+        return $map;
+    };
+
+    return $toMap($draftItems) === $toMap($lines) ? 'accepted' : 'edited';
+}

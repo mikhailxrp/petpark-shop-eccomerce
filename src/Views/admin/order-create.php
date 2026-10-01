@@ -12,6 +12,8 @@ declare(strict_types=1);
  * @var string $homeUrl
  * @var string $userRole
  * @var array<string, string> $form введённое до ошибки валидации
+ * @var int|null $conversationId Обращение-источник (FR-CHANNELS-003)
+ * @var string $source draft — по черновику ИИ, manual — вручную
  * @var array<int, array<string, mixed>> $oldLines Позиции до ошибки (variant_id, quantity, name, sku, price)
  * @var string $checkoutToken одноразовый токен идемпотентности (FR-CHK-007)
  * @var string $freeThreshold порог бесплатной доставки курьером (BR-006)
@@ -42,6 +44,13 @@ ob_start();
     </div>
 </div>
 
+<?php if ($conversationId !== null): ?>
+    <div class="alert alert-info" role="status">
+        Из Обращения <a href="/admin/inbox/<?= $conversationId ?>">№<?= $conversationId ?></a>.
+        <?= $source === 'draft' ? 'Позиции предложены ИИ — проверьте состав и укажите email.' : 'Контакты подставлены из Обращения — укажите email и состав.' ?>
+    </div>
+<?php endif; ?>
+
 <form
     method="post"
     action="/admin/orders/new"
@@ -56,6 +65,10 @@ ob_start();
 >
     <?= csrfField() ?>
     <input type="hidden" name="checkout_token" value="<?= e($checkoutToken) ?>">
+    <?php if ($conversationId !== null): ?>
+        <input type="hidden" name="conversation_id" value="<?= $conversationId ?>">
+        <input type="hidden" name="source" value="<?= e($source) ?>">
+    <?php endif; ?>
 
     <div class="row">
         <div class="col-12 col-lg-6">

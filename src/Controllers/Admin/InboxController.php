@@ -98,6 +98,8 @@ final class InboxController
         $rawMessages = conversationMessages((int) $conversation['id']);
         $lastMessageId = $rawMessages === [] ? 0 : (int) $rawMessages[array_key_last($rawMessages)]['id'];
 
+        $orderDraft = $this->orderDraftView($conversation['order_draft'] ?? null);
+
         render('admin/conversation', [
             'pageTitle'      => 'Обращение №' . $conversation['id'] . ' — PetPark',
             'roleLabel'      => adminRoleLabel($role),
@@ -116,8 +118,12 @@ final class InboxController
             'replyUrl'       => self::INBOX_URL . '/' . $conversation['id'] . '/reply',
             'maxLength'      => CHANNEL_REPLY_MAX_LENGTH,
             'replyDraft'     => getFlash('reply_draft') ?? '',
-            'orderDraft'     => $this->orderDraftView($conversation['order_draft'] ?? null),
+            'orderDraft'     => $orderDraft,
             'draftUrl'       => self::INBOX_URL . '/' . $conversation['id'] . '/draft',
+            'linkedOrderId'  => $conversation['order_id'] !== null ? (int) $conversation['order_id'] : null,
+            'hasDraftItems'  => ($orderDraft['items'] ?? []) !== [],
+            'confirmDraftUrl' => '/admin/orders/new?conversation=' . $conversation['id'] . '&source=draft',
+            'manualOrderUrl' => '/admin/orders/new?conversation=' . $conversation['id'] . '&source=manual',
             'attributeCoverage' => productConfirmedAttributesCoverage(),
             'success'        => getFlash('success'),
             'error'          => getFlash('error'),

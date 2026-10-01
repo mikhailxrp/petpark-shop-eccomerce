@@ -69,16 +69,32 @@ final class OrderController
     {
         requireRole('shift_admin', 'owner');
 
+        $conversation = $this->requestedConversation(input('conversation', ''));
+        if ($conversation === false) {
+            http_response_code(404);
+            render('errors/404');
+            return;
+        }
+        if ($conversation !== null && $conversation['order_id'] !== null) {
+            setFlash('success', 'Из этого Обращения Заказ уже создан.');
+            redirect('/admin/orders/' . (int) $conversation['order_id']);
+        }
+
+        $source = input('source', '') === 'draft' ? 'draft' : 'manual';
         $old = $this->readOldInput();
+        $prefill = $old === null && $conversation !== null
+            ? $this->conversationPrefill($conversation, $source)
+            : null;
         $oldLines = [];
 
-        if ($old !== null) {
+        $formLines = $old['lines'] ?? $prefill['lines'] ?? [];
+        if ($formLines !== []) {
             $variants = productActiveVariantsByIds(array_map(
                 static fn (array $line): int => (int) $line['variant_id'],
-                $old['lines']
+                $formLines
             ));
 
-            foreach ($old['lines'] as $line) {
+            foreach ($formLines as $line) {
                 $variant = $variants[(int) $line['variant_id']] ?? null;
                 if ($variant !== null) {
                     $oldLines[] = [
@@ -103,7 +119,9 @@ final class OrderController
             'roleLabel'     => adminRoleLabel($role),
             'homeUrl'       => homePathForRole($role),
             'userRole'      => $role,
-            'form'          => $old['fields'] ?? [],
+            'form'          => $old['fields'] ?? $prefill['fields'] ?? [],
+            'conversationId' => $conversation !== null ? (int) $conversation['id'] : null,
+            'source'        => $source,
             'oldLines'      => $oldLines,
             'checkoutToken' => bin2hex(random_bytes(ORDER_CHECKOUT_TOKEN_BYTES)),
             'freeThreshold' => DELIVERY_FREE_THRESHOLD,
@@ -151,17 +169,32 @@ final class OrderController
         requireRole('shift_admin', 'owner');
         requireCsrf();
 
+        $conversation = $this->requestedConversation(input('conversation_id', ''));
+        if ($conversation === false) {
+            http_response_code(404);
+            render('errors/404');
+            return;
+        }
+        $source = input('source', '') === 'draft' ? 'draft' : 'manual';
+        $formUrl = $conversation !== null
+            ? '/admin/orders/new?conversation=' . (int) $conversation['id'] . '&source=' . $source
+            : '/admin/orders/new';
+
         $token = input('checkout_token');
         $checkoutToken = is_string($token) && preg_match(ORDER_CHECKOUT_TOKEN_PATTERN, $token) === 1 ? $token : null;
 
         if ($checkoutToken === null) {
             setFlash('error', self::CREATE_VALIDATION_ERROR);
-            redirect('/admin/orders/new');
+            redirect($formUrl);
         }
 
         $existing = orderFindByCheckoutToken($checkoutToken);
         if ($existing !== null) {
             redirect('/admin/orders/' . (int) $existing['id']);
+        }
+        if ($conversation !== null && $conversation['order_id'] !== null) {
+            setFlash('success', 'Из этого Обращения Заказ уже создан.');
+            redirect('/admin/orders/' . (int) $conversation['order_id']);
         }
 
         $fields = [
@@ -191,7 +224,7 @@ final class OrderController
         if (!$isValid) {
             $this->rememberOldInput($fields, $lines ?? []);
             setFlash('error', self::CREATE_VALIDATION_ERROR);
-            redirect('/admin/orders/new');
+            redirect($formUrl);
         }
 
         $deliveryAddress = $fields['delivery_method'] === 'courier'
@@ -204,6 +237,13 @@ final class OrderController
             )
             : null;
 
+        $beforeCommit = null;
+        if ($conversation !== null) {
+            $outcome = orderDraftOutcome($this->draftLines($conversation['order_draft']), $lines, $source);
+            $conversationId = (int) $conversation['id'];
+            $beforeCommit = static fn (int $orderId) => conversationAttachOrder($conversationId, $orderId, $outcome);
+        }
+
         try {
             $result = orderCreateManual(
                 (int) $_SESSION['user_id'],
@@ -213,13 +253,14 @@ final class OrderController
                 $deliveryAddress,
                 $fields['payment_method'],
                 $fields['customer_note'] !== '' ? $fields['customer_note'] : null,
-                $checkoutToken
+                $checkoutToken,
+                $beforeCommit
             );
         } catch (\Throwable $e) {
             logException($e, ['action' => 'order_create_manual']);
             $this->rememberOldInput($fields, $lines);
             setFlash('error', self::ACTION_FAILED_ERROR);
-            redirect('/admin/orders/new');
+            redirect($formUrl);
         }
 
         if ($result['status'] === 'variant_not_found' || $result['status'] === 'unavailable') {
@@ -227,11 +268,86 @@ final class OrderController
             setFlash('error', $result['status'] === 'unavailable'
                 ? 'Недостаточно товара «' . $result['product_name'] . '» в наличии.'
                 : self::CREATE_VARIANT_ERROR);
-            redirect('/admin/orders/new');
+            redirect($formUrl);
         }
 
         setFlash('success', 'Заказ создан, резерв товара начат.');
         redirect('/admin/orders/' . $result['order_id']);
+    }
+
+    /**
+     * Обращение из параметра запроса: null — параметра нет, false — Обращение
+     * не найдено или его Канал выключен (FR-CHANNELS-005).
+     *
+     * @return array<string, mixed>|false|null
+     */
+    private function requestedConversation(mixed $id): array|false|null
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        $conversation = is_string($id) && ctype_digit($id) ? conversationFind((int) $id) : null;
+        if ($conversation === null || !in_array((string) $conversation['channel'], enabledChannels(CHANNELS_ENABLED), true)) {
+            return false;
+        }
+
+        return $conversation;
+    }
+
+    /**
+     * Позиции сохранённого черновика Обращения (variant_id + quantity).
+     *
+     * @return array<int, array{variant_id: int, quantity: int}>
+     */
+    private function draftLines(mixed $json): array
+    {
+        $draft = is_string($json) && $json !== '' ? json_decode($json, true) : null;
+        if (!is_array($draft) || !is_array($draft['items'] ?? null)) {
+            return [];
+        }
+
+        $lines = [];
+        foreach ($draft['items'] as $item) {
+            if (is_array($item) && isset($item['variant_id'], $item['quantity'])) {
+                $lines[] = ['variant_id' => (int) $item['variant_id'], 'quantity' => (int) $item['quantity']];
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Предзаполнение формы Заказа данными Обращения: контакты из БД
+     * (опознанный Покупатель, имя отправителя, идентификатор Канала), при
+     * `draft` — Позиции черновика. Email Обращение не даёт — вводит администратор.
+     *
+     * @param array<string, mixed> $conversation
+     * @return array{fields: array<string, string>, lines: array<int, array{variant_id: int, quantity: int}>}
+     */
+    private function conversationPrefill(array $conversation, string $source): array
+    {
+        $customer = $conversation['user_id'] !== null ? userFindById((int) $conversation['user_id']) : null;
+        $identifier = trim((string) ($conversation['contact_identifier'] ?? ''));
+
+        $phone = (string) ($customer['phone'] ?? '');
+        if ($phone === '' && $identifier !== '' && normalizePhone($identifier) !== null) {
+            $phone = $identifier;
+        }
+
+        $name = (string) ($customer['name'] ?? '');
+        if ($name === '') {
+            $name = trim((string) ($conversation['sender_name'] ?? ''));
+        }
+
+        return [
+            'fields' => [
+                'contact_name'  => mb_substr($name, 0, 150),
+                'contact_phone' => mb_substr($phone, 0, 20),
+                'contact_email' => (string) ($customer['email'] ?? ''),
+            ],
+            'lines'  => $source === 'draft' ? $this->draftLines($conversation['order_draft']) : [],
+        ];
     }
 
     /**
