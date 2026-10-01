@@ -64,26 +64,35 @@ declare(strict_types=1);
                     <h3>Категории</h3>
                     <div class="boder"></div>
                     <ul>
+
+                        <?php foreach ($headerCategoryTree as $rootCategory): ?>
+
+                            <li>
+
+                                <i class="fa-solid fa-angle-right"></i>
+
+                                <a href="/catalog/<?= e((string) $rootCategory['slug']) ?>"><?= e((string) $rootCategory['name']) ?></a>
+
+                            </li>
+
+                        <?php endforeach; ?>
+
                         <li>
+
                             <i class="fa-solid fa-angle-right"></i>
-                            <a href="#">Товары для кошек</a>
+
+                            <a href="/booking">Груминг</a>
+
                         </li>
+
                         <li>
+
                             <i class="fa-solid fa-angle-right"></i>
-                            <a href="#">Товары для собак</a>
+
+                            <a href="/booking">Ветконсультации</a>
+
                         </li>
-                        <li>
-                            <i class="fa-solid fa-angle-right"></i>
-                            <a href="#">Товары для птиц</a>
-                        </li>
-                        <li>
-                            <i class="fa-solid fa-angle-right"></i>
-                            <a href="#">Груминг</a>
-                        </li>
-                        <li>
-                            <i class="fa-solid fa-angle-right"></i>
-                            <a href="#">Ветконсультации</a>
-                        </li>
+
                     </ul>
                 </div>
             </div>

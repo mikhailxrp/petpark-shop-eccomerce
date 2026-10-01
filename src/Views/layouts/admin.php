@@ -94,7 +94,20 @@ declare(strict_types=1);
                                     <span class="side-menu__label">Заказы</span>
                                 </a>
                             </li>
-                            <?php $stockActive = str_starts_with($currentPath, '/admin/stock'); ?>
+                            <?php $bookingsActive = str_starts_with($currentPath, '/admin/bookings'); ?>
+                            <li class="slide<?= $bookingsActive ? ' active' : '' ?>">
+                                <a href="/admin/bookings" class="side-menu__item<?= $bookingsActive ? ' active' : '' ?>">
+                                    <i class="fe fe-calendar side-menu__icon"></i>
+                                    <span class="side-menu__label">Записи</span>
+                                </a>
+                            </li>
+                            <li class="slide<?= $currentPath === '/admin/time-off' ? ' active' : '' ?>">
+                                <a href="/admin/time-off" class="side-menu__item<?= $currentPath === '/admin/time-off' ? ' active' : '' ?>">
+                                    <i class="fe fe-slash side-menu__icon"></i>
+                                    <span class="side-menu__label">Закрытие слотов</span>
+                                </a>
+                            </li>
+                            <?php $stockActive =str_starts_with($currentPath, '/admin/stock'); ?>
                             <li class="slide<?= $stockActive ? ' active' : '' ?>">
                                 <a href="/admin/stock" class="side-menu__item<?= $stockActive ? ' active' : '' ?>">
                                     <i class="fe fe-package side-menu__icon"></i>

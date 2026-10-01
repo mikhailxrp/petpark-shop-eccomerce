@@ -1374,3 +1374,567 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     color: #fff;
     background-color: var(--cart-accent-hover);
 }
+
+/*
+ * Баннер страницы без inline-стиля (components/page-banner.php) — тот же
+ * фон, что в style="" баннеров корзины/каталога/входа.
+ */
+.banner--page {
+    background-color: #fff8e5;
+    background-image: url(/assets/img/banners/banner-catalog.png);
+}
+
+/*
+ * Личный кабинет (components/account-nav.php, account/*.php): меню слева,
+ * карточки справа. Фон #f0f0f0 и радиус 30px — те же, что у .box.login
+ * шаблона (форма входа), чтобы кабинет выглядел родным.
+ */
+:root {
+    --account-card-bg: #f0f0f0;
+    --account-radius: 30px;
+    --account-gap: 16px;
+}
+
+.account-nav {
+    margin-bottom: 30px;
+    padding: 20px;
+    border-radius: var(--account-radius);
+    background-color: var(--account-card-bg);
+}
+
+.account-nav__list {
+    margin: 0 0 var(--account-gap);
+    padding: 0;
+    list-style: none;
+}
+
+.account-nav__link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+    padding: 12px 20px;
+    border-radius: 45px;
+    color: var(--color-text);
+    font-weight: 600;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.account-nav__link:hover {
+    color: var(--color-primary);
+}
+
+.account-nav__link--active,
+.account-nav__link--active:hover {
+    background-color: var(--color-primary);
+    color: #fff;
+}
+
+.account-nav__logout {
+    padding-top: var(--account-gap);
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.account-nav__logout-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 20px;
+    border: 2px solid var(--color-primary);
+    border-radius: 45px;
+    background-color: transparent;
+    color: var(--color-primary);
+    font-weight: 600;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.account-nav__logout-button:hover {
+    background-color: var(--color-primary);
+    color: #fff;
+}
+
+.account-card {
+    margin-bottom: 30px;
+    padding: 24px;
+    border-radius: var(--account-radius);
+    background-color: var(--account-card-bg);
+}
+
+/* h2 темы (DynaPuff-замена, ~60px) в узкой колонке кабинета вылезает за край */
+.account-heading {
+    margin-bottom: var(--account-gap);
+    font-size: 28px;
+    line-height: 1.2;
+}
+
+.account-card__title {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.pet-card {
+    margin-bottom: var(--account-gap);
+}
+
+.account-card__hint {
+    margin: 0;
+    font-size: 14px;
+}
+
+.pet-card__details {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: var(--account-gap);
+}
+
+.pet-card__details dt {
+    flex: 0 0 35%;
+    font-weight: 600;
+}
+
+.pet-card__details dd {
+    flex: 0 0 65%;
+    margin: 0 0 4px;
+}
+
+.pet-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.pet-card__delete {
+    padding: 14px 28px;
+    border: 2px solid var(--color-primary);
+    border-radius: 65px;
+    background-color: transparent;
+    color: var(--color-primary);
+    font-weight: bold;
+}
+
+.pet-card__delete:hover {
+    background-color: var(--color-primary);
+    color: #fff;
+}
+
+.pet-form.box {
+    padding: 24px;
+}
+
+.pet-form label {
+    display: block;
+    margin: 6px 0 4px 20px;
+    font-weight: 600;
+}
+
+.pet-form select {
+    width: 100%;
+    height: 60px;
+    margin-bottom: 10px;
+    padding: 0 60px 0 30px;
+    border: 0;
+    border-radius: 45px;
+    outline: none;
+    /* своя стрелка вместо нативной — её нельзя сдвинуть от края */
+    appearance: none;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 28px center;
+}
+
+.pet-form .is-invalid {
+    box-shadow: 0 0 0 2px #dc3545;
+}
+
+@media (min-width: 768px) {
+    .account-card,
+    .pet-form.box {
+        padding: 30px;
+    }
+}
+
+/*
+ * Форма Записи (booking.php, assets/js/booking.js): шаги, выбор Услуг,
+ * Специалистов и слотов как «чипы» из скрытых radio/checkbox + label.
+ * Раскладка — Bootstrap-сетка, здесь только оформление (general.md).
+ */
+:root {
+    --booking-card-bg: #f0f0f0;
+    --booking-radius: 30px;
+    --booking-gap: 12px;
+    --booking-chip-radius: 45px;
+}
+
+.booking-form__step {
+    margin: 0 0 30px;
+    padding: 24px;
+    border: 0;
+    border-radius: var(--booking-radius);
+    background-color: var(--booking-card-bg);
+}
+
+/*
+ * Обычный <legend> браузер рисует поверх верхней границы fieldset — заголовок
+ * вылезает за карточку. float + width: 100% (приём Bootstrap) возвращает его
+ * внутрь, следующий элемент сбрасывает обтекание.
+ */
+.booking-form__title {
+    float: left;
+    width: 100%;
+    margin-bottom: var(--booking-gap);
+    padding: 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.booking-form__title + * {
+    clear: both;
+}
+
+.booking-form__group {
+    margin: 16px 0 8px;
+    font-size: 18px;
+}
+
+.booking-form__hint {
+    margin: 0 0 var(--booking-gap);
+    font-size: 14px;
+}
+
+.booking-form__label {
+    display: block;
+    margin: 6px 0 4px 20px;
+    font-weight: 600;
+}
+
+.booking-form .input-text,
+.booking-form select {
+    width: 100%;
+    height: 60px;
+    margin-bottom: 10px;
+    padding: 0 30px;
+    border: 0;
+    border-radius: var(--booking-chip-radius);
+    outline: none;
+    background-color: #fff;
+}
+
+.booking-form select {
+    padding-right: 60px;
+    /* своя стрелка вместо нативной — как у .pet-form select */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 28px center;
+}
+
+.booking-service,
+.booking-specialist,
+.booking-pet,
+.booking-slot {
+    position: relative;
+}
+
+.booking-service input,
+.booking-specialist input,
+.booking-pet input,
+.booking-slot input {
+    position: absolute;
+    opacity: 0;
+}
+
+.booking-service label,
+.booking-specialist label,
+.booking-pet label,
+.booking-slot label {
+    display: block;
+    margin-bottom: 8px;
+    padding: 12px 20px;
+    border-radius: var(--booking-chip-radius);
+    background-color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.booking-service input:checked + label,
+.booking-specialist input:checked + label,
+.booking-pet input:checked + label,
+.booking-slot input:checked + label {
+    background-color: var(--color-primary);
+    color: #fff;
+}
+
+.booking-service input:focus-visible + label,
+.booking-specialist input:focus-visible + label,
+.booking-pet input:focus-visible + label,
+.booking-slot input:focus-visible + label {
+    outline: 2px solid var(--color-text);
+    outline-offset: 2px;
+}
+
+.booking-service__name {
+    display: block;
+}
+
+.booking-service__meta {
+    display: block;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+.booking-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: var(--booking-gap);
+}
+
+.booking-slot label {
+    margin-bottom: 0;
+}
+
+.booking-summary {
+    padding: 24px;
+    border-radius: var(--booking-radius);
+    background-color: var(--booking-card-bg);
+}
+
+.booking-summary__title {
+    margin-bottom: var(--booking-gap);
+    font-size: 24px;
+}
+
+.booking-summary__list dt {
+    font-weight: 700;
+}
+
+.booking-summary__list dd {
+    margin: 0 0 var(--booking-gap);
+}
+
+.booking-summary .button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (min-width: 768px) {
+    .booking-form__step,
+    .booking-summary {
+        padding: 30px;
+    }
+}
+
+/*
+ * «Запись создана» (booking-success.php, phase-4.md Таск 4) — собрано на
+ * языке макета Patte: кремовая карточка и круглый бейдж с вращающейся
+ * дугой (как `.pet-grooming` на service-details.html), фиолетовая
+ * карточка-сводка как `.checkout-side`. Цвета темы вынесены в
+ * переменные — в style.css они захардкожены.
+ */
+.booking-done {
+    --booking-done-accent: #940c69;
+    --booking-done-cream: #fff8e5;
+    --booking-done-yellow: #feda46;
+    --booking-done-radius: 40px;
+    --booking-done-gap: 24px;
+}
+
+.booking-done__card,
+.booking-done__visit {
+    margin-bottom: var(--booking-done-gap);
+    padding: 30px 24px;
+    border-radius: var(--booking-done-radius);
+}
+
+.booking-done__card {
+    background-color: var(--booking-done-cream);
+}
+
+.booking-done__badge {
+    position: relative;
+    display: inline-block;
+    margin-bottom: var(--booking-done-gap);
+}
+
+.booking-done__badge-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background-color: var(--booking-done-accent);
+    color: #fff;
+    font-size: 44px;
+}
+
+.booking-done__badge-ring {
+    position: absolute;
+    top: -10px;
+    left: -8px;
+    transition: transform 5s;
+}
+
+.booking-done__badge:hover .booking-done__badge-ring {
+    transform: rotate(360deg);
+}
+
+.booking-done__title {
+    margin-bottom: 12px;
+    font-size: 32px;
+}
+
+.booking-done__lead {
+    margin-bottom: var(--booking-done-gap);
+    font-size: 18px;
+}
+
+.booking-done__notice {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: var(--booking-done-gap);
+    padding: 16px 20px;
+    border-radius: 20px;
+    background-color: var(--booking-done-yellow);
+}
+
+.booking-done__notice-icon {
+    flex: none;
+    margin-top: 4px;
+    margin-right: 14px;
+    font-size: 22px;
+}
+
+.booking-done__notice p {
+    margin: 0;
+    color: var(--color-text);
+}
+
+.booking-done__subtitle {
+    margin-bottom: 12px;
+    font-size: 24px;
+}
+
+.booking-done__services {
+    margin: 0 0 var(--booking-done-gap);
+    padding: 0;
+    list-style: none;
+}
+
+.booking-done__service {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.2);
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.booking-done__service:last-child {
+    border-bottom: 0;
+}
+
+.booking-done__service-icon {
+    margin-right: 10px;
+    color: var(--color-primary);
+}
+
+.booking-done__service-name {
+    margin-right: auto;
+    padding-right: 12px;
+}
+
+.booking-done__service-meta {
+    color: #555;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+.booking-done__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 12px;
+}
+
+.booking-done__actions .button {
+    margin-right: 24px;
+}
+
+.booking-done__link {
+    color: var(--booking-done-accent);
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.booking-done__visit {
+    background-color: var(--booking-done-accent);
+    color: #fff;
+}
+
+.booking-done__visit p,
+.booking-done__visit dt,
+.booking-done__visit dd {
+    color: #fff;
+}
+
+.booking-done__visit-title {
+    margin-bottom: 8px;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.booking-done__visit-time {
+    margin: 0;
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.booking-done__visit-date {
+    margin-bottom: var(--booking-done-gap);
+    font-size: 18px;
+}
+
+.booking-done__visit-list {
+    margin: 0 0 var(--booking-done-gap);
+    padding-top: var(--booking-done-gap);
+    border-top: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.booking-done__visit-list dt {
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.booking-done__visit-list dd {
+    margin: 0 0 14px;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.booking-done__visit-hint {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.85;
+}
+
+@media (min-width: 768px) {
+    .booking-done__card,
+    .booking-done__visit {
+        padding: 40px;
+    }
+
+    .booking-done__title {
+        font-size: 40px;
+    }
+}

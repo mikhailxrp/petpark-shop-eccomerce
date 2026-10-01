@@ -13,6 +13,7 @@ namespace App\Services;
 final class AmoCrm
 {
     private const DEAL_ID_PREFIX = 'DEMO-';
+    private const BOOKING_DEAL_ID_PREFIX = 'DEMO-B';
 
     /** Создать сделку по Заказу; возвращает её идентификатор в AmoCRM. */
     public function pushOrder(int $orderId): string
@@ -32,6 +33,22 @@ final class AmoCrm
     public function registerOrder(int $orderId): void
     {
         orderSetAmoCrm($orderId, $this->pushOrder($orderId));
+    }
+
+    /** Создать сделку по Записи (FR-SV-011); возвращает её идентификатор в AmoCRM. */
+    public function pushBooking(int $bookingId): string
+    {
+        $dealId = self::BOOKING_DEAL_ID_PREFIX . $bookingId;
+
+        logInfo('AmoCRM (демо): сделка по Записи создана', ['booking_id' => $bookingId, 'amocrm_id' => $dealId]);
+
+        return $dealId;
+    }
+
+    /** Создать сделку и записать её id в Запись — для подтверждённых Записей. */
+    public function registerBooking(int $bookingId): void
+    {
+        bookingSetAmoCrm($bookingId, $this->pushBooking($bookingId));
     }
 
     /** Обновить сделку после смены статуса или правки Заказа. */
