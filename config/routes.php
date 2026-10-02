@@ -17,6 +17,8 @@ return [
         '/account'             => ['AccountController', 'index'],
         '/account/pets'        => ['AccountController', 'pets'],
         '/account/bookings'    => ['AccountController', 'bookings'],
+        '/account/orders'      => ['AccountController', 'orders'],
+        '/account/orders/{id}' => ['AccountController', 'order'],
         '/account/returns'     => ['AccountController', 'returns'],
         '/account/returns/{orderId}/new' => ['AccountController', 'returnForm'],
         '/account/pets/{id}/edit' => ['AccountController', 'petEdit'],

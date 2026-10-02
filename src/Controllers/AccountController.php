@@ -19,6 +19,7 @@ final class AccountController
     private const PET_BREED_MAX = 80;
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const PET_FORM_FLASH = 'pet_form';
+    private const ORDERS_PER_PAGE = 10;
     private const RETURN_REASON_MAX = 1000;
     private const RETURN_REVIEW_HOURS = 24;
     private const RETURN_RATE_LIMIT_ATTEMPTS = 5;
@@ -188,6 +189,40 @@ final class AccountController
         };
 
         redirect('/account/bookings');
+    }
+
+    public function orders(): void
+    {
+        requireRole('customer');
+
+        $userId = (int) $_SESSION['user_id'];
+        $total = orderCountByUser($userId);
+        $totalPages = max(1, (int) ceil($total / self::ORDERS_PER_PAGE));
+        $page = min(catalogNormalizePage($_GET['page'] ?? null), $totalPages);
+
+        render('account/orders', [
+            'orders'     => ordersPageByUser($userId, self::ORDERS_PER_PAGE, ($page - 1) * self::ORDERS_PER_PAGE),
+            'page'       => $page,
+            'totalPages' => $totalPages,
+        ]);
+    }
+
+    public function order(string $id): void
+    {
+        requireRole('customer');
+
+        $order = $this->findOwnOrder($id);
+        if ($order === null) {
+            $this->notFound();
+            return;
+        }
+
+        render('account/order', [
+            'order'     => $order,
+            'items'     => orderItemsForOrder((int) $order['id']),
+            'canReturn' => $this->orderIsReturnable($order),
+            'hasReturn' => returnFindByOrderId((int) $order['id']) !== null,
+        ]);
     }
 
     public function returns(): void
