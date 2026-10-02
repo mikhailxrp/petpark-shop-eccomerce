@@ -1559,6 +1559,99 @@ table.shop_table td.product-quantity input.cart-item__quantity {
 }
 
 /*
+ * Возвраты в кабинете (account/returns.php, account/return-form.php,
+ * assets/js/return-form.js): статус заявки, сводка Заказа, зона загрузки фото.
+ */
+:root {
+    --return-status-submitted: #0d6efd;
+    --return-status-in-review: #b58100;
+    --return-status-approved: #198754;
+    --return-status-rejected: #dc3545;
+    --return-status-completed: #6c757d;
+}
+
+.return-card {
+    margin-bottom: var(--account-gap);
+}
+
+.return-status {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 12px;
+    border-radius: 45px;
+    background-color: var(--return-status-completed);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.return-status--submitted {
+    background-color: var(--return-status-submitted);
+}
+
+.return-status--in_review {
+    background-color: var(--return-status-in-review);
+}
+
+.return-status--approved {
+    background-color: var(--return-status-approved);
+}
+
+.return-status--rejected {
+    background-color: var(--return-status-rejected);
+}
+
+.order-summary__date {
+    margin-bottom: 10px;
+}
+
+.order-summary__items {
+    margin: 0 0 var(--account-gap);
+    padding-left: 20px;
+}
+
+.order-summary__total {
+    margin: 0;
+}
+
+.return-steps {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.return-form textarea {
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 16px 30px;
+    border: 0;
+    border-radius: var(--account-radius);
+    outline: none;
+    background-color: #fff;
+    resize: vertical;
+}
+
+.return-form__file {
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 20px;
+    border: 2px dashed var(--color-primary);
+    border-radius: var(--account-radius);
+    background-color: #fff;
+}
+
+.return-form__hint {
+    margin: 0 0 var(--account-gap) 20px;
+    font-size: 14px;
+}
+
+.return-form__files {
+    margin: 0 0 var(--account-gap);
+    padding-left: 40px;
+    font-size: 14px;
+}
+
+/*
  * Форма Записи (booking.php, assets/js/booking.js): шаги, выбор Услуг,
  * Специалистов и слотов как «чипы» из скрытых radio/checkbox + label.
  * Раскладка — Bootstrap-сетка, здесь только оформление (general.md).
@@ -2139,4 +2232,59 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     .chat-widget__toggle-text {
         display: none;
     }
+}
+
+/*
+ * Кнопки мессенджеров (FR-NOTIF-003) — слева внизу колонкой: справа заняты
+ * виджет чата и кнопка «вверх» (#progress). Все доступные мессенджеры видны
+ * сразу, без раскрытия.
+ */
+.messenger-button {
+    --messenger-gap: 1rem;
+    --messenger-size: 3.5rem;
+    --messenger-space: 0.75rem;
+
+    position: fixed;
+    bottom: 20px; /* на одной линии с #progress */
+    left: var(--messenger-gap);
+    z-index: 1040;
+}
+
+.messenger-button__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--messenger-space);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.messenger-button__link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--messenger-size);
+    height: var(--messenger-size);
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+    text-decoration: none;
+}
+
+.messenger-button__link:hover,
+.messenger-button__link:focus-visible {
+    background: var(--color-bg-light);
+    color: var(--color-primary);
+}
+
+.messenger-button__icon {
+    display: inline-flex;
+}
+
+.messenger-button__icon svg {
+    display: block;
+    width: 1.75rem;
+    height: 1.75rem;
+    fill: currentColor;
 }

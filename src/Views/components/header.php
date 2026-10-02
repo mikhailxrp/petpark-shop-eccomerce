@@ -56,7 +56,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                             <div class="line"></div>
                             <a href="#">Оплата</a>
                             <div class="line"></div>
-                            <a href="#">Возврат</a>
+                            <a href="/account/returns">Возврат</a>
                         </div>
                         <div class="login">
                             <i class="fa-solid fa-user"></i>

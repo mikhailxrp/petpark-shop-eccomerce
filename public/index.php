@@ -32,5 +32,8 @@ spl_autoload_register(static function (string $class): void {
 
 ensureSessionStarted();
 
+// Очередь уведомлений (ADR-030): отправка и повторы — после ответа на запрос
+notifierSendAfterResponse();
+
 $routes = loadRoutes(ROOT_PATH . '/config/routes.php');
 dispatch($routes);

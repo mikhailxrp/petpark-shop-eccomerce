@@ -14,6 +14,16 @@ declare(strict_types=1);
 $canonicalUrl ??= null;
 $robotsNoindex ??= false;
 $footerVariant ??= 'two';
+
+// Единственное чтение БД в каркасе (dev-log, Таск 7): ссылки на мессенджеры
+// нужны кнопке, чату и соц-иконкам шапки/футера на каждой странице. Сбой БД
+// не должен ронять страницу — просто без ссылок.
+try {
+    $messengerLinks = messengerLinks(CHANNELS_ENABLED, siteSettingMessengerUrls(), messengerLabels());
+} catch (Throwable $e) {
+    logException($e, ['action' => 'messenger_links_load']);
+    $messengerLinks = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -63,6 +73,8 @@ $footerVariant ??= 'two';
     <?php if (!str_starts_with((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/checkout')): ?>
         <?php include __DIR__ . '/../components/chat-widget.php'; ?>
     <?php endif; ?>
+
+    <?php include __DIR__ . '/../components/messenger-button.php'; ?>
 
     <div id="progress">
         <span id="progress-value"><i class="fa-solid fa-up-long"></i></span>

@@ -172,7 +172,12 @@ function orderCreateFromRows(
         if ($userId === null) {
             $existingUser = userFindByEmail($contact['email']);
             if ($existingUser !== null) {
-                $userId = (int) $existingUser['id'];
+                // Публичный чекаут не подтверждает владение email — Заказ
+                // гостя на занятый email остаётся гостевым (user_id = NULL,
+                // контакты в contact_*), чтобы не попасть в чужой кабинет.
+                // Персонал (created_by_user_id) оформляет от имени Покупателя —
+                // ему привязка к найденному аккаунту нужна.
+                $userId = $createdByUserId !== null ? (int) $existingUser['id'] : null;
             } else {
                 $password = generatePassword();
                 $userId = userCreateCustomer(
@@ -260,6 +265,14 @@ function orderCreateFromRows(
             $pdo->rollBack();
             return ['status' => 'unavailable', 'product_name' => $unavailableProductName];
         }
+
+        notifierEnqueueOrderStatus([
+            'id'              => $orderId,
+            'contact_email'   => $contact['email'],
+            'contact_name'    => $contact['name'],
+            'total'           => $total,
+            'delivery_method' => $deliveryMethod,
+        ], 'new', 'unpaid');
 
         // Оплата при получении: подтверждаем сразу (Q-032), в той же
         // транзакции — orderTransition() присоединяется к уже открытой.
@@ -350,6 +363,26 @@ function orderItemsForOrder(int $orderId): array
 }
 
 /**
+ * Заказы Покупателя с признаком «по Заказу уже есть заявка на Возврат»
+ * (экран `/account/returns`, FR-RET-001). Новые — первыми.
+ *
+ * @return list<array<string, mixed>>
+ */
+function ordersByUserWithReturnFlag(int $userId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT o.id, o.status, o.total, o.created_at,
+               EXISTS (SELECT 1 FROM order_returns r WHERE r.order_id = o.id) AS has_return
+        FROM orders o
+        WHERE o.user_id = ?
+        ORDER BY o.created_at DESC, o.id DESC
+    ');
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Единственное место, где меняется orders.status (php.md, «Cart & orders»).
  * Возвращает false, если Заказа нет или переход из текущего статуса не
  * разрешён (в т.ч. повторный вызов после уже выполненного перехода) —
@@ -378,9 +411,15 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
     }
 
     try {
-        $stmt = $pdo->prepare('SELECT status FROM orders WHERE id = ? FOR UPDATE');
+        $stmt = $pdo->prepare('
+            SELECT id, status, payment_status, contact_name, contact_email, total, delivery_method
+            FROM orders
+            WHERE id = ?
+            FOR UPDATE
+        ');
         $stmt->execute([$orderId]);
-        $fromStatus = $stmt->fetchColumn();
+        $order = $stmt->fetch();
+        $fromStatus = $order !== false ? $order['status'] : false;
 
         if ($fromStatus === false || !orderCanTransition((string) $fromStatus, $toStatus)) {
             if ($ownsTransaction) {
@@ -443,6 +482,9 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
             WHERE id = :id
         ');
         $updateStmt->execute(['status' => $toStatus, 'payment_status' => $paymentStatus, 'id' => $orderId]);
+
+        // Письмо в той же транзакции: откат статуса откатывает и письмо (FR-NOTIF-002).
+        notifierEnqueueOrderStatus($order, $toStatus, (string) $order['payment_status']);
 
         if ($ownsTransaction) {
             $pdo->commit();
@@ -621,6 +663,25 @@ function orderMarkRefunded(int $orderId): bool
     $stmt->execute(['id' => $orderId]);
 
     return $stmt->rowCount() > 0;
+}
+
+/**
+ * Вернуть на склад количество всех Позиций Заказа (Возврат, FR-RET-003).
+ * Позиции удалённых Вариантов (variant_id IS NULL) пропускаются. Вызывать
+ * внутри транзакции завершения Возврата — сам по себе не идемпотентен.
+ */
+function orderRestoreStock(int $orderId): void
+{
+    $pdo = getPdo();
+
+    $itemsStmt = $pdo->prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ? AND variant_id IS NOT NULL');
+    $itemsStmt->execute([$orderId]);
+
+    $restoreStmt = $pdo->prepare('UPDATE product_variants SET stock_quantity = stock_quantity + :qty WHERE id = :id');
+
+    foreach ($itemsStmt->fetchAll() as $item) {
+        $restoreStmt->execute(['qty' => (int) $item['quantity'], 'id' => (int) $item['variant_id']]);
+    }
 }
 
 /** Идентификатор сделки заглушки AmoCRM (ADR-023) и время «синхронизации». */

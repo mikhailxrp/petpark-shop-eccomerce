@@ -57,11 +57,11 @@ define('CHAT_DEMO_MAX_REQUESTS',  10);
 define('CHAT_TIMEOUT_SECONDS',    5);
 define('CHAT_MAX_QUESTION_LENGTH', 500);
 define('CHAT_HISTORY_MESSAGES',   10);
-define('CHAT_FALLBACK_LINKS', [
-    'Telegram' => env('CHAT_LINK_TELEGRAM', ''),
-    'MAX'      => env('CHAT_LINK_MAX', ''),
-    'VK'       => env('CHAT_LINK_VK', ''),
-]);
+
+// Ссылки на мессенджеры (FR-NOTIF-003) хранятся в БД (site_settings) и правятся
+// Владельцем в /admin/settings/messengers; список кодов и подписей — messengerLinks().
+define('MESSENGER_SETTING_PREFIX',   'messenger_link_');
+define('MESSENGER_LINK_MAX_LENGTH',  255);
 
 // Единый инбокс (FR-CHANNELS-002/005). Включённые Каналы — .env: Канал без
 // подтверждённого доступа к API не показывается в панели (FR-CHANNELS-005).
@@ -79,6 +79,8 @@ require_once ROOT_PATH . '/src/Core/Cart.php';
 require_once ROOT_PATH . '/src/Core/Booking.php';
 require_once ROOT_PATH . '/src/Core/Ai.php';
 require_once ROOT_PATH . '/src/Core/Pii.php';
+require_once ROOT_PATH . '/src/Core/Notification.php';
+require_once ROOT_PATH . '/src/Core/OrderReturn.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';
@@ -93,7 +95,12 @@ require_once ROOT_PATH . '/src/Models/Specialist.php';
 require_once ROOT_PATH . '/src/Models/AiCall.php';
 require_once ROOT_PATH . '/src/Models/AttributeDraft.php';
 require_once ROOT_PATH . '/src/Models/Conversation.php';
+require_once ROOT_PATH . '/src/Models/Notification.php';
+require_once ROOT_PATH . '/src/Models/OrderReturn.php';
+require_once ROOT_PATH . '/src/Models/SiteSetting.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';
+require_once ROOT_PATH . '/src/Services/Notifier.php';
+require_once ROOT_PATH . '/src/Services/FileUpload.php';
 require_once ROOT_PATH . '/src/Services/ChannelGateway.php';
 require_once ROOT_PATH . '/src/Services/Ai/AiProvider.php';
 require_once ROOT_PATH . '/src/Services/Ai/OfflineProvider.php';

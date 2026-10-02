@@ -517,6 +517,15 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+$bookingsStatusScheduledIndexExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND INDEX_NAME = 'idx_bookings_status_scheduled'
+")->fetchColumn();
+
+if ($bookingsStatusScheduledIndexExists === 0) {
+    $pdo->exec("ALTER TABLE bookings ADD KEY idx_bookings_status_scheduled (status, scheduled_at)");
+}
+
 // ─── booking_services ───────────────────────────────────────────────────
 // M:N со снэпшотом — Запись назначена на 1 или несколько Услуг подряд.
 
@@ -591,6 +600,17 @@ $pdo->exec("
             FOREIGN KEY (resolved_by_user_id) REFERENCES users (id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
+
+// decision_comment (phase-6, Таск 4) добавлен после создания таблицы — на
+// существующей БД CREATE TABLE IF NOT EXISTS его не добавит.
+$decisionCommentExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_returns' AND COLUMN_NAME = 'decision_comment'
+")->fetchColumn();
+
+if ($decisionCommentExists === 0) {
+    $pdo->exec("ALTER TABLE order_returns ADD COLUMN decision_comment TEXT NULL AFTER status");
+}
 
 // ─── order_return_photos ────────────────────────────────────────────────
 
@@ -792,6 +812,43 @@ $pdo->exec("
 $pdo->exec("
     ALTER TABLE product_attribute_drafts
         MODIFY status ENUM('pending', 'needs_decision', 'empty', 'confirmed', 'rejected') NOT NULL
+");
+
+// ─── notifications ──────────────────────────────────────────────────────
+// Очередь email-уведомлений (phase-6, Таск 1, ADR-030). Письмо ставится в
+// транзакции смены статуса; event_key UNIQUE — одно событие, одно письмо.
+// В `sending` строка — «аренда»: next_attempt_at хранит срок, после которого
+// брошенная отправка считается упавшей.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS notifications (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        event_key       VARCHAR(100) NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name  VARCHAR(150) NOT NULL DEFAULT '',
+        subject         VARCHAR(255) NOT NULL,
+        body            TEXT NOT NULL,
+        status          ENUM('pending', 'sending', 'sent', 'failed') NOT NULL DEFAULT 'pending',
+        attempts        TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_error      VARCHAR(500) NULL,
+        sent_at         TIMESTAMP NULL,
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_notifications_event_key (event_key),
+        KEY idx_notifications_status_next (status, next_attempt_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── site_settings ──────────────────────────────────────────────────────
+// Настройки сайта «ключ → значение» (phase-6, Таск 7): ссылки на мессенджеры
+// `messenger_link_{код}`, правятся Владельцем в админке.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key   VARCHAR(60) NOT NULL PRIMARY KEY,
+        setting_value VARCHAR(255) NOT NULL DEFAULT '',
+        updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):

@@ -121,3 +121,40 @@ function sendAiLimitNotifyEmail(string $toEmail, string $toName, int $percent, s
         throw new RuntimeException('Не удалось отправить письмо о лимите ИИ: ' . $mail->ErrorInfo, 0, $e);
     }
 }
+
+// Таймаут SMTP-соединения: письмо отправляется после ответа на запрос
+// (Services/Notifier.php), зависший сервер не должен держать процесс минутами.
+const MAIL_SMTP_TIMEOUT_SECONDS = 10;
+
+/**
+ * Общая отправка текстового письма (очередь уведомлений, ADR-030). Тема и
+ * текст приходят готовыми. При сбое бросает RuntimeException — ловит Notifier.
+ */
+function sendEmail(string $toEmail, string $toName, string $subject, string $body): void
+{
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host       = env('MAIL_HOST');
+        $mail->Port       = (int) env('MAIL_PORT');
+        $mail->SMTPAuth   = true;
+        $mail->Username   = env('MAIL_USERNAME');
+        $mail->Password   = env('MAIL_PASSWORD');
+        $mail->SMTPSecure = env('MAIL_ENCRYPTION') === 'ssl'
+            ? PHPMailer::ENCRYPTION_SMTPS
+            : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->CharSet    = 'UTF-8';
+        $mail->Timeout    = MAIL_SMTP_TIMEOUT_SECONDS;
+
+        $mail->setFrom(env('MAIL_FROM'), env('MAIL_FROM_NAME'));
+        $mail->addAddress($toEmail, $toName);
+
+        $mail->Subject = $subject;
+        $mail->Body    = $body;
+
+        $mail->send();
+    } catch (PHPMailerException $e) {
+        throw new RuntimeException('Не удалось отправить письмо: ' . $mail->ErrorInfo, 0, $e);
+    }
+}
