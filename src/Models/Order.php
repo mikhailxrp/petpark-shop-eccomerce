@@ -363,6 +363,26 @@ function orderItemsForOrder(int $orderId): array
 }
 
 /**
+ * Заказы Покупателя с признаком «по Заказу уже есть заявка на Возврат»
+ * (экран `/account/returns`, FR-RET-001). Новые — первыми.
+ *
+ * @return list<array<string, mixed>>
+ */
+function ordersByUserWithReturnFlag(int $userId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT o.id, o.status, o.total, o.created_at,
+               EXISTS (SELECT 1 FROM order_returns r WHERE r.order_id = o.id) AS has_return
+        FROM orders o
+        WHERE o.user_id = ?
+        ORDER BY o.created_at DESC, o.id DESC
+    ');
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Единственное место, где меняется orders.status (php.md, «Cart & orders»).
  * Возвращает false, если Заказа нет или переход из текущего статуса не
  * разрешён (в т.ч. повторный вызов после уже выполненного перехода) —

@@ -204,3 +204,23 @@ function returnFindByOrderId(int $orderId): ?array
 
     return $id === false ? null : returnFindById((int) $id);
 }
+
+/**
+ * Заявки Покупателя со статусами для `/account/returns`. Новые — первыми.
+ *
+ * @return list<array<string, mixed>>
+ */
+function returnsByUser(int $userId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT r.id, r.order_id, r.reason, r.status, r.decision_comment, r.created_at,
+               (SELECT COUNT(*) FROM order_return_photos p WHERE p.return_id = r.id) AS photo_count
+        FROM order_returns r
+        JOIN orders o ON o.id = r.order_id
+        WHERE o.user_id = ?
+        ORDER BY r.created_at DESC, r.id DESC
+    ');
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
+}
