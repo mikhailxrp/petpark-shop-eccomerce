@@ -135,5 +135,9 @@ return [
         '/admin/products/new'          => ['Admin\ProductController', 'store'],
         '/admin/products/{id}'         => ['Admin\ProductController', 'update'],
         '/admin/products/{id}/active'  => ['Admin\ProductController', 'toggleActive'],
+        '/admin/products/{id}/variants' => ['Admin\ProductController', 'variantStore'],
+        '/admin/products/{id}/variants/{variantId}' => ['Admin\ProductController', 'variantUpdate'],
+        '/admin/products/{id}/attributes' => ['Admin\ProductController', 'attributesSave'],
+        '/admin/products/{id}/attributes/decide' => ['Admin\ProductController', 'attributeDecide'],
     ],
 ];

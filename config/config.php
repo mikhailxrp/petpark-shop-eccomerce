@@ -82,6 +82,7 @@ require_once ROOT_PATH . '/src/Core/Pii.php';
 require_once ROOT_PATH . '/src/Core/Notification.php';
 require_once ROOT_PATH . '/src/Core/OrderReturn.php';
 require_once ROOT_PATH . '/src/Core/Product.php';
+require_once ROOT_PATH . '/src/Core/ProductVariant.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Brand.php';
 require_once ROOT_PATH . '/src/Models/Product.php';

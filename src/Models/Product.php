@@ -1368,3 +1368,176 @@ function productAdminSave(
         throw $e;
     }
 }
+
+// ─── Варианты и Характеристики в форме Товара (phase-7.md, Таск 9) ─────────
+
+/**
+ * Все Варианты Товара для формы (включая неактивные) со значениями «вес
+ * упаковки»/«вкус». Остаток — как есть, решение «показать индикатор» — во View.
+ *
+ * @return array<int, array<string, mixed>> строка Варианта + `attributes` (attr_name => значение)
+ */
+function productAdminVariants(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, sku, price, discount_price, stock_quantity, reserved_quantity, is_active
+        FROM product_variants
+        WHERE product_id = ?
+        ORDER BY id ASC
+    ');
+    $stmt->execute([$productId]);
+    $variants = $stmt->fetchAll();
+
+    if ($variants === []) {
+        return [];
+    }
+
+    $ids = array_map(static fn (array $row): int => (int) $row['id'], $variants);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = getPdo()->prepare("
+        SELECT variant_id, attr_name, attr_value
+        FROM product_variant_attributes
+        WHERE variant_id IN ({$placeholders})
+        ORDER BY id
+    ");
+    $stmt->execute($ids);
+
+    $attributes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $attributes[(int) $row['variant_id']][(string) $row['attr_name']] = (string) $row['attr_value'];
+    }
+
+    foreach ($variants as &$variant) {
+        $variant['attributes'] = $attributes[(int) $variant['id']] ?? [];
+    }
+    unset($variant);
+
+    return $variants;
+}
+
+/**
+ * Вариант именно этого Товара (чужой `variant_id` под чужим `product_id` не найдётся).
+ *
+ * @return array<string, mixed>|null
+ */
+function productVariantFind(int $productId, int $variantId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, sku, price, discount_price, stock_quantity, is_active
+        FROM product_variants
+        WHERE id = ? AND product_id = ?
+    ');
+    $stmt->execute([$variantId, $productId]);
+    $variant = $stmt->fetch();
+
+    return $variant !== false ? $variant : null;
+}
+
+function productVariantSkuTaken(string $sku): bool
+{
+    $stmt = getPdo()->prepare('SELECT 1 FROM product_variants WHERE sku = ? LIMIT 1');
+    $stmt->execute([$sku]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * Заменяет значения «вес упаковки»/«вкус» Варианта; прочие свойства Варианта
+ * (если появятся в данных) не трогает. Зовётся внутри транзакции вызывающего.
+ *
+ * @param array<string, string> $attributes attr_name => значение (только известные имена)
+ */
+function productVariantAttributesReplace(int $variantId, array $attributes): void
+{
+    $pdo = getPdo();
+    $names = PRODUCT_VARIANT_ATTRIBUTE_NAMES;
+    $placeholders = implode(',', array_fill(0, count($names), '?'));
+
+    $pdo->prepare("DELETE FROM product_variant_attributes WHERE variant_id = ? AND attr_name IN ({$placeholders})")
+        ->execute([$variantId, ...$names]);
+
+    $insert = $pdo->prepare('INSERT INTO product_variant_attributes (variant_id, attr_name, attr_value) VALUES (?, ?, ?)');
+    foreach ($attributes as $name => $value) {
+        $insert->execute([$variantId, $name, $value]);
+    }
+}
+
+/**
+ * Новый Вариант и его свойства одной транзакцией. Остаток всегда 0: «внешний»
+ * остаток контроллер записывает отдельно через MoySklad::syncVariant() (заглушка,
+ * ADR-001), Model остаток из формы не пишет.
+ *
+ * @param array<string, mixed> $values sku, price, discount_price, attributes (productVariantValidate())
+ * @return int id Варианта
+ */
+function productVariantCreate(int $productId, array $values): int
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('
+            INSERT INTO product_variants (product_id, sku, price, discount_price, stock_quantity, is_active)
+            VALUES (?, ?, ?, ?, 0, 1)
+        ')->execute([$productId, $values['sku'], $values['price'], $values['discount_price']]);
+        $variantId = (int) $pdo->lastInsertId();
+
+        productVariantAttributesReplace($variantId, $values['attributes']);
+
+        $pdo->commit();
+
+        return $variantId;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Правка существующего Варианта: только скидка, активность и свойства.
+ * `price`, `sku` и остаток не входят в запрос — их из POST не принять физически.
+ *
+ * @param array<string, mixed> $values discount_price, is_active, attributes (productVariantValidate())
+ */
+function productVariantUpdate(int $productId, int $variantId, array $values): void
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE product_variants SET discount_price = ?, is_active = ? WHERE id = ? AND product_id = ?')
+            ->execute([$values['discount_price'], $values['is_active'] ? 1 : 0, $variantId, $productId]);
+
+        productVariantAttributesReplace($variantId, $values['attributes']);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Ручной ввод Характеристик Товара из справочника одной транзакцией: значение
+ * заменяет существующее, пустое — убирает Характеристику.
+ *
+ * @param array<string, string> $attributes attr_name => значение ('' — убрать)
+ */
+function productAttributesSave(int $productId, array $attributes): void
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        foreach ($attributes as $name => $value) {
+            if ($value === '') {
+                $pdo->prepare('DELETE FROM product_attributes WHERE product_id = ? AND attr_name = ?')
+                    ->execute([$productId, $name]);
+                continue;
+            }
+            productAttributeReplace($productId, $name, $value);
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}

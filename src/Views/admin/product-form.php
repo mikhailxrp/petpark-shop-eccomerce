@@ -6,7 +6,8 @@ declare(strict_types=1);
  * Форма Товара — /admin/products/new и /admin/products/{id}/edit
  * (phase-7.md, Таск 8; FR-ADM-001). Владелец видит все поля, Фрилансер —
  * только название, описание и фото (сервер читает из его POST только их).
- * Цена, остаток и Варианты — Таск 9.
+ * Таск 9 (FR-ADM-002): у существующего Товара Владелец ещё видит блоки
+ * Вариантов и Характеристик — каждый со своей формой и своим POST.
  *
  * @var string $pageTitle
  * @var string $roleLabel
@@ -22,10 +23,21 @@ declare(strict_types=1);
  * @var int $photoMb
  * @var string|null $success
  * @var string|null $error
+ * @var list<string> $attributeNames Характеристики Товара (ATTRIBUTE_EXTRACT_NAMES)
+ * @var list<string> $variantAttributes Свойства Варианта (вес упаковки, вкус)
+ * @var int $attributeMaxLength
+ * @var int $stockMax
+ * @var array<int, array<string, mixed>>|null $variants null — блок не показывается
+ * @var array<string, string> $attributes Подтверждённые Характеристики Товара
+ * @var array<string, list<string>> $dictionary attr_name => значения справочника
+ * @var array<int, array<string, mixed>> $drafts Нерешённые ИИ-черновики Товара
+ * @var array{target: int|string, values: array<string, mixed>, errors: array<string, string>}|null $variantForm
  */
 
 $isOwner = $userRole === 'owner';
 $isNew = $product === null;
+$showCatalogBlocks = $isOwner && !$isNew && $variants !== null;
+$attributeLabel = static fn (string $name): string => str_replace('_', ' ', $name);
 $formAction = $isNew ? '/admin/products/new' : '/admin/products/' . (int) $product['id'];
 $isActive = !$isNew && (int) $product['is_active'] === 1;
 
@@ -177,6 +189,195 @@ ob_start();
         <button type="submit" class="btn btn-primary"><?= $isNew ? 'Создать товар' : 'Сохранить' ?></button>
     </div>
 </form>
+
+<?php if ($showCatalogBlocks): ?>
+    <?php
+    $productId = (int) $product['id'];
+    $newState = $variantForm !== null && $variantForm['target'] === 'new' ? $variantForm : null;
+    $newValues = $newState['values'] ?? [];
+    $newErrors = $newState['errors'] ?? [];
+    $newField = static fn (string $key): string => isset($newErrors[$key]) ? ' is-invalid' : '';
+    ?>
+    <section class="card mb-4" id="variants" aria-labelledby="variants-title">
+        <div class="card-header">
+            <h2 class="card-title" id="variants-title">Варианты</h2>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">Цена вводится один раз при создании Варианта (имитация импорта из МойСклад) и дальше не меняется. Остаток правится на странице «Склад». Здесь можно изменить скидочную цену, вес/вкус и отключить Вариант.</p>
+
+            <?php if ($variants === []): ?>
+                <p class="mb-4">Вариантов пока нет — без них Товар не появится на витрине.</p>
+            <?php endif; ?>
+
+            <?php foreach ($variants as $variant): ?>
+                <?php
+                $variantId = (int) $variant['id'];
+                $state = $variantForm !== null && $variantForm['target'] === $variantId ? $variantForm : null;
+                $stateValues = $state['values'] ?? [];
+                $stateErrors = $state['errors'] ?? [];
+                $variantField = static fn (string $key): string => isset($stateErrors[$key]) ? ' is-invalid' : '';
+                $discountValue = $stateValues['discount_price'] ?? ($variant['discount_price'] ?? '');
+                $variantActive = $state !== null ? (bool) ($stateValues['is_active'] ?? false) : (int) $variant['is_active'] === 1;
+                $inStock = (int) $variant['stock_quantity'] - (int) $variant['reserved_quantity'] > 0;
+                ?>
+                <form method="post" action="/admin/products/<?= $productId ?>/variants/<?= $variantId ?>" class="border rounded p-3 mb-3" id="variant-<?= $variantId ?>" novalidate>
+                    <?= csrfField() ?>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <span class="form-label d-block">Артикул</span>
+                            <strong><?= e((string) $variant['sku']) ?></strong>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="form-label d-block">Цена</span>
+                            <strong><?= e((string) $variant['price']) ?> ₽</strong>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <span class="form-label d-block">Наличие</span>
+                            <span class="badge <?= $inStock ? 'bg-success-transparent' : 'bg-danger-transparent' ?>"><?= $inStock ? 'В наличии' : 'Нет в наличии' ?></span>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" class="form-check-input" role="switch" id="variant-active-<?= $variantId ?>" name="is_active" value="1"<?= $variantActive ? ' checked' : '' ?>>
+                                <label class="form-check-label" for="variant-active-<?= $variantId ?>">Активен</label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="variant-discount-<?= $variantId ?>" class="form-label">Скидочная цена</label>
+                            <input type="text" inputmode="decimal" class="form-control<?= $variantField('discount_price') ?>" id="variant-discount-<?= $variantId ?>" name="discount_price" maxlength="14" autocomplete="off" aria-describedby="variant-discount-help-<?= $variantId ?>" value="<?= e((string) $discountValue) ?>">
+                            <?php if (isset($stateErrors['discount_price'])): ?>
+                                <div class="invalid-feedback"><?= e($stateErrors['discount_price']) ?></div>
+                            <?php endif; ?>
+                            <div class="form-text" id="variant-discount-help-<?= $variantId ?>">Ниже обычной цены. Пусто — без скидки.</div>
+                        </div>
+                        <?php foreach ($variantAttributes as $attrName): ?>
+                            <?php $attrValue = $stateValues['attributes'][$attrName] ?? ($variant['attributes'][$attrName] ?? ''); ?>
+                            <div class="col-6 col-md-3">
+                                <label for="variant-<?= $variantId ?>-<?= e($attrName) ?>" class="form-label"><?= e($attributeLabel($attrName)) ?></label>
+                                <input type="text" class="form-control<?= $variantField('attributes') ?>" id="variant-<?= $variantId ?>-<?= e($attrName) ?>" name="attributes[<?= e($attrName) ?>]" maxlength="<?= $attributeMaxLength ?>" autocomplete="off" value="<?= e((string) $attrValue) ?>">
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (isset($stateErrors['attributes'])): ?>
+                            <div class="col-12"><div class="text-danger fs-12" role="alert"><?= e($stateErrors['attributes']) ?></div></div>
+                        <?php endif; ?>
+                        <div class="col-12 col-md-2">
+                            <button type="submit" class="btn btn-outline-primary w-100">Сохранить</button>
+                        </div>
+                    </div>
+                </form>
+            <?php endforeach; ?>
+
+            <form method="post" action="/admin/products/<?= $productId ?>/variants" class="border rounded p-3" id="variant-new" novalidate>
+                <?= csrfField() ?>
+                <h3 class="h6 mb-3">Добавить Вариант</h3>
+                <div class="row g-3">
+                    <div class="col-12 col-md-4">
+                        <label for="variant-new-sku" class="form-label">Артикул</label>
+                        <input type="text" class="form-control<?= $newField('sku') ?>" id="variant-new-sku" name="sku" maxlength="64" autocomplete="off" required value="<?= e((string) ($newValues['sku'] ?? '')) ?>">
+                        <?php if (isset($newErrors['sku'])): ?>
+                            <div class="invalid-feedback"><?= e($newErrors['sku']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label for="variant-new-price" class="form-label">Цена, ₽</label>
+                        <input type="text" inputmode="decimal" class="form-control<?= $newField('price') ?>" id="variant-new-price" name="price" maxlength="14" autocomplete="off" required aria-describedby="variant-new-price-help" value="<?= e((string) ($newValues['price'] ?? '')) ?>">
+                        <?php if (isset($newErrors['price'])): ?>
+                            <div class="invalid-feedback"><?= e($newErrors['price']) ?></div>
+                        <?php endif; ?>
+                        <div class="form-text" id="variant-new-price-help">Дальше не редактируется.</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label for="variant-new-stock" class="form-label">Начальный остаток</label>
+                        <input type="number" class="form-control<?= $newField('stock_quantity') ?>" id="variant-new-stock" name="stock_quantity" min="0" max="<?= $stockMax ?>" step="1" value="<?= e((string) ($newValues['stock_quantity'] ?? '0')) ?>">
+                        <?php if (isset($newErrors['stock_quantity'])): ?>
+                            <div class="invalid-feedback"><?= e($newErrors['stock_quantity']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php foreach ($variantAttributes as $attrName): ?>
+                        <div class="col-6 col-md-4">
+                            <label for="variant-new-<?= e($attrName) ?>" class="form-label"><?= e($attributeLabel($attrName)) ?></label>
+                            <input type="text" class="form-control<?= $newField('attributes') ?>" id="variant-new-<?= e($attrName) ?>" name="attributes[<?= e($attrName) ?>]" maxlength="<?= $attributeMaxLength ?>" autocomplete="off" value="<?= e((string) ($newValues['attributes'][$attrName] ?? '')) ?>">
+                        </div>
+                    <?php endforeach; ?>
+                    <div class="col-12 col-md-4">
+                        <label for="variant-new-discount" class="form-label">Скидочная цена</label>
+                        <input type="text" inputmode="decimal" class="form-control<?= $newField('discount_price') ?>" id="variant-new-discount" name="discount_price" maxlength="14" autocomplete="off" value="<?= e((string) ($newValues['discount_price'] ?? '')) ?>">
+                        <?php if (isset($newErrors['discount_price'])): ?>
+                            <div class="invalid-feedback"><?= e($newErrors['discount_price']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (isset($newErrors['attributes'])): ?>
+                        <div class="col-12"><div class="text-danger fs-12" role="alert"><?= e($newErrors['attributes']) ?></div></div>
+                    <?php endif; ?>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Добавить Вариант</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="card mb-4" id="characteristics" aria-labelledby="characteristics-title">
+        <div class="card-header">
+            <h2 class="card-title" id="characteristics-title">Характеристики</h2>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">Значения — из справочника каталога; по ним работает фильтр. Пустое значение убирает Характеристику.</p>
+
+            <form method="post" action="/admin/products/<?= $productId ?>/attributes" class="mb-4" novalidate>
+                <?= csrfField() ?>
+                <div class="row g-3">
+                    <?php foreach ($attributeNames as $attrName): ?>
+                        <?php $current = $attributes[$attrName] ?? ''; ?>
+                        <div class="col-12 col-md-4">
+                            <label for="attribute-<?= e($attrName) ?>" class="form-label"><?= e($attributeLabel($attrName)) ?></label>
+                            <select id="attribute-<?= e($attrName) ?>" name="attributes[<?= e($attrName) ?>]" class="form-select">
+                                <option value="">Не задано</option>
+                                <?php foreach ($dictionary[$attrName] ?? [] as $known): ?>
+                                    <option value="<?= e($known) ?>"<?= $known === $current ? ' selected' : '' ?>><?= e($known) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endforeach; ?>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Сохранить Характеристики</button>
+                    </div>
+                </div>
+            </form>
+
+            <?php if ($drafts !== []): ?>
+                <h3 class="h6">Предложено ИИ-помощником</h3>
+                <?php foreach ($attributeNames as $attrName): ?>
+                    <datalist id="draft-dictionary-<?= e($attrName) ?>">
+                        <?php foreach ($dictionary[$attrName] ?? [] as $known): ?>
+                            <option value="<?= e($known) ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php endforeach; ?>
+                <?php foreach ($drafts as $draft): ?>
+                    <?php $draftId = (int) $draft['id']; ?>
+                    <form method="post" action="/admin/products/<?= $productId ?>/attributes/decide" class="border rounded p-3 mb-3" novalidate>
+                        <?= csrfField() ?>
+                        <input type="hidden" name="draft_id" value="<?= $draftId ?>">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-12 col-md-4">
+                                <label for="draft-value-<?= $draftId ?>" class="form-label"><?= e($attributeLabel((string) $draft['attr_name'])) ?></label>
+                                <input type="text" class="form-control" id="draft-value-<?= $draftId ?>" name="value" maxlength="<?= $attributeMaxLength ?>" list="draft-dictionary-<?= e((string) $draft['attr_name']) ?>" autocomplete="off" value="<?= e((string) $draft['attr_value']) ?>">
+                                <?php if ($draft['status'] === 'needs_decision'): ?>
+                                    <span class="badge bg-warning mt-1">Значения нет в справочнике</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="col-12 col-md-8 d-flex flex-wrap gap-2">
+                                <button type="submit" class="btn btn-success" name="action" value="confirm" formnovalidate>Подтвердить</button>
+                                <button type="submit" class="btn btn-outline-primary" name="action" value="edit">Поправить</button>
+                                <button type="submit" class="btn btn-outline-danger" name="action" value="reject" formnovalidate>Отклонить</button>
+                            </div>
+                        </div>
+                    </form>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </section>
+<?php endif; ?>
 <script type="module" src="/admin/js/product-form.js"></script>
 <?php
 $content = (string) ob_get_clean();

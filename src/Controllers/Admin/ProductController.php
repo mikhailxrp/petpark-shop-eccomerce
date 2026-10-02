@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Services\MoySklad;
+
 /**
  * Товары в админке — список /admin/products (phase-7.md, Таск 7) и форма
  * создания/правки (Таск 8; FR-ADM-001). Список и правку видят `owner` и
@@ -11,6 +13,10 @@ namespace App\Controllers\Admin;
  * домашнюю страницу. Создавать и деактивировать Товар может только Владелец;
  * Фрилансер правит название, описание и фото — остальные поля из его POST
  * не читаются (`productFormValidate()` с `$full = false`).
+ *
+ * Таск 9 (FR-ADM-002, FR-DISC-001): Варианты и Характеристики на странице
+ * правки — отдельные POST только для Владельца. Цена Варианта вводится один
+ * раз, начальный остаток уходит через заглушку МойСклад.
  */
 final class ProductController
 {
@@ -26,6 +32,12 @@ final class ProductController
 
     private const SAVE_FAILED_ERROR = 'Не удалось сохранить Товар. Попробуйте ещё раз.';
     private const SLUG_TAKEN_ERROR = 'Такой адрес уже занят другим Товаром.';
+
+    private const VARIANT_FLASH = 'variant_form';
+    private const VARIANT_NEW = 'new';
+    private const SKU_TAKEN_ERROR = 'Вариант с таким артикулом уже есть.';
+    private const VARIANT_SAVE_FAILED_ERROR = 'Не удалось сохранить Вариант. Попробуйте ещё раз.';
+    private const ATTRIBUTES_SAVE_FAILED_ERROR = 'Не удалось сохранить Характеристики. Попробуйте ещё раз.';
 
     public function index(): void
     {
@@ -112,6 +124,216 @@ final class ProductController
             $form['errors'] ?? [],
             productAdminImages((int) $product['id'])
         );
+    }
+
+    /** Новый Вариант Товара (FR-ADM-002): цена вводится здесь один раз, остаток — через заглушку МойСклад. */
+    public function variantStore(string $id): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $productId = (int) $product['id'];
+        $backUrl = '/admin/products/' . $productId . '/edit#variants';
+
+        [$values, $errors] = productVariantValidate($_POST, null);
+        if (!isset($errors['sku']) && productVariantSkuTaken($values['sku'])) {
+            $errors['sku'] = self::SKU_TAKEN_ERROR;
+        }
+
+        if ($errors !== []) {
+            $this->rememberVariantForm(self::VARIANT_NEW, $this->variantFormRaw(true), $errors);
+            redirect($backUrl);
+        }
+
+        try {
+            $variantId = productVariantCreate($productId, $values);
+        } catch (\Throwable $e) {
+            // Гонка двух форм с одним артикулом: проверка выше её не ловит, ловит UNIQUE.
+            if ($e instanceof \PDOException && $e->getCode() === '23000' && productVariantSkuTaken($values['sku'])) {
+                $this->rememberVariantForm(self::VARIANT_NEW, $this->variantFormRaw(true), ['sku' => self::SKU_TAKEN_ERROR]);
+            } else {
+                logException($e, ['product_id' => $productId]);
+                setFlash('error', self::VARIANT_SAVE_FAILED_ERROR);
+                $this->rememberVariantForm(self::VARIANT_NEW, $this->variantFormRaw(true), []);
+            }
+            redirect($backUrl);
+        }
+
+        $stockFailed = false;
+        if ($values['stock_quantity'] > 0) {
+            try {
+                (new MoySklad())->syncVariant($variantId, $values['stock_quantity']);
+            } catch (\Throwable $e) {
+                logException($e, ['product_id' => $productId, 'variant_id' => $variantId]);
+                $stockFailed = true;
+            }
+        }
+
+        logWarning('Товары: добавлен Вариант', [
+            'user_id'    => (int) $_SESSION['user_id'],
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+        ]);
+
+        if ($stockFailed) {
+            setFlash('error', 'Вариант создан, но остаток не записан — задайте его на странице «Склад».');
+        } else {
+            setFlash('success', 'Вариант добавлен.');
+        }
+        redirect($backUrl);
+    }
+
+    /** Правка существующего Варианта: скидка, активность, вес/вкус. Цена, артикул и остаток не принимаются. */
+    public function variantUpdate(string $id, string $variantId): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $productId = (int) $product['id'];
+        $variant = ctype_digit($variantId) && strlen($variantId) <= self::PAGE_MAX_DIGITS
+            ? productVariantFind($productId, (int) $variantId)
+            : null;
+
+        if ($variant === null) {
+            http_response_code(404);
+            render('errors/404');
+            return;
+        }
+
+        $backUrl = '/admin/products/' . $productId . '/edit#variant-' . (int) $variant['id'];
+
+        [$values, $errors] = productVariantValidate($_POST, (string) $variant['price']);
+
+        if ($errors !== []) {
+            $this->rememberVariantForm((int) $variant['id'], $this->variantFormRaw(false), $errors);
+            redirect($backUrl);
+        }
+
+        try {
+            productVariantUpdate($productId, (int) $variant['id'], $values);
+        } catch (\Throwable $e) {
+            logException($e, ['product_id' => $productId, 'variant_id' => (int) $variant['id']]);
+            setFlash('error', self::VARIANT_SAVE_FAILED_ERROR);
+            $this->rememberVariantForm((int) $variant['id'], $this->variantFormRaw(false), []);
+            redirect($backUrl);
+        }
+
+        logWarning('Товары: изменён Вариант', [
+            'user_id'    => (int) $_SESSION['user_id'],
+            'product_id' => $productId,
+            'variant_id' => (int) $variant['id'],
+        ]);
+
+        setFlash('success', 'Вариант ' . $variant['sku'] . ' сохранён.');
+        redirect($backUrl);
+    }
+
+    /** Ручной ввод Характеристик из справочника (FR-ADM-002). Значение вне справочника — отказ целиком. */
+    public function attributesSave(string $id): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $productId = (int) $product['id'];
+        $backUrl = '/admin/products/' . $productId . '/edit#characteristics';
+
+        $dictionary = attributeDictionary(ATTRIBUTE_EXTRACT_NAMES);
+        $input = is_array($_POST['attributes'] ?? null) ? $_POST['attributes'] : [];
+
+        $attributes = [];
+        foreach (ATTRIBUTE_EXTRACT_NAMES as $name) {
+            if (!is_string($input[$name] ?? null)) {
+                continue;
+            }
+            $value = trim($input[$name]);
+            if ($value !== '' && !in_array($value, $dictionary[$name], true)) {
+                setFlash('error', 'Значения «' . mb_substr($value, 0, ATTRIBUTE_VALUE_MAX_LENGTH) . '» нет в справочнике — выберите из списка.');
+                redirect($backUrl);
+            }
+            $attributes[$name] = $value;
+        }
+
+        try {
+            productAttributesSave($productId, $attributes);
+        } catch (\Throwable $e) {
+            logException($e, ['product_id' => $productId]);
+            setFlash('error', self::ATTRIBUTES_SAVE_FAILED_ERROR);
+            redirect($backUrl);
+        }
+
+        logWarning('Товары: изменены Характеристики', [
+            'user_id'    => (int) $_SESSION['user_id'],
+            'product_id' => $productId,
+        ]);
+
+        setFlash('success', 'Характеристики сохранены.');
+        redirect($backUrl);
+    }
+
+    /**
+     * Решение по ИИ-черновику Характеристики прямо из формы Товара: та же логика,
+     * что на экране Фазы 5 (`attributeDecisionResolve()` + `attributeDraftDecide()`).
+     * Черновик должен принадлежать этому Товару.
+     */
+    public function attributeDecide(string $id): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $productId = (int) $product['id'];
+        $backUrl = '/admin/products/' . $productId . '/edit#characteristics';
+
+        $draftIdInput = input('draft_id', '');
+        $draftId = is_string($draftIdInput) && ctype_digit($draftIdInput) && strlen($draftIdInput) <= self::PAGE_MAX_DIGITS
+            ? (int) $draftIdInput
+            : 0;
+
+        $ownDraftIds = array_map(
+            static fn (array $draft): int => (int) $draft['id'],
+            attributeDraftsOpenForProducts([$productId])
+        );
+        if (!in_array($draftId, $ownDraftIds, true)) {
+            setFlash('error', 'Черновик уже обработан или не найден.');
+            redirect($backUrl);
+        }
+
+        $actionInput = input('action', '');
+        $action = is_string($actionInput) ? $actionInput : '';
+        $valueInput = input('value', '');
+
+        $draftValue = $action === ATTRIBUTE_ACTION_CONFIRM ? attributeDraftOpenValue($draftId) : null;
+        $value = is_string($valueInput) ? $valueInput : '';
+        $decision = mb_check_encoding($value, 'UTF-8')
+            ? attributeDecisionResolve($action, $draftValue, $value)
+            : ['error' => 'Значение содержит недопустимые символы.', 'value' => null, 'outcome' => null];
+
+        if ($decision['error'] !== null) {
+            setFlash('error', $decision['error']);
+            redirect($backUrl);
+        }
+
+        try {
+            $applied = attributeDraftDecide($draftId, $decision['value'], (string) $decision['outcome']);
+        } catch (\Throwable $e) {
+            logError('Решение по черновику Характеристики не записано', ['draft_id' => $draftId, 'error' => $e->getMessage()]);
+            setFlash('error', 'Не удалось сохранить решение. Попробуйте ещё раз.');
+            redirect($backUrl);
+        }
+
+        if ($applied) {
+            setFlash('success', match ($decision['outcome']) {
+                'rejected' => 'Черновик отклонён.',
+                default    => 'Характеристика сохранена — Товар найдётся в фильтре каталога.',
+            });
+        } else {
+            setFlash('error', 'Черновик уже обработан.');
+        }
+
+        redirect($backUrl);
     }
 
     public function update(string $id): void
@@ -254,6 +476,17 @@ final class ProductController
     {
         $role = (string) $_SESSION['user_role'];
 
+        // Варианты и Характеристики — только Владельцу и только у существующего Товара.
+        $catalog = $product !== null && $role === 'owner'
+            ? [
+                'variants'     => productAdminVariants((int) $product['id']),
+                'attributes'   => productConfirmedAttributes((int) $product['id']),
+                'dictionary'   => attributeDictionary(ATTRIBUTE_EXTRACT_NAMES),
+                'drafts'       => attributeDraftsOpenForProducts([(int) $product['id']]),
+                'variantForm'  => $this->takeVariantForm(),
+            ]
+            : ['variants' => null, 'attributes' => [], 'dictionary' => [], 'drafts' => [], 'variantForm' => null];
+
         render('admin/product-form', [
             'pageTitle'  => ($product === null ? 'Новый товар' : 'Правка товара') . ' — PetPark',
             'roleLabel'  => adminRoleLabel($role),
@@ -269,7 +502,63 @@ final class ProductController
             'photoMb'    => intdiv(PRODUCT_PHOTO_MAX_BYTES, 1024 * 1024),
             'success'    => getFlash('success'),
             'error'      => getFlash('error'),
-        ]);
+            'attributeNames'     => ATTRIBUTE_EXTRACT_NAMES,
+            'variantAttributes'  => PRODUCT_VARIANT_ATTRIBUTE_NAMES,
+            'attributeMaxLength' => ATTRIBUTE_VALUE_MAX_LENGTH,
+            'stockMax'           => PRODUCT_VARIANT_STOCK_MAX,
+        ] + $catalog);
+    }
+
+    /**
+     * Введённое в форме Варианта как строки — чтобы после ошибки показать то,
+     * что набрал Владелец, а не проверенные значения.
+     *
+     * @return array<string, mixed>
+     */
+    private function variantFormRaw(bool $isNew): array
+    {
+        $text = static fn (string $key): string => is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
+        $attributes = [];
+        foreach (PRODUCT_VARIANT_ATTRIBUTE_NAMES as $name) {
+            $value = is_array($_POST['attributes'] ?? null) ? ($_POST['attributes'][$name] ?? '') : '';
+            $attributes[$name] = is_string($value) ? trim($value) : '';
+        }
+
+        $raw = ['discount_price' => $text('discount_price'), 'attributes' => $attributes];
+
+        return $isNew
+            ? $raw + ['sku' => $text('sku'), 'price' => $text('price'), 'stock_quantity' => $text('stock_quantity')]
+            : $raw + ['is_active' => ($_POST['is_active'] ?? '') === '1'];
+    }
+
+    /**
+     * @param int|string $target id Варианта или VARIANT_NEW
+     * @param array<string, mixed> $values
+     * @param array<string, string> $errors
+     */
+    private function rememberVariantForm(int|string $target, array $values, array $errors): void
+    {
+        setFlash(
+            self::VARIANT_FLASH,
+            json_encode(['target' => $target, 'values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR)
+        );
+    }
+
+    /**
+     * @return array{target: int|string, values: array<string, mixed>, errors: array<string, string>}|null
+     */
+    private function takeVariantForm(): ?array
+    {
+        $raw = getFlash(self::VARIANT_FLASH);
+        if ($raw === null) {
+            return null;
+        }
+
+        $form = json_decode($raw, true);
+
+        return is_array($form) && isset($form['target']) && is_array($form['values'] ?? null) && is_array($form['errors'] ?? null)
+            ? $form
+            : null;
     }
 
     /**
