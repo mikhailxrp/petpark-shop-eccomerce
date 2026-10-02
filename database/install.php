@@ -794,6 +794,31 @@ $pdo->exec("
         MODIFY status ENUM('pending', 'needs_decision', 'empty', 'confirmed', 'rejected') NOT NULL
 ");
 
+// ─── notifications ──────────────────────────────────────────────────────
+// Очередь email-уведомлений (phase-6, Таск 1, ADR-030). Письмо ставится в
+// транзакции смены статуса; event_key UNIQUE — одно событие, одно письмо.
+// В `sending` строка — «аренда»: next_attempt_at хранит срок, после которого
+// брошенная отправка считается упавшей.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS notifications (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        event_key       VARCHAR(100) NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name  VARCHAR(150) NOT NULL DEFAULT '',
+        subject         VARCHAR(255) NOT NULL,
+        body            TEXT NOT NULL,
+        status          ENUM('pending', 'sending', 'sent', 'failed') NOT NULL DEFAULT 'pending',
+        attempts        TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_error      VARCHAR(500) NULL,
+        sent_at         TIMESTAMP NULL,
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_notifications_event_key (event_key),
+        KEY idx_notifications_status_next (status, next_attempt_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 
