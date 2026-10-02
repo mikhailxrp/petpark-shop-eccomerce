@@ -54,6 +54,7 @@ final class HomeController
             'reviewsAggregate' => reviewPublishedAggregate(),
             'rootCategories'   => $rootCategories,
             'categoryTabs'     => $categoryTabs,
+            'favoriteVariantIds' => favoriteVariantIdsForCurrentCustomer(),
         ]);
     }
 }

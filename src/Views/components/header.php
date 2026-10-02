@@ -124,7 +124,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                     </a>
                 </div>
                 <div class="line"></div>
-                <a href="#"><i class="fa-regular fa-heart"></i></a>
+                <a href="/account/favorites" aria-label="Избранное"><i class="fa-regular fa-heart" aria-hidden="true"></i></a>
                 <div class="line"></div>
                 <div class="cart-widget">
                     <a

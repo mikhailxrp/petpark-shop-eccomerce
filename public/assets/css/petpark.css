@@ -967,6 +967,14 @@ select.nice-select::-ms-expand {
     cursor: pointer;
 }
 
+/* Сердечко в карточке листинга: форма не создаёт своего блока внутри .add-to-cart */
+.add-to-cart form.favorite-toggle-form {
+    display: contents;
+}
+.add-to-cart button.heart-wishlist:hover {
+    color: #fff;
+}
+
 /*
  * .star-rating (форма «Оставить отзыв», product.php) — в макете звёзды
  * выбора оценки чисто декоративные (`.start i`, без обработчика клика,

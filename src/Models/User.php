@@ -5,8 +5,9 @@ declare(strict_types=1);
 /**
  * Модель Пользователя — только SQL через PDO, возвращает массивы (php.md).
  * Регистрации в проекте нет (Q-027) — только чтение существующих
- * пользователей (сид ролей, `database/seed.php`) и смена пароля при
- * восстановлении (FR-AUTH-003).
+ * пользователей (сид ролей, `database/seed.php`), смена пароля при
+ * восстановлении (FR-AUTH-003) и правка личных данных Покупателя
+ * (FR-ACC-005).
  */
 
 /**
@@ -75,4 +76,31 @@ function userCreateCustomer(string $name, string $email, string $phone, string $
     ]);
 
     return (int) getPdo()->lastInsertId();
+}
+
+/**
+ * Личные данные Покупателя (FR-ACC-005). Занятый чужой email ловится
+ * уникальным индексом `users.email`, а не предварительным SELECT — так нет
+ * гонки между проверкой и записью.
+ *
+ * @return bool false — email уже принадлежит другому аккаунту
+ */
+function userUpdateProfile(int $userId, string $name, string $email, string $phone): bool
+{
+    $stmt = getPdo()->prepare('
+        UPDATE users
+        SET name = :name, email = :email, phone = :phone
+        WHERE id = :id
+    ');
+
+    try {
+        $stmt->execute(['name' => $name, 'email' => $email, 'phone' => $phone, 'id' => $userId]);
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000') {
+            return false;
+        }
+        throw $e;
+    }
+
+    return true;
 }

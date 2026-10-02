@@ -20,6 +20,14 @@ final class AccountController
     private const PET_BREED_MAX = 80;
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const PET_FORM_FLASH = 'pet_form';
+    private const PROFILE_FORM_FLASH = 'profile_form';
+    private const PROFILE_NAME_MAX = 100;
+    private const PROFILE_EMAIL_MAX = 150;
+    private const PROFILE_RATE_LIMIT_ATTEMPTS = 5;
+    private const PROFILE_RATE_LIMIT_SECONDS = 60;
+    private const PROFILE_RATE_LIMITED_ERROR = 'Слишком много попыток. Попробуйте через минуту.';
+    // Одна формулировка для занятого email и сбоя записи: иначе по тексту видно, что аккаунт существует.
+    private const PROFILE_SAVE_FAILED_ERROR = 'Не удалось сохранить данные. Проверьте введённое и попробуйте ещё раз.';
     private const ORDERS_PER_PAGE = 10;
     private const BOOKINGS_PER_PAGE = 10;
     private const RETURN_REASON_MAX = 1000;
@@ -501,6 +509,99 @@ final class AccountController
             : null;
     }
 
+    public function favorites(): void
+    {
+        requireRole('customer');
+
+        $favorites = favoritesByUser((int) $_SESSION['user_id']);
+        foreach ($favorites as &$favorite) {
+            $favorite['status'] = catalogAvailabilityStatus(
+                (int) $favorite['stock_quantity'],
+                (int) $favorite['reserved_quantity']
+            );
+        }
+        unset($favorite);
+
+        render('account/favorites', [
+            'favorites' => $favorites,
+            'success'   => getFlash('success'),
+            'error'     => getFlash('error'),
+        ]);
+    }
+
+    public function favoriteRemove(string $variantId): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $id = ctype_digit($variantId) ? (int) $variantId : 0;
+
+        if ($id > 0 && favoriteRemove((int) $_SESSION['user_id'], $id)) {
+            setFlash('success', 'Убрано из избранного.');
+        } else {
+            setFlash('error', 'Этого товара уже нет в избранном.');
+        }
+
+        redirect('/account/favorites');
+    }
+
+    public function profile(): void
+    {
+        requireRole('customer');
+
+        $form = $this->takeForm(self::PROFILE_FORM_FLASH);
+
+        if ($form !== null) {
+            $values = $form['values'];
+            $errors = $form['errors'];
+        } else {
+            $user = userFindById((int) $_SESSION['user_id']);
+            $values = [
+                'name'  => (string) ($user['name'] ?? ''),
+                'phone' => (string) ($user['phone'] ?? ''),
+                'email' => (string) ($user['email'] ?? ''),
+            ];
+            $errors = [];
+        }
+
+        render('account/profile', [
+            'values'  => $values,
+            'errors'  => $errors,
+            'success' => getFlash('success'),
+            'error'   => getFlash('error'),
+        ]);
+    }
+
+    public function profileUpdate(): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        if (tooManyAttempts('profile', self::PROFILE_RATE_LIMIT_ATTEMPTS, self::PROFILE_RATE_LIMIT_SECONDS)) {
+            logWarning('Профиль: превышен лимит попыток', ['user_id' => (int) $_SESSION['user_id']]);
+            setFlash('error', self::PROFILE_RATE_LIMITED_ERROR);
+            redirect('/account/profile');
+        }
+        hitRateLimit('profile');
+
+        [$values, $errors] = $this->validateProfile();
+
+        if ($errors !== []) {
+            $this->rememberForm($values, $errors, self::PROFILE_FORM_FLASH);
+            redirect('/account/profile');
+        }
+
+        if (!userUpdateProfile((int) $_SESSION['user_id'], $values['name'], $values['email'], $values['phone'])) {
+            logWarning('Профиль: email занят другим аккаунтом', ['user_id' => (int) $_SESSION['user_id']]);
+            setFlash('error', self::PROFILE_SAVE_FAILED_ERROR);
+            $this->rememberForm($values, [], self::PROFILE_FORM_FLASH);
+            redirect('/account/profile');
+        }
+
+        setFlash('success', 'Данные сохранены.');
+        redirect('/account/profile');
+    }
+
     private function notFound(): void
     {
         http_response_code(404);
@@ -550,17 +651,17 @@ final class AccountController
      * @param array<string, string> $values
      * @param array<string, string> $errors
      */
-    private function rememberForm(array $values, array $errors): void
+    private function rememberForm(array $values, array $errors, string $flashKey = self::PET_FORM_FLASH): void
     {
-        setFlash(self::PET_FORM_FLASH, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
+        setFlash($flashKey, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
     }
 
     /**
      * @return array{values: array<string, string>, errors: array<string, string>}|null
      */
-    private function takeForm(): ?array
+    private function takeForm(string $flashKey = self::PET_FORM_FLASH): ?array
     {
-        $raw = getFlash(self::PET_FORM_FLASH);
+        $raw = getFlash($flashKey);
         if ($raw === null) {
             return null;
         }
@@ -570,5 +671,42 @@ final class AccountController
         return is_array($form) && is_array($form['values'] ?? null) && is_array($form['errors'] ?? null)
             ? $form
             : null;
+    }
+
+    /**
+     * Телефон приводится к `+7XXXXXXXXXX` (`normalizePhone()`) — в таком виде
+     * его хранит и сопоставляет Обращения (phase-5.md, Таск 7).
+     *
+     * @return array{0: array<string, string>, 1: array<string, string>} [значения, ошибки по полям]
+     */
+    private function validateProfile(): array
+    {
+        $values = [
+            'name'  => trim(mb_scrub((string) input('name'))),
+            'phone' => trim(mb_scrub((string) input('phone'))),
+            'email' => mb_strtolower(trim(mb_scrub((string) input('email')))),
+        ];
+        $errors = [];
+
+        if ($values['name'] === '') {
+            $errors['name'] = 'Укажите имя.';
+        } elseif (mb_strlen($values['name']) > self::PROFILE_NAME_MAX) {
+            $errors['name'] = 'Имя — не длиннее ' . self::PROFILE_NAME_MAX . ' символов.';
+        }
+
+        $phone = normalizePhone($values['phone']);
+        if ($phone === null) {
+            $errors['phone'] = 'Укажите телефон в формате +7 900 000-00-00.';
+        } else {
+            $values['phone'] = $phone;
+        }
+
+        if ($values['email'] === '' || mb_strlen($values['email']) > self::PROFILE_EMAIL_MAX
+            || filter_var($values['email'], FILTER_VALIDATE_EMAIL) === false
+        ) {
+            $errors['email'] = 'Укажите корректный email.';
+        }
+
+        return [$values, $errors];
     }
 }

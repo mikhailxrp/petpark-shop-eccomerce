@@ -49,3 +49,67 @@ function favoriteToggle(int $userId, int $variantId): ?bool
 
     return $stmt->rowCount() > 0 ? true : null;
 }
+
+/**
+ * Избранное Покупателя для `/account/favorites` (`FR-ACC-004`): только
+ * активные Варианты активных Товаров, свежие сверху. Подпись Варианта —
+ * один подзапрос (характеристики, иначе артикул), как в
+ * `productSearchVariants()`. Наличие отдаётся сырыми числами — статус
+ * считает Controller (`catalogAvailabilityStatus()`).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function favoritesByUser(int $userId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT v.id AS variant_id, v.sku, v.price, v.discount_price,
+               v.stock_quantity, v.reserved_quantity,
+               p.name, p.slug,
+               (
+                   SELECT GROUP_CONCAT(a.attr_value ORDER BY a.attr_name SEPARATOR \', \')
+                   FROM product_variant_attributes a
+                   WHERE a.variant_id = v.id
+               ) AS attributes_label
+        FROM favorites f
+        JOIN product_variants v ON v.id = f.variant_id AND v.is_active = 1
+        JOIN products p ON p.id = v.product_id AND p.is_active = 1
+        WHERE f.user_id = ?
+        ORDER BY f.created_at DESC, f.id DESC
+    ');
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Убирает Вариант из избранного Покупателя. Условие по `user_id` — чужую
+ * запись по подставленному id не удалить (dod-global.md).
+ *
+ * @return bool false — такой записи у Покупателя нет
+ */
+function favoriteRemove(int $userId, int $variantId): bool
+{
+    $stmt = getPdo()->prepare('DELETE FROM favorites WHERE user_id = ? AND variant_id = ?');
+    $stmt->execute([$userId, $variantId]);
+
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Id избранных Вариантов текущего Покупателя — для закрашенного сердечка на
+ * карточках листингов (components/product-card.php). Гость и персонал —
+ * пустой список. Читает сессию здесь, а не в View: View не ходит в БД.
+ *
+ * @return array<int, int>
+ */
+function favoriteVariantIdsForCurrentCustomer(): array
+{
+    if (!isAuthenticated() || ($_SESSION['user_role'] ?? null) !== 'customer') {
+        return [];
+    }
+
+    $stmt = getPdo()->prepare('SELECT variant_id FROM favorites WHERE user_id = ?');
+    $stmt->execute([(int) $_SESSION['user_id']]);
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
