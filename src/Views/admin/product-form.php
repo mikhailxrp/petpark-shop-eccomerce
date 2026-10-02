@@ -30,7 +30,7 @@ declare(strict_types=1);
  * @var array<int, array<string, mixed>>|null $variants null — блок не показывается
  * @var array<string, string> $attributes Подтверждённые Характеристики Товара
  * @var array<string, list<string>> $dictionary attr_name => значения справочника
- * @var array<int, array<string, mixed>> $drafts Нерешённые ИИ-черновики Товара
+ * @var array<string, string> $suggestions Предложения ИИ (attr_name => значение) из последнего разбора
  * @var array{target: int|string, values: array<string, mixed>, errors: array<string, string>}|null $variantForm
  */
 
@@ -321,21 +321,37 @@ ob_start();
             <h2 class="card-title" id="characteristics-title">Характеристики</h2>
         </div>
         <div class="card-body">
-            <p class="text-muted">Значения — из справочника каталога; по ним работает фильтр. Пустое значение убирает Характеристику.</p>
+            <p class="text-muted">По этим значениям работает фильтр каталога. Подсказки — значения, уже встречающиеся в каталоге; можно ввести и новое. Пустое поле или «Удалить» убирает Характеристику.</p>
 
-            <form method="post" action="/admin/products/<?= $productId ?>/attributes" class="mb-4" novalidate>
+            <form method="post" action="/admin/products/<?= $productId ?>/attributes/ai" class="mb-3">
+                <?= csrfField() ?>
+                <button type="submit" class="btn btn-outline-primary">Разобрать ИИ</button>
+                <span class="form-text ms-2">ИИ прочитает описание Товара и предложит значения. Ничего не сохранится, пока вы сами не нажмёте «Сохранить Характеристики».</span>
+            </form>
+
+            <form method="post" action="/admin/products/<?= $productId ?>/attributes" novalidate>
                 <?= csrfField() ?>
                 <div class="row g-3">
                     <?php foreach ($attributeNames as $attrName): ?>
-                        <?php $current = $attributes[$attrName] ?? ''; ?>
+                        <?php
+                        $current = (string) ($attributes[$attrName] ?? '');
+                        $suggested = $suggestions[$attrName] ?? null;
+                        $fieldValue = $suggested ?? $current;
+                        ?>
+                        <datalist id="attribute-list-<?= e($attrName) ?>">
+                            <?php foreach ($dictionary[$attrName] ?? [] as $known): ?>
+                                <option value="<?= e($known) ?>"></option>
+                            <?php endforeach; ?>
+                        </datalist>
                         <div class="col-12 col-md-4">
                             <label for="attribute-<?= e($attrName) ?>" class="form-label"><?= e($attributeLabel($attrName)) ?></label>
-                            <select id="attribute-<?= e($attrName) ?>" name="attributes[<?= e($attrName) ?>]" class="form-select">
-                                <option value="">Не задано</option>
-                                <?php foreach ($dictionary[$attrName] ?? [] as $known): ?>
-                                    <option value="<?= e($known) ?>"<?= $known === $current ? ' selected' : '' ?>><?= e($known) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <input type="text" class="form-control" id="attribute-<?= e($attrName) ?>" name="attributes[<?= e($attrName) ?>]" maxlength="<?= $attributeMaxLength ?>" list="attribute-list-<?= e($attrName) ?>" autocomplete="off" value="<?= e($fieldValue) ?>">
+                            <?php if ($suggested !== null): ?>
+                                <span class="badge bg-info-transparent mt-1">Предложено ИИ<?= $current !== '' && $current !== $suggested ? ' (было: ' . e($current) . ')' : '' ?></span>
+                            <?php endif; ?>
+                            <?php if ($current !== ''): ?>
+                                <button type="submit" class="btn btn-link btn-sm text-danger p-0 mt-1 d-block" name="delete" value="<?= e($attrName) ?>" formnovalidate>Удалить</button>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                     <div class="col-12">
@@ -343,38 +359,6 @@ ob_start();
                     </div>
                 </div>
             </form>
-
-            <?php if ($drafts !== []): ?>
-                <h3 class="h6">Предложено ИИ-помощником</h3>
-                <?php foreach ($attributeNames as $attrName): ?>
-                    <datalist id="draft-dictionary-<?= e($attrName) ?>">
-                        <?php foreach ($dictionary[$attrName] ?? [] as $known): ?>
-                            <option value="<?= e($known) ?>"></option>
-                        <?php endforeach; ?>
-                    </datalist>
-                <?php endforeach; ?>
-                <?php foreach ($drafts as $draft): ?>
-                    <?php $draftId = (int) $draft['id']; ?>
-                    <form method="post" action="/admin/products/<?= $productId ?>/attributes/decide" class="border rounded p-3 mb-3" novalidate>
-                        <?= csrfField() ?>
-                        <input type="hidden" name="draft_id" value="<?= $draftId ?>">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-12 col-md-4">
-                                <label for="draft-value-<?= $draftId ?>" class="form-label"><?= e($attributeLabel((string) $draft['attr_name'])) ?></label>
-                                <input type="text" class="form-control" id="draft-value-<?= $draftId ?>" name="value" maxlength="<?= $attributeMaxLength ?>" list="draft-dictionary-<?= e((string) $draft['attr_name']) ?>" autocomplete="off" value="<?= e((string) $draft['attr_value']) ?>">
-                                <?php if ($draft['status'] === 'needs_decision'): ?>
-                                    <span class="badge bg-warning mt-1">Значения нет в справочнике</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="col-12 col-md-8 d-flex flex-wrap gap-2">
-                                <button type="submit" class="btn btn-success" name="action" value="confirm" formnovalidate>Подтвердить</button>
-                                <button type="submit" class="btn btn-outline-primary" name="action" value="edit">Поправить</button>
-                                <button type="submit" class="btn btn-outline-danger" name="action" value="reject" formnovalidate>Отклонить</button>
-                            </div>
-                        </div>
-                    </form>
-                <?php endforeach; ?>
-            <?php endif; ?>
         </div>
     </section>
 <?php endif; ?>

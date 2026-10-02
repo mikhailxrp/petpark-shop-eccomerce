@@ -39,6 +39,13 @@ final class ProductController
     private const VARIANT_SAVE_FAILED_ERROR = 'Не удалось сохранить Вариант. Попробуйте ещё раз.';
     private const ATTRIBUTES_SAVE_FAILED_ERROR = 'Не удалось сохранить Характеристики. Попробуйте ещё раз.';
 
+    private const AI_FLASH = 'attribute_suggestions';
+    private const AI_ERRORS = [
+        'unavailable' => 'ИИ-провайдер недоступен. Заполните Характеристики вручную или повторите позже.',
+        'blocked'     => 'Достигнут месячный лимит расхода на ИИ — разбор приостановлен.',
+        'error'       => 'Не удалось разобрать ответ ИИ. Повторите позже или заполните поля вручную.',
+    ];
+
     public function index(): void
     {
         requireRole('owner', 'content_editor');
@@ -230,7 +237,10 @@ final class ProductController
         redirect($backUrl);
     }
 
-    /** Ручной ввод Характеристик из справочника (FR-ADM-002). Значение вне справочника — отказ целиком. */
+    /**
+     * Сохранение Характеристик из формы (FR-ADM-002): значение заменяет прежнее,
+     * пустое или кнопка «Удалить» — убирает. Одна транзакция на все поля.
+     */
     public function attributesSave(string $id): void
     {
         requireRole('owner');
@@ -240,20 +250,14 @@ final class ProductController
         $productId = (int) $product['id'];
         $backUrl = '/admin/products/' . $productId . '/edit#characteristics';
 
-        $dictionary = attributeDictionary(ATTRIBUTE_EXTRACT_NAMES);
-        $input = is_array($_POST['attributes'] ?? null) ? $_POST['attributes'] : [];
-
-        $attributes = [];
-        foreach (ATTRIBUTE_EXTRACT_NAMES as $name) {
-            if (!is_string($input[$name] ?? null)) {
-                continue;
-            }
-            $value = trim($input[$name]);
-            if ($value !== '' && !in_array($value, $dictionary[$name], true)) {
-                setFlash('error', 'Значения «' . mb_substr($value, 0, ATTRIBUTE_VALUE_MAX_LENGTH) . '» нет в справочнике — выберите из списка.');
-                redirect($backUrl);
-            }
-            $attributes[$name] = $value;
+        [$attributes, $errors] = productAttributesValidate($_POST, ATTRIBUTE_EXTRACT_NAMES);
+        if ($errors !== []) {
+            setFlash('error', implode(' ', array_map(
+                static fn (string $name, string $message): string => str_replace('_', ' ', $name) . ': ' . $message,
+                array_keys($errors),
+                $errors
+            )));
+            redirect($backUrl);
         }
 
         try {
@@ -274,11 +278,11 @@ final class ProductController
     }
 
     /**
-     * Решение по ИИ-черновику Характеристики прямо из формы Товара: та же логика,
-     * что на экране Фазы 5 (`attributeDecisionResolve()` + `attributeDraftDecide()`).
-     * Черновик должен принадлежать этому Товару.
+     * ИИ-разбор Характеристик одного Товара по его описанию (FR-AI-001). Ничего не
+     * пишет в каталог: предложения кладутся во flash и подставляются в поля формы —
+     * в `product_attributes` они попадают, только когда Владелец нажмёт «Сохранить».
      */
-    public function attributeDecide(string $id): void
+    public function attributesAi(string $id): void
     {
         requireRole('owner');
         requireCsrf();
@@ -287,83 +291,46 @@ final class ProductController
         $productId = (int) $product['id'];
         $backUrl = '/admin/products/' . $productId . '/edit#characteristics';
 
-        $draftIdInput = input('draft_id', '');
-        $draftId = is_string($draftIdInput) && ctype_digit($draftIdInput) && strlen($draftIdInput) <= self::PAGE_MAX_DIGITS
-            ? (int) $draftIdInput
-            : 0;
-
-        $ownDraftIds = array_map(
-            static fn (array $draft): int => (int) $draft['id'],
-            attributeDraftsOpenForProducts([$productId])
-        );
-        if (!in_array($draftId, $ownDraftIds, true)) {
-            setFlash('error', 'Черновик уже обработан или не найден.');
-            redirect($backUrl);
-        }
-
-        $actionInput = input('action', '');
-        $action = is_string($actionInput) ? $actionInput : '';
-        $valueInput = input('value', '');
-
-        $draftValue = $action === ATTRIBUTE_ACTION_CONFIRM ? attributeDraftOpenValue($draftId) : null;
-        $value = is_string($valueInput) ? $valueInput : '';
-        $decision = mb_check_encoding($value, 'UTF-8')
-            ? attributeDecisionResolve($action, $draftValue, $value)
-            : ['error' => 'Значение содержит недопустимые символы.', 'value' => null, 'outcome' => null];
-
-        if ($decision['error'] !== null) {
-            setFlash('error', $decision['error']);
+        if (trim((string) ($product['description'] ?? '')) === '') {
+            setFlash('error', 'У Товара нет описания — ИИ нечего разбирать. Заполните описание и сохраните Товар.');
             redirect($backUrl);
         }
 
         try {
-            $applied = attributeDraftDecide($draftId, $decision['value'], (string) $decision['outcome']);
+            $result = attributeExtractForProduct(
+                ['id' => $productId, 'name' => (string) $product['name'], 'description' => (string) $product['description']],
+                ATTRIBUTE_EXTRACT_NAMES,
+                attributeDictionary(ATTRIBUTE_EXTRACT_NAMES)
+            );
         } catch (\Throwable $e) {
-            logError('Решение по черновику Характеристики не записано', ['draft_id' => $draftId, 'error' => $e->getMessage()]);
-            setFlash('error', 'Не удалось сохранить решение. Попробуйте ещё раз.');
+            logException($e, ['product_id' => $productId]);
+            $result = ['status' => 'error', 'drafts' => []];
+        }
+
+        if ($result['status'] !== 'ok') {
+            setFlash('error', self::AI_ERRORS[$result['status']] ?? self::AI_ERRORS['error']);
             redirect($backUrl);
         }
 
-        if ($applied) {
-            setFlash('success', match ($decision['outcome']) {
-                'rejected' => 'Черновик отклонён.',
-                default    => 'Характеристика сохранена — Товар найдётся в фильтре каталога.',
-            });
-        } else {
-            setFlash('error', 'Черновик уже обработан.');
-        }
+        $suggestions = productAttributeSuggestions(
+            array_map(static fn (array $draft): ?string => $draft['value'], $result['drafts']),
+            ATTRIBUTE_EXTRACT_NAMES
+        );
 
-        redirect($backUrl);
-    }
-
-    public function update(string $id): void
-    {
-        requireRole('owner', 'content_editor');
-        requireCsrf();
-
-        $this->save($this->findOr404($id));
-    }
-
-    public function toggleActive(string $id): void
-    {
-        requireRole('owner');
-        requireCsrf();
-
-        $product = $this->findOr404($id);
-        $activate = (int) $product['is_active'] === 0;
-        productSetActive((int) $product['id'], $activate);
-        $this->forgetSitemap();
-
-        logWarning('Товары: смена статуса', [
+        logWarning('Товары: ИИ-разбор Характеристик', [
             'user_id'    => (int) $_SESSION['user_id'],
-            'product_id' => (int) $product['id'],
-            'is_active'  => $activate,
+            'product_id' => $productId,
+            'found'      => count($suggestions),
         ]);
 
-        setFlash('success', $activate
-            ? 'Товар снова активен: ' . $product['name'] . '.'
-            : 'Товар деактивирован: ' . $product['name'] . '.');
-        redirect('/admin/products/' . (int) $product['id'] . '/edit');
+        if ($suggestions === []) {
+            setFlash('error', 'ИИ не нашёл Характеристик в описании. Заполните поля вручную.');
+            redirect($backUrl);
+        }
+
+        setFlash(self::AI_FLASH, json_encode($suggestions, JSON_THROW_ON_ERROR));
+        setFlash('success', 'ИИ предложил значения (отмечены в полях). Проверьте их и нажмите «Сохранить Характеристики» — пока вы не сохранили, в каталоге ничего не изменилось.');
+        redirect($backUrl);
     }
 
     /**
@@ -482,10 +449,10 @@ final class ProductController
                 'variants'     => productAdminVariants((int) $product['id']),
                 'attributes'   => productConfirmedAttributes((int) $product['id']),
                 'dictionary'   => attributeDictionary(ATTRIBUTE_EXTRACT_NAMES),
-                'drafts'       => attributeDraftsOpenForProducts([(int) $product['id']]),
+                'suggestions'  => $this->takeSuggestions(),
                 'variantForm'  => $this->takeVariantForm(),
             ]
-            : ['variants' => null, 'attributes' => [], 'dictionary' => [], 'drafts' => [], 'variantForm' => null];
+            : ['variants' => null, 'attributes' => [], 'dictionary' => [], 'suggestions' => [], 'variantForm' => null];
 
         render('admin/product-form', [
             'pageTitle'  => ($product === null ? 'Новый товар' : 'Правка товара') . ' — PetPark',
@@ -542,6 +509,19 @@ final class ProductController
             self::VARIANT_FLASH,
             json_encode(['target' => $target, 'values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR)
         );
+    }
+
+    /**
+     * Предложения ИИ из прошлого запроса (подставляются в поля один раз).
+     *
+     * @return array<string, string>
+     */
+    private function takeSuggestions(): array
+    {
+        $raw = getFlash(self::AI_FLASH);
+        $decoded = $raw === null ? null : json_decode($raw, true);
+
+        return is_array($decoded) ? productAttributeSuggestions($decoded, ATTRIBUTE_EXTRACT_NAMES) : [];
     }
 
     /**

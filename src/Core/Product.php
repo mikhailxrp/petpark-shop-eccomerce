@@ -11,6 +11,7 @@ declare(strict_types=1);
 const PRODUCT_NAME_MAX = 200;
 const PRODUCT_SLUG_MAX = 220;
 const PRODUCT_DESCRIPTION_MAX = 20000;
+const PRODUCT_ATTRIBUTE_VALUE_MAX = 150; // product_attributes.attr_value
 
 const PRODUCT_PHOTOS_MAX = 8;
 const PRODUCT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
@@ -148,4 +149,65 @@ function productUploadedPaths(array $paths): array
             $path
         ) === 1
     ));
+}
+
+/**
+ * Проверка формы Характеристик Товара (FR-ADM-002). Читаются только `$names`;
+ * значение вне справочника допустимо — справочник строится из сохранённых
+ * значений, новое значение Владелец вводит осознанно. Пустое значение — убрать
+ * Характеристику; имя в `delete` убирает её независимо от введённого; имя,
+ * которого нет в POST, не трогается.
+ *
+ * @param array<string, mixed> $input сырой POST
+ * @param list<string> $names допустимые attr_name
+ * @return array{0: array<string, string>, 1: array<string, string>} [attr_name => значение ('' — убрать), ошибки по имени]
+ */
+function productAttributesValidate(array $input, array $names): array
+{
+    $posted = is_array($input['attributes'] ?? null) ? $input['attributes'] : [];
+    $delete = is_string($input['delete'] ?? null) ? $input['delete'] : '';
+
+    $values = [];
+    $errors = [];
+    foreach ($names as $name) {
+        if ($name === $delete) {
+            $values[$name] = '';
+            continue;
+        }
+        if (!is_string($posted[$name] ?? null)) {
+            continue;
+        }
+
+        $value = trim($posted[$name]);
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            $errors[$name] = 'Значение содержит недопустимые символы.';
+        } elseif (mb_strlen($value) > PRODUCT_ATTRIBUTE_VALUE_MAX) {
+            $errors[$name] = 'Значение — не длиннее ' . PRODUCT_ATTRIBUTE_VALUE_MAX . ' символов.';
+        } else {
+            $values[$name] = $value;
+        }
+    }
+
+    return [$values, $errors];
+}
+
+/**
+ * Предложения ИИ для подстановки в форму: только известные имена и непустые
+ * строки (`null` — ИИ ничего не нашёл, текущее значение остаётся).
+ *
+ * @param array<string, mixed> $raw attr_name => значение|null
+ * @param list<string> $names
+ * @return array<string, string>
+ */
+function productAttributeSuggestions(array $raw, array $names): array
+{
+    $suggestions = [];
+    foreach ($names as $name) {
+        $value = is_string($raw[$name] ?? null) ? trim($raw[$name]) : '';
+        if ($value !== '') {
+            $suggestions[$name] = $value;
+        }
+    }
+
+    return $suggestions;
 }

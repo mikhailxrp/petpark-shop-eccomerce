@@ -170,4 +170,105 @@ final class ProductFormTest extends TestCase
             ])
         );
     }
+
+    private const ATTRIBUTE_NAMES = ['вид_животного', 'возраст', 'назначение'];
+
+    public function testAttributesTrimAndKeepNewValuesOutsideDictionary(): void
+    {
+        [$values, $errors] = productAttributesValidate(
+            ['attributes' => ['вид_животного' => '  Кошка ', 'назначение' => 'для стерилизованных кошек']],
+            self::ATTRIBUTE_NAMES
+        );
+
+        $this->assertSame([], $errors);
+        $this->assertSame(['вид_животного' => 'Кошка', 'назначение' => 'для стерилизованных кошек'], $values);
+    }
+
+    public function testAttributesEmptyValueMeansRemove(): void
+    {
+        [$values] = productAttributesValidate(['attributes' => ['возраст' => '   ']], self::ATTRIBUTE_NAMES);
+
+        $this->assertSame(['возраст' => ''], $values);
+    }
+
+    public function testAttributesAbsentNameIsNotTouched(): void
+    {
+        [$values] = productAttributesValidate(['attributes' => ['возраст' => 'Взрослые']], self::ATTRIBUTE_NAMES);
+
+        $this->assertArrayNotHasKey('вид_животного', $values);
+        $this->assertArrayNotHasKey('назначение', $values);
+    }
+
+    public function testAttributesDeleteButtonBeatsTypedValue(): void
+    {
+        [$values] = productAttributesValidate(
+            ['attributes' => ['возраст' => 'Взрослые', 'назначение' => 'Корм'], 'delete' => 'возраст'],
+            self::ATTRIBUTE_NAMES
+        );
+
+        $this->assertSame(['возраст' => '', 'назначение' => 'Корм'], $values);
+    }
+
+    public function testAttributesDeleteWorksEvenIfFieldNotPosted(): void
+    {
+        [$values] = productAttributesValidate(['delete' => 'назначение'], self::ATTRIBUTE_NAMES);
+
+        $this->assertSame(['назначение' => ''], $values);
+    }
+
+    public function testAttributesUnknownNamesAreIgnored(): void
+    {
+        [$values] = productAttributesValidate(
+            ['attributes' => ['цена' => '1', 'возраст' => 'Взрослые'], 'delete' => 'цена'],
+            self::ATTRIBUTE_NAMES
+        );
+
+        $this->assertSame(['возраст' => 'Взрослые'], $values);
+    }
+
+    public function testAttributesRejectTooLongAndBrokenUtf8(): void
+    {
+        [, $errors] = productAttributesValidate(
+            [
+                'attributes' => [
+                    'возраст'    => str_repeat('я', PRODUCT_ATTRIBUTE_VALUE_MAX + 1),
+                    'назначение' => "\xFF\xFE",
+                ],
+            ],
+            self::ATTRIBUTE_NAMES
+        );
+
+        $this->assertArrayHasKey('возраст', $errors);
+        $this->assertArrayHasKey('назначение', $errors);
+    }
+
+    public function testAttributesMaxLengthAccepted(): void
+    {
+        [$values, $errors] = productAttributesValidate(
+            ['attributes' => ['возраст' => str_repeat('я', PRODUCT_ATTRIBUTE_VALUE_MAX)]],
+            self::ATTRIBUTE_NAMES
+        );
+
+        $this->assertSame([], $errors);
+        $this->assertSame(PRODUCT_ATTRIBUTE_VALUE_MAX, mb_strlen($values['возраст']));
+    }
+
+    public function testAttributesNonArrayInputIsIgnored(): void
+    {
+        [$values, $errors] = productAttributesValidate(['attributes' => 'возраст'], self::ATTRIBUTE_NAMES);
+
+        $this->assertSame([], $values);
+        $this->assertSame([], $errors);
+    }
+
+    public function testAiSuggestionsKeepOnlyKnownNonEmptyStrings(): void
+    {
+        $this->assertSame(
+            ['возраст' => 'Взрослые'],
+            productAttributeSuggestions(
+                ['возраст' => ' Взрослые ', 'назначение' => null, 'вид_животного' => '', 'цена' => '1', 'x' => ['a']],
+                self::ATTRIBUTE_NAMES
+            )
+        );
+    }
 }

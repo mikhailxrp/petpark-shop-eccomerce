@@ -3,26 +3,20 @@
 declare(strict_types=1);
 
 /**
- * ИИ-разбор Характеристик Товара из текста описания (FR-AI-001, phase-5 Таск 3).
- * Класс задачи «без ПДн» (BR-AI-001): в промпт уходят только название и
- * описание Товара. Результат — черновики, в каталог сами не попадают.
+ * ИИ-разбор Характеристик Товара из текста описания (FR-AI-001). Запускается
+ * кнопкой в карточке Товара (phase-7 Таск 9). Класс задачи «без ПДн» (BR-AI-001):
+ * в промпт уходят только название и описание Товара. Результат — предложение,
+ * подставляемое в поля формы: в каталог попадает, только когда Владелец сохранит.
  */
 
 // Характеристики уровня Товара (product_attributes). «Вес упаковки» — уровень Варианта.
 const ATTRIBUTE_EXTRACT_NAMES = ['вид_животного', 'возраст', 'назначение'];
 
-const ATTRIBUTE_STATUS_PENDING  = 'pending';        // значение из справочника, ждёт подтверждения
+const ATTRIBUTE_STATUS_PENDING  = 'pending';        // значение из справочника
 const ATTRIBUTE_STATUS_DECISION = 'needs_decision'; // значения нет в справочнике
 const ATTRIBUTE_STATUS_EMPTY    = 'empty';          // в тексте не найдено
 
-const ATTRIBUTE_STATUS_CONFIRMED = 'confirmed';     // Владелец подтвердил/поправил
-const ATTRIBUTE_STATUS_REJECTED  = 'rejected';      // Владелец отклонил
-
 const ATTRIBUTE_VALUE_MAX_LENGTH = 150; // product_attributes.attr_value
-
-const ATTRIBUTE_ACTION_CONFIRM = 'confirm';
-const ATTRIBUTE_ACTION_EDIT    = 'edit';
-const ATTRIBUTE_ACTION_REJECT  = 'reject';
 
 const ATTRIBUTE_SYSTEM_PROMPT = 'Ты извлекаешь характеристики товара зоомагазина из его описания. '
     . 'Не выдумывай: если характеристики нет в тексте — верни null. Отвечай только JSON-объектом.';
@@ -95,44 +89,12 @@ function attributeDraftsFromResponse(string $text, array $names, array $dictiona
 }
 
 /**
- * Проверка решения Владельца по черновику. Чистая функция.
- * confirm — значение черновика как есть (outcome accepted); edit — значение
- * из формы, 1–150 символов (edited); reject — ничего не пишется (rejected).
- *
- * @return array{error: string|null, value: string|null, outcome: string|null}
- */
-function attributeDecisionResolve(string $action, ?string $draftValue, string $input): array
-{
-    $fail = static fn (string $message): array => ['error' => $message, 'value' => null, 'outcome' => null];
-
-    return match ($action) {
-        ATTRIBUTE_ACTION_CONFIRM => ($draftValue === null || trim($draftValue) === '')
-            ? $fail('У черновика нет значения — подтверждать нечего.')
-            : ['error' => null, 'value' => $draftValue, 'outcome' => 'accepted'],
-        ATTRIBUTE_ACTION_EDIT => (static function () use ($input, $fail): array {
-            $value = trim($input);
-            if ($value === '') {
-                return $fail('Укажите значение Характеристики.');
-            }
-            if (mb_strlen($value) > ATTRIBUTE_VALUE_MAX_LENGTH) {
-                return $fail('Значение не длиннее ' . ATTRIBUTE_VALUE_MAX_LENGTH . ' символов.');
-            }
-
-            return ['error' => null, 'value' => $value, 'outcome' => 'edited'];
-        })(),
-        ATTRIBUTE_ACTION_REJECT => ['error' => null, 'value' => null, 'outcome' => 'rejected'],
-        default => $fail('Неизвестное действие.'),
-    };
-}
-
-/**
  * Разбор одного Товара.
- * ok — черновики готовы к записи; unavailable/blocked — провайдер недоступен
- * или лимит, Товар остаётся в очереди; error — ответ не разобран, Товар
- * остаётся в очереди, но пакет можно продолжать.
+ * ok — предложения готовы; unavailable/blocked — провайдер недоступен или
+ * достигнут месячный лимит; error — ответ не разобран.
  *
  * @param array{id: int, name: string, description: string|null} $product
- * @param list<string> $names Характеристики, которых у Товара ещё нет
+ * @param list<string> $names Характеристики для разбора
  * @param array<string, list<string>> $dictionary
  * @return array{status: string, drafts: array<string, array{value: string|null, status: string}>}
  */
