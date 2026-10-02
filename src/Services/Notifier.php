@@ -8,6 +8,9 @@ declare(strict_types=1);
  * Исключения наружу не выходят — статус Заказа/Записи от почты не зависит.
  */
 
+// Случайный хвост ключа события «сообщение по Возврату» (hex = вдвое длиннее).
+const NOTIFICATION_MESSAGE_KEY_BYTES = 8;
+
 /**
  * Отправить письма, которым пора, не больше $limit за вызов.
  *
@@ -146,6 +149,32 @@ function notifierEnqueueReturnStatus(array $return, string $toStatus): void
         (string) ($return['contact_name'] ?? ''),
         'Возврат по заказу №' . (int) $return['order_id'] . ' — ' . $subject . ' — ' . SHOP_NAME,
         renderToString('emails/return-status', ['return' => $return, 'status' => $toStatus])
+    );
+}
+
+/**
+ * Поставить в очередь сообщение Покупателю по заявке на Возврат («Написать
+ * покупателю», FR-RET-002 п. 3). Статус заявки не меняется. Ключ события
+ * уникален на каждое сообщение — второе письмо не считается дублем первого.
+ *
+ * @param array{id: int|string, order_id: int|string, contact_name: ?string, contact_email: ?string} $return
+ * @return bool false — у заявки нет email, письмо не поставлено
+ */
+function notifierEnqueueReturnMessage(array $return, string $message): bool
+{
+    $returnId = (int) $return['id'];
+    $email = trim((string) ($return['contact_email'] ?? ''));
+    if ($email === '') {
+        logWarning('Сообщение по Возврату не поставлено: нет email', ['return_id' => $returnId]);
+        return false;
+    }
+
+    return notificationEnqueue(
+        'return:' . $returnId . ':message:' . bin2hex(random_bytes(NOTIFICATION_MESSAGE_KEY_BYTES)),
+        $email,
+        (string) ($return['contact_name'] ?? ''),
+        'Возврат по заказу №' . (int) $return['order_id'] . ' — сообщение от магазина — ' . SHOP_NAME,
+        renderToString('emails/return-message', ['return' => $return, 'message' => $message])
     );
 }
 

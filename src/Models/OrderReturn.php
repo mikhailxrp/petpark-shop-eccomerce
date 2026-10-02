@@ -224,3 +224,89 @@ function returnsByUser(int $userId): array
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Заявки для очереди `/admin/returns` (FR-RET-002) с контактами и суммой
+ * Заказа. Новые — первыми.
+ *
+ * @return list<array<string, mixed>>
+ */
+function returnListForAdmin(?string $status, int $limit, int $offset): array
+{
+    $sql = '
+        SELECT r.id, r.order_id, r.status, r.created_at,
+               o.contact_name, o.contact_phone, o.total,
+               (SELECT COUNT(*) FROM order_return_photos p WHERE p.return_id = r.id) AS photo_count
+        FROM order_returns r
+        JOIN orders o ON o.id = r.order_id
+    ';
+
+    if ($status !== null) {
+        $sql .= ' WHERE r.status = :status';
+    }
+
+    $sql .= ' ORDER BY r.created_at DESC, r.id DESC LIMIT :limit OFFSET :offset';
+
+    $stmt = getPdo()->prepare($sql);
+    if ($status !== null) {
+        $stmt->bindValue(':status', $status);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+function returnCountForAdmin(?string $status): int
+{
+    return $status === null
+        ? (int) getPdo()->query('SELECT COUNT(*) FROM order_returns')->fetchColumn()
+        : returnCountByStatus($status);
+}
+
+function returnCountByStatus(string $status): int
+{
+    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM order_returns WHERE status = ?');
+    $stmt->execute([$status]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Карточка заявки для админки: заявка + контакты и состояние Заказа + кто
+ * принял решение.
+ *
+ * @return array<string, mixed>|null
+ */
+function returnFindForAdmin(int $id): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT r.id, r.order_id, r.reason, r.status, r.decision_comment,
+               r.resolved_by_user_id, r.created_at, r.updated_at,
+               o.status AS order_status, o.payment_method, o.payment_status,
+               o.contact_name, o.contact_phone, o.contact_email, o.total,
+               u.name AS resolved_by_name
+        FROM order_returns r
+        JOIN orders o ON o.id = r.order_id
+        LEFT JOIN users u ON u.id = r.resolved_by_user_id
+        WHERE r.id = ?
+    ');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
+ * Пути фото заявки (относительно public/).
+ *
+ * @return list<string>
+ */
+function returnPhotos(int $returnId): array
+{
+    $stmt = getPdo()->prepare('SELECT path FROM order_return_photos WHERE return_id = ? ORDER BY id');
+    $stmt->execute([$returnId]);
+
+    return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}

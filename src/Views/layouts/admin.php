@@ -121,6 +121,25 @@ declare(strict_types=1);
                                     <span class="side-menu__label">Обращения</span>
                                 </a>
                             </li>
+                            <?php
+                            // Единственный запрос в каркасе (dev-log, Таск 6): счётчик
+                            // новых заявок на Возврат. Сбой БД не должен ронять страницу.
+                            try {
+                                $newReturns = returnCountByStatus('submitted');
+                            } catch (Throwable $e) {
+                                $newReturns = 0;
+                            }
+                            $returnsActive = str_starts_with($currentPath, '/admin/returns');
+                            ?>
+                            <li class="slide<?= $returnsActive ? ' active' : '' ?>">
+                                <a href="/admin/returns" class="side-menu__item<?= $returnsActive ? ' active' : '' ?>">
+                                    <i class="fe fe-rotate-ccw side-menu__icon"></i>
+                                    <span class="side-menu__label">Возвраты</span>
+                                    <?php if ($newReturns > 0): ?>
+                                        <span class="badge bg-danger ms-auto" aria-label="Новых заявок: <?= $newReturns ?>"><?= $newReturns ?></span>
+                                    <?php endif; ?>
+                                </a>
+                            </li>
                             <li class="slide<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                 <a href="/admin/reviews" class="side-menu__item<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                     <i class="fe fe-star side-menu__icon"></i>
