@@ -2437,3 +2437,20 @@ table.shop_table td.product-name img {
 .cart-popup__item-img {
     object-fit: contain;
 }
+
+/*
+ * Длинное название Товара в <h1> баннера (product.php): шрифт уменьшается
+ * по длине названия, чтобы баннер не растягивался. clamp() не даёт
+ * увеличить шрифт на мобильных, где h1 и так меньше (responsive.css).
+ */
+.banner-text .banner-title {
+    overflow-wrap: anywhere;
+}
+.banner-text .banner-title--long {
+    font-size: clamp(28px, 3.4vw, 44px);
+    line-height: 1.2;
+}
+.banner-text .banner-title--xlong {
+    font-size: clamp(22px, 2.6vw, 32px);
+    line-height: 1.2;
+}

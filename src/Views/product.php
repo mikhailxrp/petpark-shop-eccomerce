@@ -22,6 +22,17 @@ declare(strict_types=1);
  * @var string|null                       $favoriteNotice  flash 'favorite_notice' — результат последнего переключения «В избранное»
  */
 
+// Длинное название уменьшает шрифт <h1>, чтобы баннер не растягивался
+const BANNER_TITLE_LONG_LENGTH = 30;
+const BANNER_TITLE_XLONG_LENGTH = 70;
+
+$bannerTitleLength = mb_strlen((string) $product['name']);
+$bannerTitleModifier = match (true) {
+    $bannerTitleLength > BANNER_TITLE_XLONG_LENGTH => ' banner-title--xlong',
+    $bannerTitleLength > BANNER_TITLE_LONG_LENGTH  => ' banner-title--long',
+    default                                        => '',
+};
+
 $minPrice = min(array_map(
     static fn (array $variant): float => catalogEffectivePrice(
         (float) $variant['price'],
@@ -129,7 +140,7 @@ ob_start();
         <div class="row align-items-center">
             <div class="col-lg-6">
                 <div class="banner-text">
-                    <h1><?= e((string) $product['name']) ?></h1>
+                    <h1 class="banner-title<?= $bannerTitleModifier ?>"><?= e((string) $product['name']) ?></h1>
                     <?php include __DIR__ . '/components/breadcrumbs.php'; ?>
                 </div>
             </div>

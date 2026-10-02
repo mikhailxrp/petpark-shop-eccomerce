@@ -174,6 +174,12 @@ declare(strict_types=1);
                                     <span class="side-menu__label">ИИ-помощники</span>
                                 </a>
                             </li>
+                            <li class="slide<?= $currentPath === '/admin/reports' ? ' active' : '' ?>">
+                                <a href="/admin/reports" class="side-menu__item<?= $currentPath === '/admin/reports' ? ' active' : '' ?>">
+                                    <i class="fe fe-bar-chart-2 side-menu__icon"></i>
+                                    <span class="side-menu__label">Отчёты</span>
+                                </a>
+                            </li>
                             <li class="slide<?= $currentPath === '/admin/settings/messengers' ? ' active' : '' ?>">
                                 <a href="/admin/settings/messengers" class="side-menu__item<?= $currentPath === '/admin/settings/messengers' ? ' active' : '' ?>">
                                     <i class="fe fe-send side-menu__icon"></i>

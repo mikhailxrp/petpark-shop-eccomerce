@@ -241,3 +241,9 @@ button.sidemenu-toggle {
     .staff-table__cell--name { font-weight: 400; }
     .staff-table__cell--actions { text-align: end; }
 }
+
+.report-chart { position: relative; height: 14rem; }
+
+@media (min-width: 768px) {
+    .report-chart { height: 16rem; }
+}

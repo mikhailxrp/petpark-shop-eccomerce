@@ -42,6 +42,7 @@ return [
         '/admin/inbox/{id}'    => ['Admin\InboxController', 'show'],
         '/admin/settings/messengers' => ['Admin\MessengerSettingsController', 'index'],
         '/admin/ai'            => ['Admin\AiController', 'index'],
+        '/admin/reports'       => ['Admin\ReportController', 'index'],
         '/admin/bookings'      => ['Admin\BookingController', 'index'],
         '/admin/bookings/new'  => ['Admin\BookingController', 'create'],
         '/admin/bookings/specialists' => ['Admin\BookingController', 'specialists'],
