@@ -78,3 +78,32 @@ function notificationRetryDelayAfterFailure(int $attemptsDone): ?int
 
     return notificationDelayBeforeAttempt($attemptsDone + 1);
 }
+
+// За сколько часов до визита уходит напоминание (FR-NOTIF-001 п. 3).
+const NOTIFICATION_BOOKING_REMINDER_HOURS = 3;
+
+// Как часто веб-запросы проверяют, не пора ли напоминать (ADR-030: без cron).
+const NOTIFICATION_REMINDER_CHECK_INTERVAL_SECONDS = 60;
+
+/**
+ * Нужно ли напоминание о Записи: подтверждена, визит ещё впереди и не дальше
+ * NOTIFICATION_BOOKING_REMINDER_HOURS, а сама Запись создана не позже чем за
+ * столько же часов до визита (иначе она «свежая» — подтверждение уже и есть
+ * напоминание). Тот же критерий в SQL — bookingsDueForReminder().
+ */
+function notificationBookingReminderDue(
+    string $status,
+    DateTimeImmutable $scheduledAt,
+    DateTimeImmutable $createdAt,
+    DateTimeImmutable $now
+): bool {
+    if ($status !== 'confirmed') {
+        return false;
+    }
+
+    $lead = new DateInterval('PT' . NOTIFICATION_BOOKING_REMINDER_HOURS . 'H');
+
+    return $scheduledAt > $now
+        && $scheduledAt <= $now->add($lead)
+        && $createdAt <= $scheduledAt->sub($lead);
+}

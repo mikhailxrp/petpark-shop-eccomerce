@@ -93,6 +93,68 @@ function notifierEnqueueOrderStatus(array $order, string $toStatus, string $paym
 }
 
 /**
+ * Поставить в очередь письмо о подтверждении Записи. Вызывается внутри
+ * транзакции подтверждения (Models/Booking.php): откат откатывает и письмо.
+ * Без email — пропуск с предупреждением, подтверждение не блокируется.
+ */
+function notifierEnqueueBookingConfirmed(int $bookingId): void
+{
+    $booking = bookingNotificationData($bookingId);
+    if ($booking === null) {
+        return;
+    }
+
+    $email = trim((string) $booking['customer_email']);
+    if ($email === '') {
+        logWarning('Уведомление о Записи не поставлено: нет email', ['booking_id' => $bookingId, 'kind' => 'confirmed']);
+        return;
+    }
+
+    notificationEnqueue(
+        'booking:' . $bookingId . ':confirmed',
+        $email,
+        (string) $booking['customer_name'],
+        'Запись подтверждена — ' . SHOP_NAME,
+        renderToString('emails/booking-confirmed', ['booking' => $booking])
+    );
+}
+
+/**
+ * Напоминания за NOTIFICATION_BOOKING_REMINDER_HOURS до визита. Проверка идёт
+ * на веб-запросах не чаще раза в NOTIFICATION_REMINDER_CHECK_INTERVAL_SECONDS
+ * (отметка времени — файл в storage/cache/); дубль исключён ключом
+ * `booking:{id}:reminder`. Исключения наружу не выходят.
+ */
+function notifierEnqueueBookingReminders(): void
+{
+    try {
+        if (cacheGet('notifier', 'reminders-last-run', NOTIFICATION_REMINDER_CHECK_INTERVAL_SECONDS) !== null) {
+            return;
+        }
+        cachePut('notifier', 'reminders-last-run', (string) time());
+
+        foreach (bookingsDueForReminder() as $bookingId) {
+            $booking = bookingNotificationData($bookingId);
+            $email = trim((string) ($booking['customer_email'] ?? ''));
+            if ($booking === null || $email === '') {
+                logWarning('Напоминание о Записи не поставлено: нет email', ['booking_id' => $bookingId]);
+                continue;
+            }
+
+            notificationEnqueue(
+                'booking:' . $bookingId . ':reminder',
+                $email,
+                (string) $booking['customer_name'],
+                'Напоминание о записи — ' . SHOP_NAME,
+                renderToString('emails/booking-reminder', ['booking' => $booking])
+            );
+        }
+    } catch (Throwable $e) {
+        logException($e);
+    }
+}
+
+/**
  * Запланировать отправку очереди на конец текущего запроса. Безопасно звать
  * несколько раз — зарегистрируется один обработчик.
  */
@@ -116,6 +178,7 @@ function notifierSendAfterResponse(): void
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
         }
+        notifierEnqueueBookingReminders();
         notifierSendPending();
     });
 }

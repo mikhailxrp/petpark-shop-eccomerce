@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use DateTimeImmutable;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
@@ -56,6 +57,37 @@ final class NotificationTest extends TestCase
         $this->assertTrue(notificationOrderStatusMessage('cancelled', 'paid')['refund_note']);
         $this->assertFalse(notificationOrderStatusMessage('cancelled', 'unpaid')['refund_note']);
         $this->assertFalse(notificationOrderStatusMessage('shipped', 'paid')['refund_note']);
+    }
+
+    private function reminderDue(string $status, string $scheduled, string $created): bool
+    {
+        return notificationBookingReminderDue(
+            $status,
+            new DateTimeImmutable($scheduled),
+            new DateTimeImmutable($created),
+            new DateTimeImmutable('2026-10-10 12:00:00')
+        );
+    }
+
+    public function testReminderForVisitIn2h50(): void
+    {
+        $this->assertTrue($this->reminderDue('confirmed', '2026-10-10 14:50:00', '2026-10-01 10:00:00'));
+    }
+
+    public function testNoReminderForVisitIn3h10(): void
+    {
+        $this->assertFalse($this->reminderDue('confirmed', '2026-10-10 15:10:00', '2026-10-01 10:00:00'));
+    }
+
+    public function testNoReminderForBookingCreated2hBeforeVisit(): void
+    {
+        $this->assertFalse($this->reminderDue('confirmed', '2026-10-10 14:50:00', '2026-10-10 12:50:00'));
+    }
+
+    public function testNoReminderForNotConfirmedOrPastVisit(): void
+    {
+        $this->assertFalse($this->reminderDue('cancelled', '2026-10-10 14:50:00', '2026-10-01 10:00:00'));
+        $this->assertFalse($this->reminderDue('confirmed', '2026-10-10 11:00:00', '2026-10-01 10:00:00'));
     }
 
     public function testFifthFailureMarksFailed(): void

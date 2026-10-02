@@ -517,6 +517,15 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+$bookingsStatusScheduledIndexExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND INDEX_NAME = 'idx_bookings_status_scheduled'
+")->fetchColumn();
+
+if ($bookingsStatusScheduledIndexExists === 0) {
+    $pdo->exec("ALTER TABLE bookings ADD KEY idx_bookings_status_scheduled (status, scheduled_at)");
+}
+
 // ─── booking_services ───────────────────────────────────────────────────
 // M:N со снэпшотом — Запись назначена на 1 или несколько Услуг подряд.
 

@@ -221,6 +221,10 @@ function bookingCreate(
             ]);
         }
 
+        if ($bookingStatus === 'confirmed') {
+            notifierEnqueueBookingConfirmed($bookingId);
+        }
+
         $pdo->commit();
 
         return [
@@ -307,13 +311,32 @@ function bookingReleaseExpired(?int $specialistId = null): int
  */
 function bookingConfirmWithDeposit(int $bookingId): bool
 {
-    $stmt = getPdo()->prepare("
-        UPDATE bookings SET status = 'confirmed', deposit_status = 'held', slot_hold_expires_at = NULL
-        WHERE id = ? AND status = 'slot_selected' AND slot_hold_expires_at > NOW()
-    ");
-    $stmt->execute([$bookingId]);
+    $pdo = getPdo();
+    $pdo->beginTransaction();
 
-    return $stmt->rowCount() === 1;
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE bookings SET status = 'confirmed', deposit_status = 'held', slot_hold_expires_at = NULL
+            WHERE id = ? AND status = 'slot_selected' AND slot_hold_expires_at > NOW()
+        ");
+        $stmt->execute([$bookingId]);
+
+        if ($stmt->rowCount() !== 1) {
+            $pdo->rollBack();
+            return false;
+        }
+
+        notifierEnqueueBookingConfirmed($bookingId);
+        $pdo->commit();
+
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
 }
 
 /**
@@ -703,6 +726,8 @@ function bookingCreateManual(
             ]);
         }
 
+        notifierEnqueueBookingConfirmed($bookingId);
+
         $pdo->commit();
 
         return ['status' => 'created', 'booking_id' => $bookingId, 'new_account' => $newAccount];
@@ -797,6 +822,8 @@ function bookingReschedule(int $bookingId, int $specialistId, string $date, stri
             WHERE id = ? AND deposit_status = 'held'
         ")->execute([$bookingId]);
 
+        notifierEnqueueBookingConfirmed($newId);
+
         $pdo->commit();
 
         return ['status' => 'rescheduled', 'booking_id' => $newId];
@@ -807,4 +834,69 @@ function bookingReschedule(int $bookingId, int $specialistId, string $date, stri
 
         throw $e;
     }
+}
+
+/**
+ * Данные для писем о Записи: Покупатель (email, имя), Питомец, Специалист,
+ * Услуги, время, Депозит. Читается внутри транзакции подтверждения.
+ *
+ * @return array<string, mixed>|null
+ */
+function bookingNotificationData(int $bookingId): ?array
+{
+    $pdo = getPdo();
+    $stmt = $pdo->prepare('
+        SELECT b.id, b.scheduled_at, b.deposit_amount, b.deposit_status,
+               c.name AS customer_name, c.email AS customer_email,
+               p.name AS pet_name, su.name AS specialist_name
+        FROM bookings b
+        JOIN users c ON c.id = b.user_id
+        JOIN pets p ON p.id = b.pet_id
+        JOIN specialists sp ON sp.id = b.specialist_id
+        JOIN users su ON su.id = sp.user_id
+        WHERE b.id = ?
+    ');
+    $stmt->execute([$bookingId]);
+    $booking = $stmt->fetch();
+    if ($booking === false) {
+        return null;
+    }
+
+    $itemsStmt = $pdo->prepare('
+        SELECT service_name, price, duration_minutes
+        FROM booking_services
+        WHERE booking_id = ?
+        ORDER BY sort_order
+    ');
+    $itemsStmt->execute([$bookingId]);
+    $booking['services'] = $itemsStmt->fetchAll();
+
+    return $booking;
+}
+
+/**
+ * id подтверждённых Записей, которым пора напомнить и у которых ещё нет
+ * письма-напоминания (FR-NOTIF-001 п. 3). Критерий — как
+ * notificationBookingReminderDue().
+ *
+ * @return list<int>
+ */
+function bookingsDueForReminder(): array
+{
+    $stmt = getPdo()->prepare("
+        SELECT b.id
+        FROM bookings b
+        LEFT JOIN notifications n ON n.event_key = CONCAT('booking:', b.id, ':reminder')
+        WHERE b.status = 'confirmed'
+          AND b.scheduled_at > NOW()
+          AND b.scheduled_at <= DATE_ADD(NOW(), INTERVAL :hours HOUR)
+          AND b.created_at <= DATE_SUB(b.scheduled_at, INTERVAL :hours2 HOUR)
+          AND n.id IS NULL
+        ORDER BY b.scheduled_at
+    ");
+    $stmt->bindValue(':hours', NOTIFICATION_BOOKING_REMINDER_HOURS, PDO::PARAM_INT);
+    $stmt->bindValue(':hours2', NOTIFICATION_BOOKING_REMINDER_HOURS, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 }
