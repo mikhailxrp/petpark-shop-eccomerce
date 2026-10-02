@@ -601,6 +601,17 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// decision_comment (phase-6, Таск 4) добавлен после создания таблицы — на
+// существующей БД CREATE TABLE IF NOT EXISTS его не добавит.
+$decisionCommentExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_returns' AND COLUMN_NAME = 'decision_comment'
+")->fetchColumn();
+
+if ($decisionCommentExists === 0) {
+    $pdo->exec("ALTER TABLE order_returns ADD COLUMN decision_comment TEXT NULL AFTER status");
+}
+
 // ─── order_return_photos ────────────────────────────────────────────────
 
 $pdo->exec("

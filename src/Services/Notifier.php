@@ -120,6 +120,36 @@ function notifierEnqueueBookingConfirmed(int $bookingId): void
 }
 
 /**
+ * Поставить в очередь письмо о статусе Возврата. Вызывается внутри транзакции
+ * Models/OrderReturn.php: откат откатывает и письмо. Без email — пропуск с
+ * предупреждением, смена статуса не блокируется.
+ *
+ * @param array{id: int|string, order_id: int|string, contact_name: ?string, contact_email: ?string, total: string, decision_comment: ?string} $return
+ */
+function notifierEnqueueReturnStatus(array $return, string $toStatus): void
+{
+    $subject = RETURN_STATUS_SUBJECTS[$toStatus] ?? null;
+    if ($subject === null) {
+        return;
+    }
+
+    $returnId = (int) $return['id'];
+    $email = trim((string) ($return['contact_email'] ?? ''));
+    if ($email === '') {
+        logWarning('Уведомление о Возврате не поставлено: нет email', ['return_id' => $returnId, 'status' => $toStatus]);
+        return;
+    }
+
+    notificationEnqueue(
+        'return:' . $returnId . ':status:' . $toStatus,
+        $email,
+        (string) ($return['contact_name'] ?? ''),
+        'Возврат по заказу №' . (int) $return['order_id'] . ' — ' . $subject . ' — ' . SHOP_NAME,
+        renderToString('emails/return-status', ['return' => $return, 'status' => $toStatus])
+    );
+}
+
+/**
  * Напоминания за NOTIFICATION_BOOKING_REMINDER_HOURS до визита. Проверка идёт
  * на веб-запросах не чаще раза в NOTIFICATION_REMINDER_CHECK_INTERVAL_SECONDS
  * (отметка времени — файл в storage/cache/); дубль исключён ключом

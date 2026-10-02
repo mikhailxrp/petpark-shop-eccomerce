@@ -15,3 +15,5 @@ require_once ROOT_PATH . '/src/Core/Cart.php';
 require_once ROOT_PATH . '/src/Core/Booking.php';
 require_once ROOT_PATH . '/src/Core/Ai.php';
 require_once ROOT_PATH . '/src/Core/Notification.php';
+require_once ROOT_PATH . '/src/Core/OrderReturn.php';
+require_once ROOT_PATH . '/src/Services/FileUpload.php';
