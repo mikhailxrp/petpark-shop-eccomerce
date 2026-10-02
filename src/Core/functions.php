@@ -433,3 +433,62 @@ function enabledChannels(string $configured, array $known = ['max', 'telegram', 
         static fn (string $code): bool => in_array($code, $known, true)
     )));
 }
+
+/**
+ * Мессенджеры, в которых можно открыть диалог с магазином (код → подпись).
+ * Avito сюда не входит: это Канал входящих, ссылки на диалог у него нет.
+ *
+ * @return array<string, string>
+ */
+function messengerLabels(): array
+{
+    return ['telegram' => 'Telegram', 'max' => 'MAX', 'vk' => 'VK'];
+}
+
+/**
+ * Мессенджеры для кнопки, запасного блока чата и соц-иконок (FR-NOTIF-003):
+ * Каналы из `CHANNELS_ENABLED`, у которых задана ссылка. Порядок — как в
+ * конфиге; каналы без подписи (Avito) и с пустой ссылкой отбрасываются.
+ *
+ * @param array<string, string> $urls   код → ссылка
+ * @param array<string, string> $labels код → подпись
+ * @return list<array{code: string, label: string, url: string}>
+ */
+function messengerLinks(string $enabled, array $urls, array $labels): array
+{
+    $links = [];
+
+    foreach (enabledChannels($enabled, array_keys($labels)) as $code) {
+        $url = trim($urls[$code] ?? '');
+
+        // Проверка и при выводе: строка в БД могла появиться в обход формы.
+        if (isSafeMessengerUrl($url)) {
+            $links[] = ['code' => $code, 'label' => $labels[$code], 'url' => $url];
+        }
+    }
+
+    return $links;
+}
+
+/**
+ * Ссылка на мессенджер, пригодная для `href`: абсолютный `https://` с доменом
+ * (`t.me`, `vk.com` — хост без точки вроде `https://vk/…` не принимается), без
+ * пробелов и управляющих символов, не длиннее лимита. `javascript:`, `http://`
+ * и прочие схемы отклоняются.
+ */
+function isSafeMessengerUrl(string $url, int $maxLength = 255): bool
+{
+    if ($url === '' || mb_strlen($url) > $maxLength || preg_match('/[\s\x00-\x1F\x7F]/u', $url) === 1) {
+        return false;
+    }
+
+    if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
+    $parts = parse_url($url);
+
+    return is_array($parts)
+        && ($parts['scheme'] ?? '') === 'https'
+        && preg_match('/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i', (string) ($parts['host'] ?? '')) === 1;
+}

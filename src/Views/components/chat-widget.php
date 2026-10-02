@@ -5,8 +5,11 @@ declare(strict_types=1);
 /**
  * Виджет консультанта (FR-AI-003): кнопка + панель чата. Логика — public/assets/js/chat.js,
  * ответы — POST /chat. Без JS виджет не показывается (кнопка скрыта до инициализации).
+ * Запасные ссылки на мессенджеры — те же, что у кнопки мессенджеров (layouts/public.php).
+ *
+ * @var list<array{code: string, label: string, url: string}> $messengerLinks
  */
-$chatLinks = array_filter(CHAT_FALLBACK_LINKS, static fn (string $url): bool => $url !== '');
+$chatLinks = $messengerLinks ?? [];
 ?>
 <section class="chat-widget" id="chat-widget" aria-label="Консультант" data-csrf="<?= e(csrfToken()) ?>" hidden>
     <button class="chat-widget__toggle" id="chat-toggle" type="button" aria-expanded="false" aria-controls="chat-panel">
@@ -38,9 +41,9 @@ $chatLinks = array_filter(CHAT_FALLBACK_LINKS, static fn (string $url): bool => 
             <?php if ($chatLinks !== []): ?>
                 <p class="chat-widget__fallback-text">Напишите нам в мессенджер:</p>
                 <ul class="chat-widget__links">
-                    <?php foreach ($chatLinks as $label => $url): ?>
+                    <?php foreach ($chatLinks as $link): ?>
                         <li class="chat-widget__links-item">
-                            <a class="chat-widget__link" href="<?= e($url) ?>" target="_blank" rel="noopener noreferrer"><?= e($label) ?></a>
+                            <a class="chat-widget__link" href="<?= e($link['url']) ?>" target="_blank" rel="noopener noreferrer"><?= e($link['label']) ?></a>
                         </li>
                     <?php endforeach; ?>
                 </ul>

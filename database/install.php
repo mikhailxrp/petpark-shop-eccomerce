@@ -839,6 +839,18 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// ─── site_settings ──────────────────────────────────────────────────────
+// Настройки сайта «ключ → значение» (phase-6, Таск 7): ссылки на мессенджеры
+// `messenger_link_{код}`, правятся Владельцем в админке.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key   VARCHAR(60) NOT NULL PRIMARY KEY,
+        setting_value VARCHAR(255) NOT NULL DEFAULT '',
+        updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // Добавляй свои таблицы здесь (после базовых, с учётом их FK):
 // $pdo->exec("CREATE TABLE IF NOT EXISTS ...");
 
