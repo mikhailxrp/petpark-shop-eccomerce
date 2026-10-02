@@ -2235,15 +2235,14 @@ table.shop_table td.product-quantity input.cart-item__quantity {
 }
 
 /*
- * Кнопка мессенджеров (FR-NOTIF-003) — слева внизу: справа заняты виджет чата
- * и кнопка «вверх» (#progress). Без JS список ссылок виден всегда; класс --js
- * (messenger-button.js) прячет его до клика по кнопке.
+ * Кнопки мессенджеров (FR-NOTIF-003) — слева внизу колонкой: справа заняты
+ * виджет чата и кнопка «вверх» (#progress). Все доступные мессенджеры видны
+ * сразу, без раскрытия.
  */
 .messenger-button {
     --messenger-gap: 1rem;
-    --messenger-toggle-size: 3.5rem;
-    --messenger-radius: 0.75rem;
-    --messenger-border: #e2e2e2;
+    --messenger-size: 3.5rem;
+    --messenger-space: 0.75rem;
 
     position: fixed;
     bottom: 20px; /* на одной линии с #progress */
@@ -2251,53 +2250,25 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     z-index: 1040;
 }
 
-.messenger-button__toggle {
-    display: none;
-    width: var(--messenger-toggle-size);
-    height: var(--messenger-toggle-size);
-    border: 0;
-    border-radius: 50%;
-    background: var(--color-primary);
-    color: #fff;
-    font-size: 1.25rem;
-    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-}
-
-.messenger-button--js .messenger-button__toggle {
-    display: block;
-}
-
 .messenger-button__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--messenger-space);
     margin: 0;
-    padding: 0.5rem;
-    border: 1px solid var(--messenger-border);
-    border-radius: var(--messenger-radius);
-    background: #fff;
-    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+    padding: 0;
     list-style: none;
-}
-
-.messenger-button--js .messenger-button__list {
-    position: absolute;
-    bottom: calc(var(--messenger-toggle-size) + 0.5rem);
-    left: 0;
-    display: none;
-}
-
-.messenger-button--js.messenger-button--open .messenger-button__list {
-    display: block;
 }
 
 .messenger-button__link {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--messenger-radius);
-    color: var(--color-text, #222);
-    font-weight: 600;
-    white-space: nowrap;
+    justify-content: center;
+    width: var(--messenger-size);
+    height: var(--messenger-size);
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
     text-decoration: none;
 }
 
@@ -2313,7 +2284,7 @@ table.shop_table td.product-quantity input.cart-item__quantity {
 
 .messenger-button__icon svg {
     display: block;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.75rem;
+    height: 1.75rem;
     fill: currentColor;
 }
