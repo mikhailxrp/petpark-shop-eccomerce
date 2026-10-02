@@ -175,6 +175,51 @@ function returnTransition(
 }
 
 /**
+ * Блокирует заявку FOR UPDATE и отдаёт данные для завершения. Вызывать в
+ * открытой транзакции (её ведёт Services/ReturnCompletion): блокировка
+ * держится на время `refund()`, второй запрос дождётся и увидит `completed`.
+ *
+ * @return array<string, mixed>|null null — заявки нет
+ */
+function returnLockForCompletion(int $returnId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT r.id, r.order_id, r.status,
+               o.payment_method, o.payment_status, o.total
+        FROM order_returns r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.id = ?
+        FOR UPDATE
+    ');
+    $stmt->execute([$returnId]);
+    $row = $stmt->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
+ * Завершить Возврат (FR-RET-003): переход в `completed` через
+ * returnTransition() (с письмом), возврат остатка и, если деньги вернули,
+ * `payment_status = refunded` — внутри уже открытой транзакции вызывающего.
+ *
+ * @return bool false — переход недопустим, ничего не изменено
+ */
+function returnComplete(int $returnId, int $orderId, int $resolvedByUserId, bool $markRefunded): bool
+{
+    if (!returnTransition($returnId, 'completed', $resolvedByUserId)) {
+        return false;
+    }
+
+    orderRestoreStock($orderId);
+
+    if ($markRefunded) {
+        orderMarkRefunded($orderId);
+    }
+
+    return true;
+}
+
+/**
  * Заявка с контактами Покупателя из Заказа (снэпшот `contact_*`, ADR-017).
  */
 function returnFindById(int $id): ?array

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Services\Payment\YooMoneyStubGateway;
+use App\Services\ReturnCompletion;
+
 /**
  * Рассмотрение заявок на Возврат — /admin/returns, /admin/returns/{id}
  * (phase-6.md, Таск 6; FR-RET-002). Доступ — `shift_admin`/`owner`.
  * Статус меняется только через returnTransition(); все POST — CSRF +
- * redirect(). «Завершить» и возврат денег — Таск 8.
+ * redirect(). «Завершить» и возврат денег — ReturnCompletion (Таск 8).
  */
 final class ReturnController
 {
@@ -17,6 +20,7 @@ final class ReturnController
     private const TRANSITION_REJECTED_ERROR = 'Этот переход статуса сейчас недоступен.';
     private const ACTION_FAILED_ERROR = 'Не удалось выполнить действие. Попробуйте ещё раз.';
     private const COMMENT_INVALID_ERROR = 'Комментарий Покупателю обязателен (до 1000 символов).';
+    private const REFUND_FAILED_ERROR = 'Возврат денег не прошёл. Заявка осталась «Одобрена» — попробуйте ещё раз.';
     private const MESSAGE_INVALID_ERROR = 'Текст сообщения обязателен (до 1000 символов).';
     private const MESSAGE_STATUS_ERROR = 'Написать Покупателю можно, пока заявка «На рассмотрении».';
     private const MESSAGE_NO_EMAIL_ERROR = 'У заявки нет email — сообщение не поставлено.';
@@ -77,6 +81,8 @@ final class ReturnController
             'canReview'  => returnCanTransition($status, 'in_review'),
             'canDecide'  => returnCanTransition($status, 'approved'),
             'canMessage' => $status === 'in_review',
+            'canComplete' => returnCanTransition($status, 'completed'),
+            'refundKind' => returnRefundKind((string) $return['payment_method'], (string) $return['payment_status']),
             'commentMax' => self::COMMENT_MAX_LENGTH,
             'success'    => getFlash('success'),
             'error'      => getFlash('error'),
@@ -115,6 +121,27 @@ final class ReturnController
         $returnId = $this->requireReturnId($id);
 
         $this->decide($returnId, 'rejected', 'Заявка отклонена, Покупатель уведомлён.');
+
+        redirect('/admin/returns/' . $returnId);
+    }
+
+    /** «Завершить возврат» (FR-RET-003): деньги, остаток, письмо — Services/ReturnCompletion. */
+    public function complete(string $id): void
+    {
+        requireRole('shift_admin', 'owner');
+        requireCsrf();
+
+        $returnId = $this->requireReturnId($id);
+        $completion = new ReturnCompletion(new YooMoneyStubGateway(env('PAYMENT_STUB_SECRET')));
+
+        match ($completion->complete($returnId, (int) $_SESSION['user_id'])) {
+            ReturnCompletion::RESULT_NOT_ALLOWED   => setFlash('error', self::TRANSITION_REJECTED_ERROR),
+            ReturnCompletion::RESULT_REFUND_FAILED => setFlash('error', self::REFUND_FAILED_ERROR),
+            ReturnCompletion::RESULT_ERROR         => setFlash('error', self::ACTION_FAILED_ERROR),
+            ReturnCompletion::RESULT_REFUNDED      => setFlash('success', 'Возврат завершён: деньги возвращены на карту, остаток возвращён.'),
+            ReturnCompletion::RESULT_CASH_REFUNDED => setFlash('success', 'Возврат завершён: отмечено «возвращено наличными», остаток возвращён.'),
+            ReturnCompletion::RESULT_COMPLETED     => setFlash('success', 'Возврат завершён, остаток возвращён.'),
+        };
 
         redirect('/admin/returns/' . $returnId);
     }

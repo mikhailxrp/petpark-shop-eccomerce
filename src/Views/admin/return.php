@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Карточка заявки на Возврат — /admin/returns/{id} (phase-6.md, Таск 6;
- * FR-RET-002). Завершение Возврата и возврат денег — Таск 8.
+ * FR-RET-002, FR-RET-003).
  *
  * @var string $pageTitle
  * @var string $roleLabel
@@ -15,6 +15,8 @@ declare(strict_types=1);
  * @var bool $canReview доступно «Взять в работу»
  * @var bool $canDecide доступны «Одобрить»/«Отклонить»
  * @var bool $canMessage доступно «Написать покупателю»
+ * @var bool $canComplete доступно «Завершить возврат»
+ * @var string $refundKind returnRefundKind(): card|cash|none
  * @var int $commentMax лимит длины комментария/сообщения
  * @var string|null $success
  * @var string|null $error
@@ -136,7 +138,7 @@ ob_start();
 <div class="card">
     <div class="card-header"><h2 class="card-title">Действия</h2></div>
     <div class="card-body">
-        <?php if (!$canReview && !$canDecide && !$canMessage): ?>
+        <?php if (!$canReview && !$canDecide && !$canMessage && !$canComplete): ?>
             <p class="mb-0 text-muted">Для этой заявки действий нет.</p>
         <?php endif; ?>
 
@@ -156,6 +158,21 @@ ob_start();
                     <button type="submit" class="btn btn-success">Одобрить</button>
                     <button type="submit" formaction="/admin/returns/<?= $returnId ?>/reject" class="btn btn-outline-danger">Отклонить</button>
                 </div>
+            </form>
+        <?php endif; ?>
+
+        <?php if ($canComplete): ?>
+            <?php
+            $completeHint = match ($refundKind) {
+                'card'  => 'Деньги (' . cartFormatMoney((string) $return['total']) . ' ₽) вернутся на карту Покупателя, остаток вернётся на склад, Покупатель получит письмо.',
+                'cash'  => 'Заказ будет отмечен «возвращено наличными» — выдайте деньги Покупателю. Остаток вернётся на склад, Покупатель получит письмо.',
+                default => 'Денег к возврату нет (заказ не оплачен или уже возвращён). Остаток вернётся на склад, Покупатель получит письмо.',
+            };
+            ?>
+            <form method="post" action="/admin/returns/<?= $returnId ?>/complete" class="mb-3">
+                <?= csrfField() ?>
+                <p><?= e($completeHint) ?></p>
+                <button type="submit" class="btn btn-primary">Завершить возврат</button>
             </form>
         <?php endif; ?>
 

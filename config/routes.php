@@ -98,6 +98,7 @@ return [
         '/admin/returns/{id}/approve'  => ['Admin\ReturnController', 'approve'],
         '/admin/returns/{id}/reject'   => ['Admin\ReturnController', 'reject'],
         '/admin/returns/{id}/message'  => ['Admin\ReturnController', 'messageBuyer'],
+        '/admin/returns/{id}/complete' => ['Admin\ReturnController', 'complete'],
         '/admin/inbox/simulate'        => ['Admin\InboxController', 'simulate'],
         '/admin/inbox/{id}/reply'      => ['Admin\InboxController', 'reply'],
         '/admin/inbox/{id}/draft'      => ['Admin\InboxController', 'draft'],

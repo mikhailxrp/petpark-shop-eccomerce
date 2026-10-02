@@ -95,6 +95,24 @@ final class OrderReturnTest extends TestCase
         }
     }
 
+    public static function refundKinds(): array
+    {
+        return [
+            'карта оплачена'             => ['card_online', 'paid', 'card'],
+            'при получении оплачен'      => ['cash_or_card_on_delivery', 'paid', 'cash'],
+            'при получении не оплачен'   => ['cash_or_card_on_delivery', 'unpaid', 'none'],
+            'карта не оплачена'          => ['card_online', 'unpaid', 'none'],
+            'уже возвращено'             => ['card_online', 'refunded', 'none'],
+            'неизвестный способ'         => ['nope', 'paid', 'none'],
+        ];
+    }
+
+    #[DataProvider('refundKinds')]
+    public function testReturnRefundKind(string $method, string $paymentStatus, string $expected): void
+    {
+        $this->assertSame($expected, returnRefundKind($method, $paymentStatus));
+    }
+
     // ─── fileUploadSaveImages() ─────────────────────────────────────────
 
     public function testNormalizeMultiFileInputSkipsEmptySlots(): void

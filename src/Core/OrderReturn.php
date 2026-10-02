@@ -57,6 +57,26 @@ function returnTransitionRequiresComment(string $to): bool
 }
 
 /**
+ * Как вернуть деньги при завершении Возврата (FR-RET-003): `card` — через
+ * шлюз, `cash` — отметка «возвращено наличными» (оплата при получении),
+ * `none` — денег не было или уже возвращены.
+ *
+ * @return 'card'|'cash'|'none'
+ */
+function returnRefundKind(string $paymentMethod, string $paymentStatus): string
+{
+    if ($paymentStatus !== 'paid') {
+        return 'none';
+    }
+
+    return match ($paymentMethod) {
+        'card_online'              => 'card',
+        'cash_or_card_on_delivery' => 'cash',
+        default                    => 'none',
+    };
+}
+
+/**
  * Можно ли подать заявку на Заказ: он получен и заявки на него ещё нет
  * (0..1 Возврат на Заказ, order_returns.order_id UNIQUE).
  */

@@ -665,6 +665,25 @@ function orderMarkRefunded(int $orderId): bool
     return $stmt->rowCount() > 0;
 }
 
+/**
+ * Вернуть на склад количество всех Позиций Заказа (Возврат, FR-RET-003).
+ * Позиции удалённых Вариантов (variant_id IS NULL) пропускаются. Вызывать
+ * внутри транзакции завершения Возврата — сам по себе не идемпотентен.
+ */
+function orderRestoreStock(int $orderId): void
+{
+    $pdo = getPdo();
+
+    $itemsStmt = $pdo->prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ? AND variant_id IS NOT NULL');
+    $itemsStmt->execute([$orderId]);
+
+    $restoreStmt = $pdo->prepare('UPDATE product_variants SET stock_quantity = stock_quantity + :qty WHERE id = :id');
+
+    foreach ($itemsStmt->fetchAll() as $item) {
+        $restoreStmt->execute(['qty' => (int) $item['quantity'], 'id' => (int) $item['variant_id']]);
+    }
+}
+
 /** Идентификатор сделки заглушки AmoCRM (ADR-023) и время «синхронизации». */
 function orderSetAmoCrm(int $orderId, string $amocrmId): void
 {
