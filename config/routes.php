@@ -35,6 +35,8 @@ return [
         '/admin/returns/{id}'  => ['Admin\ReturnController', 'show'],
         '/admin/stock'         => ['Admin\StockController', 'index'],
         '/admin/products'      => ['Admin\ProductController', 'index'],
+        '/admin/products/new'  => ['Admin\ProductController', 'createForm'],
+        '/admin/products/{id}/edit' => ['Admin\ProductController', 'editForm'],
         '/admin/inbox'         => ['Admin\InboxController', 'index'],
         '/admin/inbox/poll'    => ['Admin\InboxController', 'poll'],
         '/admin/inbox/{id}'    => ['Admin\InboxController', 'show'],
@@ -130,5 +132,8 @@ return [
         '/admin/staff/new'             => ['Admin\StaffController', 'store'],
         '/admin/staff/{id}/role'       => ['Admin\StaffController', 'changeRole'],
         '/admin/staff/{id}/active'     => ['Admin\StaffController', 'toggleActive'],
+        '/admin/products/new'          => ['Admin\ProductController', 'store'],
+        '/admin/products/{id}'         => ['Admin\ProductController', 'update'],
+        '/admin/products/{id}/active'  => ['Admin\ProductController', 'toggleActive'],
     ],
 ];

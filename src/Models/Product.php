@@ -1180,3 +1180,191 @@ function productAdminList(string $query, int $categoryId, string $status, int $l
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Товар для формы правки (включая неактивный) с id дополнительной категории
+ * (0 — нет). `description_draft` форма не трогает.
+ *
+ * @return array<string, mixed>|null
+ */
+function productAdminFind(int $productId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT p.id, p.category_id, p.brand_id, p.name, p.slug, p.description, p.is_active,
+               IFNULL(sc.category_id, 0) AS secondary_category_id
+        FROM products p
+        LEFT JOIN product_secondary_categories sc ON sc.product_id = p.id
+        WHERE p.id = ?
+    ');
+    $stmt->execute([$productId]);
+    $product = $stmt->fetch();
+
+    return $product !== false ? $product : null;
+}
+
+/**
+ * Все фото Товара для формы: порядок как на Карточке (главное первым).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productAdminImages(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, path, sort_order, is_main
+        FROM product_images
+        WHERE product_id = ?
+        ORDER BY is_main DESC, sort_order ASC, id ASC
+    ');
+    $stmt->execute([$productId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Занят ли `slug` другим Товаром (`$exceptProductId` — сам правящийся, 0 для нового).
+ */
+function productSlugTaken(string $slug, int $exceptProductId): bool
+{
+    $stmt = getPdo()->prepare('SELECT 1 FROM products WHERE slug = ? AND id <> ? LIMIT 1');
+    $stmt->execute([$slug, $exceptProductId]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * Деактивация/активация Товара (физически Товары не удаляют).
+ */
+function productSetActive(int $productId, bool $active): void
+{
+    getPdo()->prepare('UPDATE products SET is_active = ? WHERE id = ?')
+        ->execute([$active ? 1 : 0, $productId]);
+}
+
+/**
+ * Создание/правка Товара одной транзакцией: поля, дополнительная категория,
+ * фото. `$full = false` (Фрилансер) обновляет только название и описание.
+ * Для нового Товара `$full` должен быть true.
+ *
+ * Фото: убираются `$removeImageIds` (только принадлежащие этому Товару),
+ * оставшиеся переупорядочиваются по `$imageOrder` (id → порядок), новые
+ * `$newPaths` встают в конец; затем sort_order нумеруется заново, а главным
+ * становится `$main` (`['existing' => id]` или `['new' => индекс]`), иначе
+ * первое фото. Файлы с диска функция не трогает — пути удалённых возвращает.
+ *
+ * @param array<string, mixed> $fields name, description (+ slug, category_id, secondary_category_id, brand_id при $full)
+ * @param list<int> $removeImageIds
+ * @param array<int, int> $imageOrder
+ * @param list<string> $newPaths
+ * @param array{existing?: int, new?: int}|null $main
+ * @return array{id: int, removed_paths: list<string>}
+ */
+function productAdminSave(
+    ?int $productId,
+    bool $full,
+    array $fields,
+    array $removeImageIds,
+    array $imageOrder,
+    array $newPaths,
+    ?array $main
+): array {
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $description = $fields['description'] === '' ? null : $fields['description'];
+
+        if ($productId === null) {
+            $pdo->prepare('
+                INSERT INTO products (category_id, brand_id, name, slug, description)
+                VALUES (?, ?, ?, ?, ?)
+            ')->execute([
+                $fields['category_id'],
+                $fields['brand_id'] > 0 ? $fields['brand_id'] : null,
+                $fields['name'],
+                $fields['slug'],
+                $description,
+            ]);
+            $productId = (int) $pdo->lastInsertId();
+        } elseif ($full) {
+            $pdo->prepare('
+                UPDATE products
+                SET category_id = ?, brand_id = ?, name = ?, slug = ?, description = ?
+                WHERE id = ?
+            ')->execute([
+                $fields['category_id'],
+                $fields['brand_id'] > 0 ? $fields['brand_id'] : null,
+                $fields['name'],
+                $fields['slug'],
+                $description,
+                $productId,
+            ]);
+        } else {
+            $pdo->prepare('UPDATE products SET name = ?, description = ? WHERE id = ?')
+                ->execute([$fields['name'], $description, $productId]);
+        }
+
+        if ($full) {
+            $pdo->prepare('DELETE FROM product_secondary_categories WHERE product_id = ?')->execute([$productId]);
+            if ($fields['secondary_category_id'] > 0) {
+                $pdo->prepare('INSERT INTO product_secondary_categories (product_id, category_id) VALUES (?, ?)')
+                    ->execute([$productId, $fields['secondary_category_id']]);
+            }
+        }
+
+        $stmt = $pdo->prepare('
+            SELECT id, path, sort_order
+            FROM product_images
+            WHERE product_id = ?
+            ORDER BY sort_order ASC, id ASC
+            FOR UPDATE
+        ');
+        $stmt->execute([$productId]);
+        $existing = $stmt->fetchAll();
+
+        $removedPaths = [];
+        $kept = [];
+        foreach ($existing as $image) {
+            if (in_array((int) $image['id'], $removeImageIds, true)) {
+                $removedPaths[] = (string) $image['path'];
+                $pdo->prepare('DELETE FROM product_images WHERE id = ? AND product_id = ?')
+                    ->execute([(int) $image['id'], $productId]);
+                continue;
+            }
+            $kept[] = [
+                'id'  => (int) $image['id'],
+                'key' => $imageOrder[(int) $image['id']] ?? (int) $image['sort_order'],
+            ];
+        }
+        usort($kept, static fn (array $a, array $b): int => [$a['key'], $a['id']] <=> [$b['key'], $b['id']]);
+
+        $orderedIds = array_column($kept, 'id');
+        $position = 0;
+        foreach ($orderedIds as $imageId) {
+            $pdo->prepare('UPDATE product_images SET sort_order = ? WHERE id = ?')->execute([$position++, $imageId]);
+        }
+
+        $newIds = [];
+        foreach ($newPaths as $path) {
+            $pdo->prepare('INSERT INTO product_images (product_id, path, sort_order, is_main) VALUES (?, ?, ?, 0)')
+                ->execute([$productId, $path, $position++]);
+            $newIds[] = (int) $pdo->lastInsertId();
+        }
+
+        $allIds = array_merge($orderedIds, $newIds);
+        if ($allIds !== []) {
+            $mainId = match (true) {
+                isset($main['existing']) && in_array($main['existing'], $orderedIds, true) => $main['existing'],
+                isset($main['new']) && isset($newIds[$main['new']]) => $newIds[$main['new']],
+                default => $allIds[0],
+            };
+            $pdo->prepare('UPDATE product_images SET is_main = (id = ?) WHERE product_id = ?')
+                ->execute([$mainId, $productId]);
+        }
+
+        $pdo->commit();
+
+        return ['id' => $productId, 'removed_paths' => $removedPaths];
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}

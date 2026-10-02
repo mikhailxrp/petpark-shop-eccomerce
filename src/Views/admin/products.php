@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /**
  * Список Товаров — /admin/products (phase-7.md, Таск 7; FR-ADM-001).
- * Только просмотр: цена и остаток — источник МойСклад, формы правки
- * Товара — Таск 8.
+ * Цена и остаток — только просмотр (источник МойСклад); правка Товара и
+ * создание (только Владелец) — форма Таска 8.
  *
  * @var string $pageTitle
  * @var string $roleLabel
@@ -19,6 +19,8 @@ declare(strict_types=1);
  * @var int $page
  * @var int $totalPages
  * @var int $total
+ * @var string|null $success
+ * @var string|null $error
  */
 
 $pageUrl = static function (int $targetPage) use ($query, $categoryId, $status): string {
@@ -61,10 +63,30 @@ $attributesLabels = [
 
 ob_start();
 ?>
-<div class="my-4">
-    <h1 class="mb-0">Товары</h1>
-    <p class="mb-0 text-muted">Найдено: <?= $total ?></p>
+<div class="d-md-flex d-block align-items-center justify-content-between my-4">
+    <div>
+        <h1 class="mb-0">Товары</h1>
+        <p class="mb-0 text-muted">Найдено: <?= $total ?></p>
+    </div>
+    <?php if ($userRole === 'owner'): ?>
+        <div class="mt-3 mt-md-0">
+            <a href="/admin/products/new" class="btn btn-primary btn-sm">Добавить товар</a>
+        </div>
+    <?php endif; ?>
 </div>
+
+<?php if ($success !== null): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?= e($success) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+    </div>
+<?php endif; ?>
+<?php if ($error !== null): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?= e($error) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"><i class="fe fe-x" aria-hidden="true"></i></button>
+    </div>
+<?php endif; ?>
 
 <div class="card">
     <div class="card-header">
@@ -111,6 +133,7 @@ ob_start();
                             <th scope="col">Наличие</th>
                             <th scope="col">Статус</th>
                             <th scope="col">Характеристики</th>
+                            <th scope="col"><span class="visually-hidden">Действия</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -149,6 +172,7 @@ ob_start();
                                     <span class="badge <?= $isActive ? 'bg-success-transparent' : 'bg-light text-muted' ?>"><?= $isActive ? 'Активен' : 'Не активен' ?></span>
                                 </td>
                                 <td><span class="badge <?= e($attributesClass) ?>"><?= e($attributesText) ?></span></td>
+                                <td class="text-nowrap"><a href="/admin/products/<?= (int) $row['id'] ?>/edit" class="btn btn-outline-primary btn-sm">Редактировать</a></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
