@@ -146,6 +146,13 @@ declare(strict_types=1);
                                     <span class="side-menu__label">Отзывы</span>
                                 </a>
                             </li>
+                            <?php $staffActive = str_starts_with($currentPath, '/admin/staff'); ?>
+                            <li class="slide<?= $staffActive ? ' active' : '' ?>">
+                                <a href="/admin/staff" class="side-menu__item<?= $staffActive ? ' active' : '' ?>">
+                                    <i class="fe fe-users side-menu__icon"></i>
+                                    <span class="side-menu__label">Сотрудники</span>
+                                </a>
+                            </li>
                         <?php endif; ?>
                         <?php if ($userRole === 'owner'): ?>
                             <li class="slide<?= $currentPath === '/admin/ai' ? ' active' : '' ?>">

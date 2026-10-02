@@ -7,7 +7,8 @@ declare(strict_types=1);
  * Регистрации в проекте нет (Q-027) — только чтение существующих
  * пользователей (сид ролей, `database/seed.php`), смена пароля при
  * восстановлении (FR-AUTH-003) и правка личных данных Покупателя
- * (FR-ACC-005).
+ * (FR-ACC-005), а также учётные записи персонала (FR-ADM-003) — создание,
+ * смена роли, отключение (`users.is_active`, ADR-033).
  */
 
 /**
@@ -16,7 +17,7 @@ declare(strict_types=1);
 function userFindByEmail(string $email): ?array
 {
     $stmt = getPdo()->prepare('
-        SELECT id, name, email, phone, password_hash, role
+        SELECT id, name, email, phone, password_hash, role, is_active
         FROM users
         WHERE email = :email
         LIMIT 1
@@ -103,4 +104,103 @@ function userUpdateProfile(int $userId, string $name, string $email, string $pho
     }
 
     return true;
+}
+
+/**
+ * Активна ли учётная запись. Несуществующая строка — не активна: удалённого
+ * пользователя открытая сессия не должна пропускать (requireRole()).
+ */
+function userIsActive(int $userId): bool
+{
+    $stmt = getPdo()->prepare('SELECT is_active FROM users WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $userId]);
+
+    return (int) $stmt->fetchColumn() === 1;
+}
+
+/**
+ * Весь персонал (всё, кроме Покупателей), для /admin/staff.
+ *
+ * @return list<array<string, mixed>>
+ */
+function userListStaff(): array
+{
+    $stmt = getPdo()->query('
+        SELECT id, name, email, phone, role, is_active, created_at
+        FROM users
+        WHERE role <> \'customer\'
+        ORDER BY is_active DESC, name ASC, id ASC
+    ');
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * @return array<string, mixed>|null null — нет такого id или это Покупатель
+ */
+function userFindStaffById(int $id): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, name, email, phone, role, is_active
+        FROM users
+        WHERE id = :id AND role <> \'customer\'
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $id]);
+
+    $user = $stmt->fetch();
+    return $user !== false ? $user : null;
+}
+
+/**
+ * Создание сотрудника (FR-ADM-003). Занятый email ловится уникальным
+ * индексом, а не предварительным SELECT — так нет гонки.
+ *
+ * @return int|null id новой записи; null — email уже занят
+ */
+function userCreateStaff(string $name, string $email, ?string $phone, string $role, string $passwordHash): ?int
+{
+    $stmt = getPdo()->prepare('
+        INSERT INTO users (name, email, phone, password_hash, role)
+        VALUES (:name, :email, :phone, :password_hash, :role)
+    ');
+
+    try {
+        $stmt->execute([
+            'name'          => $name,
+            'email'         => $email,
+            'phone'         => $phone,
+            'password_hash' => $passwordHash,
+            'role'          => $role,
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000') {
+            return null;
+        }
+        throw $e;
+    }
+
+    return (int) getPdo()->lastInsertId();
+}
+
+/**
+ * Откат только что созданного сотрудника, если письмо с паролем не ушло:
+ * без письма пароль не знает никто. Покупателей не трогает.
+ */
+function userDeleteStaffById(int $id): void
+{
+    $stmt = getPdo()->prepare('DELETE FROM users WHERE id = :id AND role <> \'customer\'');
+    $stmt->execute(['id' => $id]);
+}
+
+function userUpdateRole(int $userId, string $role): void
+{
+    $stmt = getPdo()->prepare('UPDATE users SET role = :role WHERE id = :id AND role <> \'customer\'');
+    $stmt->execute(['role' => $role, 'id' => $userId]);
+}
+
+function userSetActive(int $userId, bool $isActive): void
+{
+    $stmt = getPdo()->prepare('UPDATE users SET is_active = :is_active WHERE id = :id AND role <> \'customer\'');
+    $stmt->execute(['is_active' => $isActive ? 1 : 0, 'id' => $userId]);
 }
