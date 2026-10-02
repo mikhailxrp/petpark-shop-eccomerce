@@ -31,11 +31,6 @@ if (APP_ENV === 'production') {
     exit(1);
 }
 
-if (!extension_loaded('gd')) {
-    fwrite(STDERR, "Не загружено расширение gd (нужно для демо-фото). Включите в php.ini: extension=gd\n");
-    exit(1);
-}
-
 // ─── Исходные данные из листа «Товары» (00-input/attachments/catalog-petpark.xlsx) ──
 
 require __DIR__ . '/seed-data/catalog-source.php';
@@ -68,40 +63,12 @@ const SPECIES_GENITIVE = [
     'Универсально' => 'кошек и собак',
 ];
 
-// Цветовые ключевые слова из «Описание для генерации изображения» —
-// только для подбора фона демо-фото (не для текста Товара, см. ниже).
-const PLACEHOLDER_COLOR_KEYWORDS = [
-    'бежев'        => [222, 201, 168],
-    'зелен'        => [139, 195, 74],
-    'зелён'        => [139, 195, 74],
-    'тёмно-син'    => [40, 62, 112],
-    'темно-син'    => [40, 62, 112],
-    'син'          => [63, 105, 170],
-    'оранж'        => [255, 152, 0],
-    'коричнев'     => [121, 85, 72],
-    'розов'        => [244, 143, 177],
-    'голуб'        => [79, 195, 247],
-    'сер'          => [158, 158, 158],
-    'жёлт'         => [255, 213, 79],
-    'желт'         => [255, 213, 79],
-    'бел'          => [235, 235, 232],
-    'чёрн'         => [66, 66, 66],
-    'черн'         => [66, 66, 66],
-    'красн'        => [229, 57, 53],
-    'фиолет'       => [156, 39, 176],
-    'бирюз'        => [0, 150, 136],
-    'пастель'      => [255, 224, 178],
-    'мят'          => [178, 223, 219],
-    'золот'        => [212, 175, 55],
-];
-
-const PLACEHOLDER_CATEGORY_COLORS = [
-    'Корма'             => [174, 213, 129],
-    'Лакомства'         => [255, 183, 77],
-    'Аксессуары'        => [100, 181, 246],
-    'Игрушки'           => [255, 138, 101],
-    'Средства гигиены'  => [77, 208, 225],
-];
+// Демо-фото: исходники лежат в database/seed-images/ (в git), сид копирует
+// их в public/uploads/products/demo/. Главное фото — по кругу, галерея —
+// GALLERY_IMAGES_PER_PRODUCT других картинок, выбранных детерминированно по slug.
+const SEED_IMAGES_DIR = __DIR__ . '/seed-images';
+const DEMO_UPLOAD_SUBDIR = 'products/demo';
+const GALLERY_IMAGES_PER_PRODUCT = 3;
 
 const ROOT_CATEGORY_ORDER = [
     'Корма'             => 1,
@@ -235,15 +202,29 @@ function replaceProductSpeciesAttribute(PDO $pdo, int $productId, string $specie
     ]);
 }
 
-function replaceMainProductImage(PDO $pdo, int $productId, string $path): void
+/**
+ * Пересобирает фото товара: главное (is_main=1, sort_order=0) + галерея.
+ *
+ * @param array<int, string> $paths пути относительно public/uploads/, первый — главное
+ */
+function replaceProductImages(PDO $pdo, int $productId, array $paths): void
 {
     $pdo->prepare('DELETE FROM product_images WHERE product_id = :product_id')
         ->execute(['product_id' => $productId]);
 
-    $pdo->prepare('
+    $insert = $pdo->prepare('
         INSERT INTO product_images (product_id, path, sort_order, is_main)
-        VALUES (:product_id, :path, 0, 1)
-    ')->execute(['product_id' => $productId, 'path' => $path]);
+        VALUES (:product_id, :path, :sort_order, :is_main)
+    ');
+
+    foreach (array_values($paths) as $i => $path) {
+        $insert->execute([
+            'product_id' => $productId,
+            'path'       => $path,
+            'sort_order' => $i,
+            'is_main'    => $i === 0 ? 1 : 0,
+        ]);
+    }
 }
 
 /**
@@ -332,83 +313,62 @@ function replaceSeedReviews(PDO $pdo, int $productId, array $reviews, ?int $mode
     return count($reviews);
 }
 
-// ─── Демо-фото товара (public/uploads/products/) ────────────────────────
+// ─── Демо-фото товара (database/seed-images/ → public/uploads/products/demo/) ──
 
-function detectPlaceholderColor(string $prompt, string $category): array
+/**
+ * Копирует исходные картинки в uploads (идемпотентно, перезаписывает).
+ *
+ * @return array<int, string> имена файлов по алфавиту
+ */
+function copyDemoImages(): array
 {
-    $lower = mb_strtolower($prompt);
+    $sources = glob(SEED_IMAGES_DIR . '/*.png') ?: [];
+    sort($sources);
+    if ($sources === []) {
+        throw new RuntimeException('Нет картинок в ' . SEED_IMAGES_DIR);
+    }
 
-    foreach (PLACEHOLDER_COLOR_KEYWORDS as $keyword => $rgb) {
-        if (str_contains($lower, $keyword)) {
-            return $rgb;
+    $targetDir = ROOT_PATH . '/public/uploads/' . DEMO_UPLOAD_SUBDIR;
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+        throw new RuntimeException("Не удалось создать директорию: {$targetDir}");
+    }
+
+    $names = [];
+    foreach ($sources as $source) {
+        $name = basename($source);
+        if (!copy($source, $targetDir . '/' . $name)) {
+            throw new RuntimeException("Не удалось скопировать {$name}");
         }
+        $names[] = $name;
     }
 
-    return PLACEHOLDER_CATEGORY_COLORS[$category] ?? [189, 189, 189];
-}
-
-function drawCategoryShape(GdImage $image, int $color, string $category, int $width, int $height): void
-{
-    $cx = intdiv($width, 2);
-    $cy = intdiv($height, 2);
-
-    match ($category) {
-        'Корма'            => imagefilledellipse($image, $cx, $cy, 260, 260, $color),
-        'Лакомства'        => imagefilledpolygon($image, [$cx, $cy - 150, $cx - 150, $cy + 120, $cx + 150, $cy + 120], $color),
-        'Аксессуары'       => imagefilledrectangle($image, $cx - 130, $cy - 130, $cx + 130, $cy + 130, $color),
-        'Игрушки'          => drawStarShape($image, $cx, $cy, 150, 70, $color),
-        'Средства гигиены' => imagefilledellipse($image, $cx, $cy, 180, 260, $color),
-        default            => imagefilledellipse($image, $cx, $cy, 220, 220, $color),
-    };
-}
-
-function drawStarShape(GdImage $image, int $cx, int $cy, int $outerRadius, int $innerRadius, int $color): void
-{
-    $points = [];
-    for ($i = 0; $i < 10; $i++) {
-        $radius  = $i % 2 === 0 ? $outerRadius : $innerRadius;
-        $angle   = -M_PI / 2 + $i * M_PI / 5;
-        $points[] = $cx + (int) round($radius * cos($angle));
-        $points[] = $cy + (int) round($radius * sin($angle));
-    }
-    imagefilledpolygon($image, $points, $color);
+    return $names;
 }
 
 /**
- * Генерирует демо-фото товара один раз (идемпотентно — пропускает
- * существующий файл). Не фотореалистичная генерация нейросетью (недоступна
- * в этом окружении) — абстрактная карточка: фон подобран по цветовым словам
- * из «Описание для генерации изображения», форма — по Категории товара.
- * И название, и категория, и описание участвуют в результате — этим текст
- * этой колонки не единственный источник для генерации фото.
+ * Пути фото товара: главное — по кругу от индекса товара, галерея —
+ * GALLERY_IMAGES_PER_PRODUCT других картинок в порядке, зависящем от slug
+ * (crc32 как seed — результат одинаков при каждом запуске сида).
+ *
+ * @param array<int, string> $imageNames
+ * @return array<int, string>
  */
-function ensureProductPlaceholderImage(string $absolutePath, string $category, string $imagePrompt): void
+function pickProductImagePaths(array $imageNames, int $productIndex, string $slug): array
 {
-    if (is_file($absolutePath)) {
-        return;
+    $main   = $imageNames[$productIndex % count($imageNames)];
+    $others = array_values(array_diff($imageNames, [$main]));
+
+    mt_srand(crc32($slug));
+    $keys = array_rand($others, min(GALLERY_IMAGES_PER_PRODUCT, count($others)));
+    $keys = (array) $keys;
+    shuffle($keys);
+
+    $paths = [DEMO_UPLOAD_SUBDIR . '/' . $main];
+    foreach ($keys as $key) {
+        $paths[] = DEMO_UPLOAD_SUBDIR . '/' . $others[$key];
     }
 
-    $dir = dirname($absolutePath);
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-        throw new RuntimeException("Не удалось создать директорию: {$dir}");
-    }
-
-    $width  = 600;
-    $height = 600;
-    $image  = imagecreatetruecolor($width, $height);
-
-    [$r, $g, $b] = detectPlaceholderColor($imagePrompt, $category);
-    $background  = imagecolorallocate($image, $r, $g, $b);
-    imagefill($image, 0, 0, $background);
-
-    $cardColor = imagecolorallocate($image, 250, 250, 248);
-    imagefilledrectangle($image, 50, 50, $width - 50, $height - 50, $cardColor);
-
-    $accent = imagecolorallocate($image, (int) ($r * 0.7), (int) ($g * 0.7), (int) ($b * 0.7));
-    drawCategoryShape($image, $accent, $category, $width, $height);
-
-    imagepng($image, $absolutePath, 6);
-    imagedestroy($image);
+    return $paths;
 }
 
 // ─── Основной проход по CATALOG_SOURCE ──────────────────────────────────
@@ -422,6 +382,8 @@ if ($moderatorId === null) {
     fwrite(STDERR, "Не найден пользователь shift_admin/owner — сначала выполните: php database/seed.php\n");
     exit(1);
 }
+
+$demoImageNames = copyDemoImages();
 
 $categoryCache  = [];
 $brandCache     = [];
@@ -468,13 +430,7 @@ foreach (CATALOG_SOURCE as $row) {
 
         replaceProductSpeciesAttribute($pdo, $productId, $row['species']);
 
-        $imageRelativePath = 'products/' . $productSlug . '.png';
-        ensureProductPlaceholderImage(
-            ROOT_PATH . '/public/uploads/' . $imageRelativePath,
-            $row['category'],
-            $row['image_prompt']
-        );
-        replaceMainProductImage($pdo, $productId, $imageRelativePath);
+        replaceProductImages($pdo, $productId, pickProductImagePaths($demoImageNames, $productCount, $productSlug));
 
         $variantsInserted = replaceProductVariants($pdo, $productId, $row, $variantOffset);
         $variantOffset += $variantsInserted;

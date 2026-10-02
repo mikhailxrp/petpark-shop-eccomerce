@@ -2407,3 +2407,33 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     font-size: 24px;
     line-height: 1.2;
 }
+
+/* Фото товаров разного размера вписываются в рамку с сохранением пропорций */
+:root {
+    --product-img-ratio: 1 / 1;
+    --product-thumb-size: 96px;
+}
+.healthy-product-img img {
+    display: block;
+    width: 100%;
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+.pd-main-img img {
+    display: block;
+    width: 100%;
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+ul.pd-imgs li a img {
+    width: var(--product-thumb-size);
+    height: var(--product-thumb-size);
+    object-fit: contain;
+}
+table.shop_table td.product-name img {
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+.cart-popup__item-img {
+    object-fit: contain;
+}

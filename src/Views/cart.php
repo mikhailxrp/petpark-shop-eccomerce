@@ -25,10 +25,6 @@ $breadcrumbs = [
     ['name' => 'Корзина', 'url' => null],
 ];
 
-// Заглушка до реальных фото товаров — та же, что в листинге и на
-// Карточке товара (components/product-card.php, product.php).
-$imageUrl = '/assets/img/food-1.png';
-
 $message = $error ?? $notice;
 $messageClass = $error !== null ? 'alert-danger' : 'alert-info';
 
@@ -119,7 +115,7 @@ ob_start();
                                         </form>
                                     </td>
                                     <td class="product-name">
-                                        <img alt="<?= e((string) $item['name']) ?>" src="<?= e($imageUrl) ?>">
+                                        <img alt="<?= e((string) $item['name']) ?>" src="<?= e(catalogImageUrl($item['image_path'] ?? null)) ?>">
                                         <div>
                                             <span>Артикул: <?= e((string) $item['sku']) ?></span>
                                             <a href="<?= e($itemUrl) ?>"><?= e((string) $item['name']) ?></a>

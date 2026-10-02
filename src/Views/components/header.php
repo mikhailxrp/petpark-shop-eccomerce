@@ -142,7 +142,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                         <ul class="cart-popup__list" id="cart-popup-items">
                             <?php foreach ($headerCartSummary['items'] as $headerCartItem): ?>
                                 <li class="cart-popup__item" data-item-id="<?= (int) $headerCartItem['id'] ?>">
-                                    <img class="cart-popup__item-img" src="/assets/img/food-1.png" alt="<?= e((string) $headerCartItem['name']) ?>" width="50" height="50">
+                                    <img class="cart-popup__item-img" src="<?= e(catalogImageUrl($headerCartItem['image_path'] ?? null)) ?>" alt="<?= e((string) $headerCartItem['name']) ?>" width="50" height="50">
                                     <div class="cart-popup__item-info">
                                         <p class="cart-popup__item-name"><?= e((string) $headerCartItem['name']) ?></p>
                                         <p class="cart-popup__item-line cart-popup-item__line">

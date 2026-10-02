@@ -64,6 +64,7 @@ final class ProductController
         render('product', [
             'product'          => $product,
             'variants'         => $variants,
+            'imagePaths'       => productImagePaths((int) $product['id']),
             'selectedVariant'  => $selectedVariant,
             'categoryChain'    => $categoryChain,
             'similarProducts'  => productSimilarByCategory(

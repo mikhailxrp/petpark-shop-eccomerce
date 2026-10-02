@@ -334,6 +334,24 @@ function productFindBySlug(string $slug): ?array
 }
 
 /**
+ * Фото Товара для галереи Карточки: главное первым, затем по sort_order.
+ *
+ * @return array<int, string> пути относительно public/uploads/
+ */
+function productImagePaths(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT path
+        FROM product_images
+        WHERE product_id = ?
+        ORDER BY is_main DESC, sort_order ASC, id ASC
+    ');
+    $stmt->execute([$productId]);
+
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
  * Активные Варианты Товара для переключателя на Карточке (FR-CARD-001) —
  * упорядочены по эффективной цене, чтобы совпадать с дефолтом
  * catalogSelectVariant() (Core/Catalog.php).

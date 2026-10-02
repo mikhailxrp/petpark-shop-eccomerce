@@ -33,6 +33,13 @@ final class CatalogTest extends TestCase
         $this->assertSame('В наличии', \catalogAvailabilityLabel('in'));
     }
 
+    public function testImageUrlPrefixesUploadsAndFallsBackWhenEmpty(): void
+    {
+        $this->assertSame('/uploads/products/demo/food-2.png', \catalogImageUrl('products/demo/food-2.png'));
+        $this->assertSame(CATALOG_IMAGE_FALLBACK, \catalogImageUrl(null));
+        $this->assertSame(CATALOG_IMAGE_FALLBACK, \catalogImageUrl(''));
+    }
+
     public function testEffectivePriceUsesDiscountWhenSet(): void
     {
         $this->assertSame(799.0, \catalogEffectivePrice(990.0, 799.0));

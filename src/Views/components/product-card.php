@@ -20,8 +20,7 @@ $effectivePrice = catalogEffectivePrice((float) $product['price'], $hasDiscount 
 $status = catalogAvailabilityStatus((int) $product['stock_quantity'], (int) $product['reserved_quantity']);
 $productUrl = '/product/' . $product['slug'] . '/';
 $isFavorite = in_array((int) $product['variant_id'], $favoriteVariantIds ?? [], true);
-// Заглушка до появления реальных фото товаров в /uploads — временно одна картинка на все карточки
-$imageUrl = '/assets/img/food-1.png';
+$imageUrl = catalogImageUrl($product['image_path'] ?? null);
 ?>
 <div class="col-md-4 col-sm-6">
     <div class="healthy-product">
