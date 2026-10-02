@@ -19,6 +19,10 @@ final class StaffController
     private const EMAIL_MAX = 150;
     private const PHONE_MAX = 20;
 
+    private const ROLE_SPECIALIST = 'specialist';
+    private const DEFAULT_WORK_START = '10:00';
+    private const DEFAULT_WORK_END = '20:00';
+
     private const CREATE_RATE_LIMIT_ATTEMPTS = 10;
     private const CREATE_RATE_LIMIT_SECONDS = 60;
 
@@ -68,8 +72,9 @@ final class StaffController
             'homeUrl'   => homePathForRole($actorRole),
             'userRole'  => $actorRole,
             'roles'     => staffRolesCreatableBy($actorRole),
-            'values'    => $form['values'] ?? ['name' => '', 'email' => '', 'phone' => '', 'role' => ''],
+            'values'    => $form['values'] ?? $this->emptyValues(),
             'errors'    => $form['errors'] ?? [],
+            'services'  => servicesActive(),
             'error'     => getFlash('error'),
         ]);
     }
@@ -103,7 +108,15 @@ final class StaffController
             $values['email'],
             $phone,
             $values['role'],
-            password_hash($password, PASSWORD_DEFAULT)
+            password_hash($password, PASSWORD_DEFAULT),
+            $values['role'] === self::ROLE_SPECIALIST
+                ? [
+                    'work_start'  => $values['work_start'],
+                    'work_end'    => $values['work_end'],
+                    'day_off'     => $values['day_off'] === '' ? null : (int) $values['day_off'],
+                    'service_ids' => $values['service_ids'],
+                ]
+                : null
         );
 
         if ($newId === null) {
@@ -211,7 +224,28 @@ final class StaffController
     }
 
     /**
-     * @return array{0: array<string, string>, 1: array<string, string>} [значения, ошибки по полям]
+     * @return array<string, mixed>
+     */
+    private function emptyValues(): array
+    {
+        return [
+            'name'        => '',
+            'email'       => '',
+            'phone'       => '',
+            'role'        => '',
+            'work_start'  => self::DEFAULT_WORK_START,
+            'work_end'    => self::DEFAULT_WORK_END,
+            'day_off'     => '',
+            'service_ids' => [],
+        ];
+    }
+
+    /**
+     * Поля Специалиста (график, Услуги) читаются и проверяются только при
+     * `role = specialist`; для остальных ролей остаются значения по умолчанию,
+     * даже если пришли в POST.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, string>} [значения, ошибки по полям]
      */
     private function validate(string $actorRole): array
     {
@@ -220,7 +254,7 @@ final class StaffController
             'email' => mb_strtolower(trim(mb_scrub((string) input('email')))),
             'phone' => trim(mb_scrub((string) input('phone'))),
             'role'  => (string) input('role'),
-        ];
+        ] + $this->emptyValues();
         $errors = [];
 
         if ($values['name'] === '') {
@@ -243,13 +277,53 @@ final class StaffController
             $errors['role'] = 'Выберите роль из списка.';
         }
 
+        if ($values['role'] === self::ROLE_SPECIALIST && !isset($errors['role'])) {
+            $values['work_start'] = trim((string) input('work_start'));
+            $values['work_end'] = trim((string) input('work_end'));
+            $values['day_off'] = trim((string) input('day_off'));
+            $errors += specialistScheduleErrors($values['work_start'], $values['work_end'], $values['day_off']);
+
+            [$values['service_ids'], $servicesError] = $this->validateServices(input('service_ids', []));
+            if ($servicesError !== null) {
+                $errors['service_ids'] = $servicesError;
+            }
+        }
+
         return [$values, $errors];
+    }
+
+    /**
+     * Услуги Специалиста: только существующие активные; пустой выбор допустим
+     * (Специалист без Услуг в форме Записи не появится).
+     *
+     * @return array{0: list<int>, 1: string|null} [id Услуг, ошибка]
+     */
+    private function validateServices(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [[], 'Выберите Услуги из списка.'];
+        }
+
+        $ids = [];
+        foreach ($raw as $item) {
+            if (!is_string($item) || !ctype_digit($item) || (int) $item < 1) {
+                return [[], 'Выберите Услуги из списка.'];
+            }
+            $ids[(int) $item] = (int) $item;
+        }
+        $ids = array_values($ids);
+
+        if (count(servicesFindActiveByIds($ids)) !== count($ids)) {
+            return [[], 'Выберите Услуги из списка.'];
+        }
+
+        return [$ids, null];
     }
 
     /**
      * Ошибки и введённое переживают redirect через сессию (POST → redirect).
      *
-     * @param array<string, string> $values
+     * @param array<string, mixed> $values
      * @param array<string, string> $errors
      */
     private function rememberForm(array $values, array $errors): void
@@ -258,7 +332,7 @@ final class StaffController
     }
 
     /**
-     * @return array{values: array<string, string>, errors: array<string, string>}|null
+     * @return array{values: array<string, mixed>, errors: array<string, string>}|null
      */
     private function takeForm(): ?array
     {

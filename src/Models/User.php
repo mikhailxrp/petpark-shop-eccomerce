@@ -8,7 +8,8 @@ declare(strict_types=1);
  * пользователей (сид ролей, `database/seed.php`), смена пароля при
  * восстановлении (FR-AUTH-003) и правка личных данных Покупателя
  * (FR-ACC-005), а также учётные записи персонала (FR-ADM-003) — создание,
- * смена роли, отключение (`users.is_active`, ADR-033).
+ * смена роли, отключение (`users.is_active`, ADR-033); у Специалиста
+ * создание заводит и профиль (график, Услуги — phase-7.md, Таск 6).
  */
 
 /**
@@ -154,16 +155,28 @@ function userFindStaffById(int $id): ?array
 
 /**
  * Создание сотрудника (FR-ADM-003). Занятый email ловится уникальным
- * индексом, а не предварительным SELECT — так нет гонки.
+ * индексом, а не предварительным SELECT — так нет гонки. Для Специалиста
+ * строка `users`, `specialists` и связи с Услугами пишутся одной транзакцией.
  *
+ * @param array{work_start: string, work_end: string, day_off: ?int, service_ids: list<int>}|null $specialist
+ *        профиль Специалиста; null — другие роли
  * @return int|null id новой записи; null — email уже занят
  */
-function userCreateStaff(string $name, string $email, ?string $phone, string $role, string $passwordHash): ?int
-{
-    $stmt = getPdo()->prepare('
+function userCreateStaff(
+    string $name,
+    string $email,
+    ?string $phone,
+    string $role,
+    string $passwordHash,
+    ?array $specialist = null
+): ?int {
+    $pdo = getPdo();
+    $stmt = $pdo->prepare('
         INSERT INTO users (name, email, phone, password_hash, role)
         VALUES (:name, :email, :phone, :password_hash, :role)
     ');
+
+    $pdo->beginTransaction();
 
     try {
         $stmt->execute([
@@ -173,14 +186,30 @@ function userCreateStaff(string $name, string $email, ?string $phone, string $ro
             'password_hash' => $passwordHash,
             'role'          => $role,
         ]);
-    } catch (PDOException $e) {
-        if ($e->getCode() === '23000') {
+        $userId = (int) $pdo->lastInsertId();
+
+        if ($specialist !== null) {
+            specialistCreate(
+                $userId,
+                $specialist['work_start'],
+                $specialist['work_end'],
+                $specialist['day_off'],
+                $specialist['service_ids']
+            );
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if ($e instanceof PDOException && $e->getCode() === '23000') {
             return null;
         }
         throw $e;
     }
 
-    return (int) getPdo()->lastInsertId();
+    return $userId;
 }
 
 /**

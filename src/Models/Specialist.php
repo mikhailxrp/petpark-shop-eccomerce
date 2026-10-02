@@ -3,13 +3,40 @@
 declare(strict_types=1);
 
 /**
- * Модель закрытых периодов Специалистов (`specialist_time_off`, phase-4.md,
- * Таск 9; FR-SV-010). Только SQL через PDO, возвращает массивы (php.md).
- * Чтение периодов для расчёта слотов — specialistTimeOffFrom() в
- * Models/Booking.php.
+ * Модель Специалистов: профиль со строкой графика и Услугами (`specialists`,
+ * `specialist_services`, phase-7.md, Таск 6) и закрытые периоды
+ * (`specialist_time_off`, phase-4.md, Таск 9; FR-SV-010). Только SQL через
+ * PDO, возвращает массивы (php.md). Чтение периодов для расчёта слотов —
+ * specialistTimeOffFrom() в Models/Booking.php.
  */
 
 const SPECIALIST_TIME_OFF_REASON_MAX = 200;
+
+/**
+ * Профиль Специалиста: строка `specialists` и связи с Услугами. Транзакцию
+ * не открывает — вызывается из userCreateStaff() внутри его транзакции, чтобы
+ * логин и профиль создавались целиком или не создавались вовсе.
+ *
+ * @param string    $workStart  "HH:MM"
+ * @param string    $workEnd    "HH:MM"
+ * @param int|null  $dayOff     0=воскресенье … 6=суббота; null — выходного нет
+ * @param list<int> $serviceIds активные Услуги; пусто — Специалист без Услуг
+ */
+function specialistCreate(int $userId, string $workStart, string $workEnd, ?int $dayOff, array $serviceIds): void
+{
+    $pdo = getPdo();
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO specialists (user_id, work_start, work_end, day_off) VALUES (?, ?, ?, ?)'
+    );
+    $stmt->execute([$userId, $workStart, $workEnd, $dayOff]);
+    $specialistId = (int) $pdo->lastInsertId();
+
+    $link = $pdo->prepare('INSERT INTO specialist_services (specialist_id, service_id) VALUES (?, ?)');
+    foreach ($serviceIds as $serviceId) {
+        $link->execute([$specialistId, $serviceId]);
+    }
+}
 
 /**
  * Не закончившиеся закрытые периоды: всех Специалистов (null) или одного.

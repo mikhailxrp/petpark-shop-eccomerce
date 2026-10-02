@@ -239,4 +239,26 @@ final class BookingTest extends TestCase
         $this->assertFalse(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 11:00:00'], $now));
         $this->assertTrue(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 12:00:00'], $now));
     }
+
+    public function testScheduleValidAcceptsDefaultsAndNoDayOff(): void
+    {
+        $this->assertSame([], \specialistScheduleErrors('10:00', '20:00', ''));
+        $this->assertSame([], \specialistScheduleErrors('00:00', '23:59', '0'));
+        $this->assertSame([], \specialistScheduleErrors('09:30', '18:00', '6'));
+    }
+
+    public function testScheduleEndNotAfterStartIsError(): void
+    {
+        $this->assertSame(['work_end'], array_keys(\specialistScheduleErrors('20:00', '10:00', '')));
+        $this->assertSame(['work_end'], array_keys(\specialistScheduleErrors('10:00', '10:00', '')));
+    }
+
+    public function testScheduleRejectsMalformedTimeAndDayOff(): void
+    {
+        $errors = \specialistScheduleErrors('25:00', '', '7');
+
+        $this->assertSame(['work_start', 'work_end', 'day_off'], array_keys($errors));
+        $this->assertSame(['day_off'], array_keys(\specialistScheduleErrors('10:00', '20:00', '-1')));
+        $this->assertSame(['day_off'], array_keys(\specialistScheduleErrors('10:00', '20:00', 'x')));
+    }
 }

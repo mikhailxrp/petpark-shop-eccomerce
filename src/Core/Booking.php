@@ -98,6 +98,34 @@ function bookingTimeToMinutes(string $time): int
 }
 
 /**
+ * Ошибки графика нового Специалиста (phase-7.md, Таск 6): время — "HH:MM",
+ * конец работы позже начала, выходной — пусто (нет выходного) или 0–6
+ * (0 — воскресенье, как `specialists.day_off`). Пустой массив — график верен.
+ *
+ * @return array<string, string> ошибки по полям work_start / work_end / day_off
+ */
+function specialistScheduleErrors(string $workStart, string $workEnd, string $dayOff): array
+{
+    $errors = [];
+    $timePattern = '/^([01]\d|2[0-3]):[0-5]\d$/';
+
+    if (preg_match($timePattern, $workStart) !== 1) {
+        $errors['work_start'] = 'Укажите время начала работы.';
+    }
+    if (preg_match($timePattern, $workEnd) !== 1) {
+        $errors['work_end'] = 'Укажите время окончания работы.';
+    }
+    if ($errors === [] && bookingTimeToMinutes($workEnd) <= bookingTimeToMinutes($workStart)) {
+        $errors['work_end'] = 'Конец работы должен быть позже начала.';
+    }
+    if ($dayOff !== '' && preg_match('/^[0-6]$/', $dayOff) !== 1) {
+        $errors['day_off'] = 'Выберите выходной из списка.';
+    }
+
+    return $errors;
+}
+
+/**
  * Свободные начала визита Специалиста на дату, по возрастанию, формат "HH:MM".
  *
  * Слот свободен, если блок [начало; начало + $blockMinutes) помещается в

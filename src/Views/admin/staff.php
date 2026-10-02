@@ -49,8 +49,8 @@ ob_start();
     <div class="card-header"><h2 class="card-title">Учётные записи персонала</h2></div>
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table text-nowrap mb-0">
-                <thead>
+            <table class="table staff-table mb-0">
+                <thead class="staff-table__head">
                     <tr>
                         <th scope="col">Имя</th>
                         <th scope="col">Email</th>
@@ -63,11 +63,11 @@ ob_start();
                 <tbody>
                     <?php foreach ($staff as $member): ?>
                         <?php $memberId = (int) $member['id']; ?>
-                        <tr>
-                            <td><?= e((string) $member['name']) ?></td>
-                            <td><?= e((string) $member['email']) ?></td>
-                            <td><?= e((string) ($member['phone'] ?? '—')) ?></td>
-                            <td>
+                        <tr class="staff-table__row">
+                            <td class="staff-table__cell staff-table__cell--name"><?= e((string) $member['name']) ?></td>
+                            <td class="staff-table__cell" data-label="Email"><?= e((string) $member['email']) ?></td>
+                            <td class="staff-table__cell" data-label="Телефон"><?= e((string) ($member['phone'] ?? '—')) ?></td>
+                            <td class="staff-table__cell" data-label="Роль">
                                 <?php if ($member['can_manage']): ?>
                                     <form method="post" action="/admin/staff/<?= $memberId ?>/role" class="d-flex gap-2">
                                         <?= csrfField() ?>
@@ -77,20 +77,20 @@ ob_start();
                                                 <option value="<?= e($role) ?>"<?= $role === $member['role'] ? ' selected' : '' ?>><?= e(adminRoleLabel($role)) ?></option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <button type="submit" class="btn btn-outline-primary btn-sm">Сменить</button>
+                                        <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">Сменить</button>
                                     </form>
                                 <?php else: ?>
                                     <?= e(adminRoleLabel((string) $member['role'])) ?>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td class="staff-table__cell" data-label="Статус">
                                 <?php if ((int) $member['is_active'] === 1): ?>
                                     <span class="badge bg-success">Активен</span>
                                 <?php else: ?>
                                     <span class="badge bg-secondary">Отключён</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end">
+                            <td class="staff-table__cell staff-table__cell--actions">
                                 <?php if ($member['can_manage']): ?>
                                     <form method="post" action="/admin/staff/<?= $memberId ?>/active" class="d-inline">
                                         <?= csrfField() ?>
