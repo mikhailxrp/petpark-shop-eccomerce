@@ -53,6 +53,8 @@ return [
         '/admin/time-off'      => ['Admin\TimeOffController', 'index'],
         '/admin/staff'         => ['Admin\StaffController', 'index'],
         '/admin/staff/new'     => ['Admin\StaffController', 'createForm'],
+        '/admin/clients'       => ['Admin\ClientController', 'index'],
+        '/admin/clients/{id}'  => ['Admin\ClientController', 'show'],
         '/specialist'         =>['Admin\DashboardController', 'specialist'],
         '/catalog'             => ['CatalogController', 'index'],
         '/catalog/{cat}'       => ['CatalogController', 'category'],

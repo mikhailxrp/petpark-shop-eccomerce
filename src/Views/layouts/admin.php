@@ -99,6 +99,15 @@ declare(strict_types=1);
                                 </a>
                             </li>
                         <?php endif; ?>
+                        <?php if (in_array($userRole, ['specialist', 'shift_admin', 'owner'], true)): ?>
+                            <?php $clientsActive = str_starts_with($currentPath, '/admin/clients'); ?>
+                            <li class="slide<?= $clientsActive ? ' active' : '' ?>">
+                                <a href="/admin/clients" class="side-menu__item<?= $clientsActive ? ' active' : '' ?>">
+                                    <i class="fe fe-user side-menu__icon"></i>
+                                    <span class="side-menu__label">Клиенты</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (in_array($userRole, ['shift_admin', 'owner'], true)): ?>
                             <?php $ordersActive = str_starts_with($currentPath, '/admin/orders'); ?>
                             <li class="slide<?= $ordersActive ? ' active' : '' ?>">
