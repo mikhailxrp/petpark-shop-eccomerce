@@ -115,6 +115,24 @@ final class OrderTest extends TestCase
         $this->assertFalse(\orderCanTransition('new', 'paid'));
     }
 
+    public function testCustomerCanCancelOnlyBeforeShipment(): void
+    {
+        foreach (['new', 'confirmed', 'assembled'] as $status) {
+            $this->assertTrue(\orderCanBeCancelledByCustomer($status), $status);
+        }
+
+        foreach (['shipped', 'ready_for_pickup', 'delivered', 'picked_up', 'cancelled', 'unknown'] as $status) {
+            $this->assertFalse(\orderCanBeCancelledByCustomer($status), $status);
+        }
+    }
+
+    public function testCustomerCancellableStatusesAreAllCancellable(): void
+    {
+        foreach (ORDER_CUSTOMER_CANCELLABLE_STATUSES as $status) {
+            $this->assertTrue(\orderCanTransition($status, 'cancelled'), $status);
+        }
+    }
+
     public function testStockActionForEveryAllowedTransition(): void
     {
         $expected = [

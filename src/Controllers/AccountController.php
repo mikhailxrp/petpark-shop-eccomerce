@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Services\BookingCancellation;
+use App\Services\OrderCancellation;
 use App\Services\Payment\YooMoneyStubGateway;
 
 /**
@@ -29,6 +30,9 @@ final class AccountController
     private const CANCEL_TOO_LATE_ERROR = 'Отменить запись можно не позже чем за %d ч до визита. Обратитесь к администратору.';
     private const CANCEL_NOT_ALLOWED_ERROR = 'Эту запись уже нельзя отменить.';
     private const CANCEL_REFUND_FAILED_ERROR = 'Запись отменена, но вернуть депозит автоматически не удалось. Администратор свяжется с вами.';
+
+    private const ORDER_CANCEL_NOT_ALLOWED_ERROR = 'Этот заказ уже нельзя отменить. Обратитесь к администратору.';
+    private const ORDER_CANCEL_REFUND_FAILED_ERROR = 'Заказ отменён, но вернуть деньги автоматически не удалось. Администратор свяжется с вами.';
 
     public function index(): void
     {
@@ -222,7 +226,33 @@ final class AccountController
             'items'     => orderItemsForOrder((int) $order['id']),
             'canReturn' => $this->orderIsReturnable($order),
             'hasReturn' => returnFindByOrderId((int) $order['id']) !== null,
+            'canCancel' => orderCanBeCancelledByCustomer((string) $order['status']),
+            'success'   => getFlash('success'),
+            'error'     => getFlash('error'),
         ]);
+    }
+
+    public function orderCancel(string $id): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $order = $this->findOwnOrder($id);
+        if ($order === null) {
+            $this->notFound();
+            return;
+        }
+
+        $cancellation = new OrderCancellation(new YooMoneyStubGateway(env('PAYMENT_STUB_SECRET')));
+
+        match ($cancellation->cancel((int) $order['id'], ORDER_CUSTOMER_CANCELLABLE_STATUSES)) {
+            OrderCancellation::RESULT_NOT_ALLOWED   => setFlash('error', self::ORDER_CANCEL_NOT_ALLOWED_ERROR),
+            OrderCancellation::RESULT_REFUND_FAILED => setFlash('error', self::ORDER_CANCEL_REFUND_FAILED_ERROR),
+            OrderCancellation::RESULT_REFUNDED      => setFlash('success', 'Заказ отменён, деньги возвращены.'),
+            OrderCancellation::RESULT_CANCELLED     => setFlash('success', 'Заказ отменён.'),
+        };
+
+        redirect('/account/orders/' . (int) $order['id']);
     }
 
     public function returns(): void

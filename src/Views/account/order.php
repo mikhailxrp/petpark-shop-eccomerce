@@ -8,6 +8,9 @@ declare(strict_types=1);
  * @var list<array<string, mixed>> $items     orderItemsForOrder() — снэпшоты Позиций
  * @var bool                       $canReturn можно подать заявку на Возврат
  * @var bool                       $hasReturn по Заказу уже есть заявка на Возврат
+ * @var bool                       $canCancel Покупатель может отменить Заказ (ADR-032)
+ * @var string|null                $success   getFlash('success')
+ * @var string|null                $error     getFlash('error')
  */
 
 $pageTitle = seoTitle('account-order', $order);
@@ -61,6 +64,13 @@ include __DIR__ . '/../components/page-banner.php';
                 <?php $accountActive = 'orders'; include __DIR__ . '/../components/account-nav.php'; ?>
             </div>
             <div class="col-lg-9">
+                <?php if ($success !== null): ?>
+                    <div class="alert alert-success" role="status"><?= e($success) ?></div>
+                <?php endif; ?>
+                <?php if ($error !== null): ?>
+                    <div class="alert alert-danger" role="alert"><?= e($error) ?></div>
+                <?php endif; ?>
+
                 <h2 class="account-heading">
                     Заказ от <?= e($orderedAt->format('d.m.Y')) ?>
                     <span class="order-status order-status--<?= e((string) $order['status']) ?>">
@@ -118,12 +128,44 @@ include __DIR__ . '/../components/page-banner.php';
                     <?php elseif ($hasReturn): ?>
                         <a class="button" href="/account/returns">Заявка на возврат</a>
                     <?php endif; ?>
+                    <?php if ($canCancel): ?>
+                        <button type="button" class="button" data-bs-toggle="modal" data-bs-target="#order-cancel-modal">
+                            Отменить заказ
+                        </button>
+                    <?php endif; ?>
                     <a href="/account/orders">← Все заказы</a>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
+<?php if ($canCancel): ?>
+    <div class="modal fade" id="order-cancel-modal" tabindex="-1" aria-labelledby="order-cancel-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" action="/account/orders/<?= (int) $order['id'] ?>/cancel">
+                <?= csrfField() ?>
+                <div class="modal-header">
+                    <h2 class="modal-title order-cancel-modal__title" id="order-cancel-title">Отменить заказ №<?= (int) $order['id'] ?>?</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Заказ будет отменён, товары вернутся в наличие.
+                        <?php if ($order['payment_status'] === 'paid' && $order['payment_method'] === 'card_online'): ?>
+                            Деньги вернутся на карту, которой вы оплатили заказ.
+                        <?php endif; ?>
+                        Действие нельзя отменить.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="button" data-bs-dismiss="modal">Не отменять</button>
+                    <button type="submit" class="button">Отменить заказ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
 <?php
 $content = (string) ob_get_clean();
 

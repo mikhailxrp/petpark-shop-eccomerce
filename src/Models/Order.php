@@ -431,9 +431,16 @@ function orderCountByUser(int $userId): int
  * остаток при отмене из `confirmed` и дальше; остальное остаток не
  * трогает. Каждый переход пишет `status_changed_at`.
  *
- * @param string|null $paymentStatus новый orders.payment_status; null — не менять
+ * @param string|null       $paymentStatus      новый orders.payment_status; null — не менять
+ * @param list<string>|null $allowedFromStatuses допустимые текущие статусы, проверяются
+ *                                               под блокировкой; null — любые по карте переходов
  */
-function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus = null): bool
+function orderTransition(
+    int $orderId,
+    string $toStatus,
+    ?string $paymentStatus = null,
+    ?array $allowedFromStatuses = null
+): bool
 {
     $pdo = getPdo();
     $ownsTransaction = !$pdo->inTransaction();
@@ -453,7 +460,11 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
         $order = $stmt->fetch();
         $fromStatus = $order !== false ? $order['status'] : false;
 
-        if ($fromStatus === false || !orderCanTransition((string) $fromStatus, $toStatus)) {
+        if (
+            $fromStatus === false
+            || !orderCanTransition((string) $fromStatus, $toStatus)
+            || ($allowedFromStatuses !== null && !in_array((string) $fromStatus, $allowedFromStatuses, true))
+        ) {
             if ($ownsTransaction) {
                 $pdo->rollBack();
             }

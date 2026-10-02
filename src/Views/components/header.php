@@ -15,6 +15,7 @@ $headerCategoryTree = catalogBuildCategoryTree(categoryAll());
 // что дерево Категорий выше: шапка сама запрашивает свои данные, чтобы
 // каждый Controller, рендерящий через public.php, не прокидывал их.
 $headerCartSummary = cartSummarize(cartItemsForOwner(cartOwner()));
+$headerIsAuthenticated = isAuthenticated();
 $headerCartCount = 0;
 foreach ($headerCartSummary['items'] as $headerCartItem) {
     $headerCartCount += (int) $headerCartItem['quantity'];
@@ -60,7 +61,11 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                         </div>
                         <div class="login">
                             <i class="fa-solid fa-user"></i>
-                            <a href="/login">Вход</a>
+                            <?php if ($headerIsAuthenticated) : ?>
+                                <a href="/account">Личный кабинет</a>
+                            <?php else : ?>
+                                <a href="/login">Вход</a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>

@@ -2229,6 +2229,21 @@ table.shop_table td.product-quantity input.cart-item__quantity {
 }
 
 @media (max-width: 575.98px) {
+    .chat-widget {
+        /*
+         * Колонка кнопок мессенджеров слева (3 кнопки 3.5rem + 2 зазора 0.75rem
+         * + отступ 20px) перекрывает панель на всю ширину экрана — поднимаем
+         * панель выше неё.
+         */
+        --chat-messenger-stack: calc(20px + 3 * 3.5rem + 2 * 0.75rem);
+        --chat-panel-bottom: calc(var(--chat-messenger-stack) + var(--chat-gap) - var(--chat-bottom-offset));
+    }
+
+    .chat-widget__panel {
+        bottom: var(--chat-panel-bottom);
+        max-height: calc(100vh - var(--chat-bottom-offset) - var(--chat-panel-bottom) - var(--chat-gap));
+    }
+
     .chat-widget__toggle-text {
         display: none;
     }
@@ -2352,4 +2367,10 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     .order-items__name {
         flex: 1 1 50%;
     }
+}
+
+.order-cancel-modal__title {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.2;
 }
