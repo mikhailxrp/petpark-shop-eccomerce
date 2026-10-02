@@ -26,6 +26,38 @@ const NOTIFICATION_BATCH_SIZE = 5;
 // посреди отправки) и снова попадает в очередь.
 const NOTIFICATION_SENDING_LEASE_MINUTES = 5;
 
+// Письмо на каждый статус Заказа (FR-NOTIF-001 п. 2; `new` — из таблицы
+// переходов tz.md §6.3). Хвост темы после «Заказ №N — ».
+const NOTIFICATION_ORDER_STATUS_SUBJECTS = [
+    'new'              => 'принят',
+    'confirmed'        => 'подтверждён',
+    'assembled'        => 'собран',
+    'shipped'          => 'передан в доставку',
+    'ready_for_pickup' => 'готов к выдаче',
+    'delivered'        => 'доставлен',
+    'picked_up'        => 'получен',
+    'cancelled'        => 'отменён',
+];
+
+/**
+ * Какое письмо уходит при переходе Заказа в $toStatus.
+ *
+ * @param string $paymentStatusBefore orders.payment_status до перехода
+ * @return array{subject: string, refund_note: bool}|null null — для статуса письма нет
+ */
+function notificationOrderStatusMessage(string $toStatus, string $paymentStatusBefore): ?array
+{
+    $subject = NOTIFICATION_ORDER_STATUS_SUBJECTS[$toStatus] ?? null;
+    if ($subject === null) {
+        return null;
+    }
+
+    return [
+        'subject'     => $subject,
+        'refund_note' => $toStatus === 'cancelled' && $paymentStatusBefore === 'paid',
+    ];
+}
+
 /** Пауза в минутах перед попыткой №$attempt (1..NOTIFICATION_MAX_ATTEMPTS). */
 function notificationDelayBeforeAttempt(int $attempt): int
 {

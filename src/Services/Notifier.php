@@ -57,6 +57,42 @@ function notifierSendPending(int $limit = NOTIFICATION_BATCH_SIZE): array
 }
 
 /**
+ * Поставить в очередь письмо о новом статусе Заказа. Вызывается внутри
+ * транзакции смены статуса (Models/Order.php): текст фиксируется в строке
+ * очереди сразу, откат статуса откатывает и письмо. Без email — пропуск.
+ *
+ * @param array{id: int|string, contact_email: ?string, contact_name: string, total: string, delivery_method: string} $order
+ */
+function notifierEnqueueOrderStatus(array $order, string $toStatus, string $paymentStatusBefore): void
+{
+    $message = notificationOrderStatusMessage($toStatus, $paymentStatusBefore);
+    if ($message === null) {
+        return;
+    }
+
+    $orderId = (int) $order['id'];
+    $email = trim((string) ($order['contact_email'] ?? ''));
+    if ($email === '') {
+        logWarning('Уведомление о Заказе не поставлено: нет email', ['order_id' => $orderId, 'status' => $toStatus]);
+        return;
+    }
+
+    $body = renderToString('emails/order-status', [
+        'order'       => $order,
+        'status'      => $toStatus,
+        'refund_note' => $message['refund_note'],
+    ]);
+
+    notificationEnqueue(
+        'order:' . $orderId . ':status:' . $toStatus,
+        $email,
+        (string) $order['contact_name'],
+        'Заказ №' . $orderId . ' — ' . $message['subject'] . ' — ' . SHOP_NAME,
+        $body
+    );
+}
+
+/**
  * Запланировать отправку очереди на конец текущего запроса. Безопасно звать
  * несколько раз — зарегистрируется один обработчик.
  */

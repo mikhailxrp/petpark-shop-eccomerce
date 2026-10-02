@@ -177,6 +177,20 @@ function render(string $view, array $data = []): void
     require $viewPath;
 }
 
+/** Как render(), но возвращает результат строкой — для шаблонов писем. */
+function renderToString(string $view, array $data = []): string
+{
+    ob_start();
+    try {
+        render($view, $data);
+    } catch (Throwable $e) {
+        ob_end_clean();
+        throw $e;
+    }
+
+    return (string) ob_get_clean();
+}
+
 function e(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

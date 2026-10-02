@@ -261,6 +261,14 @@ function orderCreateFromRows(
             return ['status' => 'unavailable', 'product_name' => $unavailableProductName];
         }
 
+        notifierEnqueueOrderStatus([
+            'id'              => $orderId,
+            'contact_email'   => $contact['email'],
+            'contact_name'    => $contact['name'],
+            'total'           => $total,
+            'delivery_method' => $deliveryMethod,
+        ], 'new', 'unpaid');
+
         // Оплата при получении: подтверждаем сразу (Q-032), в той же
         // транзакции — orderTransition() присоединяется к уже открытой.
         if ($autoConfirm && !orderTransition($orderId, 'confirmed')) {
@@ -378,9 +386,15 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
     }
 
     try {
-        $stmt = $pdo->prepare('SELECT status FROM orders WHERE id = ? FOR UPDATE');
+        $stmt = $pdo->prepare('
+            SELECT id, status, payment_status, contact_name, contact_email, total, delivery_method
+            FROM orders
+            WHERE id = ?
+            FOR UPDATE
+        ');
         $stmt->execute([$orderId]);
-        $fromStatus = $stmt->fetchColumn();
+        $order = $stmt->fetch();
+        $fromStatus = $order !== false ? $order['status'] : false;
 
         if ($fromStatus === false || !orderCanTransition((string) $fromStatus, $toStatus)) {
             if ($ownsTransaction) {
@@ -443,6 +457,9 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
             WHERE id = :id
         ');
         $updateStmt->execute(['status' => $toStatus, 'payment_status' => $paymentStatus, 'id' => $orderId]);
+
+        // Письмо в той же транзакции: откат статуса откатывает и письмо (FR-NOTIF-002).
+        notifierEnqueueOrderStatus($order, $toStatus, (string) $order['payment_status']);
 
         if ($ownsTransaction) {
             $pdo->commit();

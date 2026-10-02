@@ -37,6 +37,27 @@ final class NotificationTest extends TestCase
         $this->assertSame(60, notificationRetryDelayAfterFailure(4));
     }
 
+    public function testEveryOrderStatusHasAMessage(): void
+    {
+        foreach (array_keys(ORDER_STATUS_TRANSITIONS) as $status) {
+            $message = notificationOrderStatusMessage($status, 'unpaid');
+            $this->assertNotNull($message, $status);
+            $this->assertNotSame('', $message['subject'], $status);
+        }
+    }
+
+    public function testUnknownOrderStatusHasNoMessage(): void
+    {
+        $this->assertNull(notificationOrderStatusMessage('archived', 'unpaid'));
+    }
+
+    public function testRefundNoteOnlyForCancelledPaidOrder(): void
+    {
+        $this->assertTrue(notificationOrderStatusMessage('cancelled', 'paid')['refund_note']);
+        $this->assertFalse(notificationOrderStatusMessage('cancelled', 'unpaid')['refund_note']);
+        $this->assertFalse(notificationOrderStatusMessage('shipped', 'paid')['refund_note']);
+    }
+
     public function testFifthFailureMarksFailed(): void
     {
         $this->assertNull(notificationRetryDelayAfterFailure(5));
