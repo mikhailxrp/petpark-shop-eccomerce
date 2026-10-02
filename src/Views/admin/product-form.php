@@ -17,6 +17,7 @@ declare(strict_types=1);
  * @var array<string, mixed> $values
  * @var array<string, string> $errors Ошибки по полям
  * @var array<int, array<string, mixed>> $images Фото правящегося Товара
+ * @var bool $descriptionSuggested Описание в поле — предложение ИИ, ещё не сохранённое
  * @var array<int, array<string, mixed>> $categories categoryAll()
  * @var array<int, array<string, mixed>> $brands brandAll()
  * @var int $photosMax
@@ -37,6 +38,7 @@ declare(strict_types=1);
 $isOwner = $userRole === 'owner';
 $isNew = $product === null;
 $showCatalogBlocks = $isOwner && !$isNew && $variants !== null;
+$showDescriptionAi = $isOwner && !$isNew;
 $attributeLabel = static fn (string $name): string => str_replace('_', ' ', $name);
 $formAction = $isNew ? '/admin/products/new' : '/admin/products/' . (int) $product['id'];
 $isActive = !$isNew && (int) $product['is_active'] === 1;
@@ -139,10 +141,20 @@ ob_start();
             <?php endif; ?>
 
             <div class="col-12">
-                <label for="product-description" class="form-label">Описание</label>
-                <textarea class="form-control<?= $fieldClass('description') ?>" id="product-description" name="description" rows="8" maxlength="20000"><?= e((string) ($values['description'] ?? '')) ?></textarea>
+                <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-1">
+                    <label for="product-description" class="form-label mb-0">Описание</label>
+                    <?php if ($showDescriptionAi): ?>
+                        <button type="submit" form="description-ai-form" class="btn btn-outline-primary btn-sm" formnovalidate>Сгенерировать ИИ</button>
+                    <?php endif; ?>
+                </div>
+                <textarea class="form-control<?= $fieldClass('description') ?>" id="product-description" name="description" rows="8" maxlength="20000" aria-describedby="product-description-help"><?= e((string) ($values['description'] ?? '')) ?></textarea>
                 <?php if (isset($errors['description'])): ?>
                     <div class="invalid-feedback"><?= e($errors['description']) ?></div>
+                <?php endif; ?>
+                <?php if ($descriptionSuggested): ?>
+                    <div class="form-text text-info" id="product-description-help"><span class="badge bg-info-transparent">Предложено ИИ</span> Прочитайте и поправьте текст, затем нажмите «Сохранить». Пока вы не сохранили, в карточке Товара прежнее описание.</div>
+                <?php elseif ($showDescriptionAi): ?>
+                    <div class="form-text" id="product-description-help">ИИ напишет описание по названию, Категории, бренду и Характеристикам — текст подставится сюда, но не сохранится сам. Прежнее описание заменится только после «Сохранить».</div>
                 <?php endif; ?>
             </div>
         </div>
@@ -189,6 +201,11 @@ ob_start();
         <button type="submit" class="btn btn-primary"><?= $isNew ? 'Создать товар' : 'Сохранить' ?></button>
     </div>
 </form>
+<?php if ($showDescriptionAi): ?>
+    <form id="description-ai-form" method="post" action="/admin/products/<?= (int) $product['id'] ?>/description/ai">
+        <?= csrfField() ?>
+    </form>
+<?php endif; ?>
 
 <?php if ($showCatalogBlocks): ?>
     <?php

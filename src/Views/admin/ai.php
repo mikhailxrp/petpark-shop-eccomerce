@@ -87,7 +87,6 @@ ob_start();
 <section class="card" aria-labelledby="ai-assistants-title">
     <div class="card-header">
         <h2 class="card-title" id="ai-assistants-title">Помощники</h2>
-        <a href="/admin/ai/descriptions" class="btn btn-sm btn-outline-primary ms-auto">Генерация описаний</a>
     </div>
     <div class="card-body">
         <div class="table-responsive">

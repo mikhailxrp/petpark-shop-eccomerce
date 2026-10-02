@@ -40,6 +40,12 @@ final class ProductController
     private const ATTRIBUTES_SAVE_FAILED_ERROR = 'Не удалось сохранить Характеристики. Попробуйте ещё раз.';
 
     private const AI_FLASH = 'attribute_suggestions';
+    private const DESCRIPTION_FLASH = 'description_suggestion';
+    private const DESCRIPTION_AI_ERRORS = [
+        'unavailable' => 'ИИ-провайдер недоступен. Напишите описание вручную или повторите позже.',
+        'blocked'     => 'Достигнут месячный лимит расхода на ИИ — генерация приостановлена.',
+        'error'       => 'Не удалось получить описание от ИИ. Повторите позже или напишите его вручную.',
+    ];
     private const AI_ERRORS = [
         'unavailable' => 'ИИ-провайдер недоступен. Заполните Характеристики вручную или повторите позже.',
         'blocked'     => 'Достигнут месячный лимит расхода на ИИ — разбор приостановлен.',
@@ -124,13 +130,61 @@ final class ProductController
 
         $product = $this->findOr404($id);
         $form = $this->takeForm();
+        $values = $form['values'] ?? $product;
+
+        // Предложение ИИ (только Владельцу — генерацию запускает он) заменяет текст
+        // в поле; в БД описание остаётся прежним, пока форму не сохранят.
+        $suggestion = $_SESSION['user_role'] === 'owner' ? $this->takeDescriptionSuggestion() : null;
+        if ($suggestion !== null) {
+            $values['description'] = $suggestion;
+        }
 
         $this->renderForm(
             $product,
-            $form['values'] ?? $product,
+            $values,
             $form['errors'] ?? [],
-            productAdminImages((int) $product['id'])
+            productAdminImages((int) $product['id']),
+            $suggestion !== null
         );
+    }
+
+    /**
+     * ИИ-описание одного Товара (FR-AI-002). Ничего не пишет в каталог: текст
+     * кладётся во flash и подставляется в поле «Описание»; в `products.description`
+     * он попадает, только когда Владелец сохранит форму.
+     */
+    public function descriptionAi(string $id): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $productId = (int) $product['id'];
+        $backUrl = '/admin/products/' . $productId . '/edit#product-description';
+
+        $outcome = ['status' => 'error', 'text' => ''];
+        $source = productDescriptionSource($productId);
+        if ($source !== null) {
+            try {
+                $outcome = descriptionGenerateForProduct($source, productConfirmedAttributes($productId));
+            } catch (\Throwable $e) {
+                logException($e, ['product_id' => $productId]);
+            }
+        }
+
+        if ($outcome['status'] !== 'ok') {
+            setFlash('error', self::DESCRIPTION_AI_ERRORS[$outcome['status']] ?? self::DESCRIPTION_AI_ERRORS['error']);
+            redirect($backUrl);
+        }
+
+        logWarning('Товары: ИИ-описание', [
+            'user_id'    => (int) $_SESSION['user_id'],
+            'product_id' => $productId,
+        ]);
+
+        setFlash(self::DESCRIPTION_FLASH, $outcome['text']);
+        setFlash('success', 'ИИ предложил описание — оно в поле ниже. Прочитайте, поправьте и нажмите «Сохранить»: пока вы не сохранили, в карточке Товара остаётся прежнее описание.');
+        redirect($backUrl);
     }
 
     /** Новый Вариант Товара (FR-ADM-002): цена вводится здесь один раз, остаток — через заглушку МойСклад. */
@@ -333,6 +387,36 @@ final class ProductController
         redirect($backUrl);
     }
 
+    public function update(string $id): void
+    {
+        requireRole('owner', 'content_editor');
+        requireCsrf();
+
+        $this->save($this->findOr404($id));
+    }
+
+    public function toggleActive(string $id): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        $product = $this->findOr404($id);
+        $activate = (int) $product['is_active'] === 0;
+        productSetActive((int) $product['id'], $activate);
+        $this->forgetSitemap();
+
+        logWarning('Товары: смена статуса', [
+            'user_id'    => (int) $_SESSION['user_id'],
+            'product_id' => (int) $product['id'],
+            'is_active'  => $activate,
+        ]);
+
+        setFlash('success', $activate
+            ? 'Товар снова активен: ' . $product['name'] . '.'
+            : 'Товар деактивирован: ' . $product['name'] . '.');
+        redirect('/admin/products/' . (int) $product['id'] . '/edit');
+    }
+
     /**
      * Общая часть store()/update(): проверка полей и фото, запись, откат файлов
      * при сбое БД. `$product` — правящийся Товар или null для нового.
@@ -439,7 +523,7 @@ final class ProductController
      * @param array<string, string> $errors
      * @param array<int, array<string, mixed>> $images
      */
-    private function renderForm(?array $product, array $values, array $errors, array $images): void
+    private function renderForm(?array $product, array $values, array $errors, array $images, bool $descriptionSuggested = false): void
     {
         $role = (string) $_SESSION['user_role'];
 
@@ -463,6 +547,7 @@ final class ProductController
             'values'     => $values,
             'errors'     => $errors,
             'images'     => $images,
+            'descriptionSuggested' => $descriptionSuggested,
             'categories' => categoryAll(),
             'brands'     => brandAll(),
             'photosMax'  => PRODUCT_PHOTOS_MAX,
@@ -509,6 +594,14 @@ final class ProductController
             self::VARIANT_FLASH,
             json_encode(['target' => $target, 'values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR)
         );
+    }
+
+    /** Предложенное ИИ описание из прошлого запроса (подставляется один раз). */
+    private function takeDescriptionSuggestion(): ?string
+    {
+        $text = getFlash(self::DESCRIPTION_FLASH);
+
+        return $text !== null && mb_check_encoding($text, 'UTF-8') ? mb_substr($text, 0, PRODUCT_DESCRIPTION_MAX) : null;
     }
 
     /**
