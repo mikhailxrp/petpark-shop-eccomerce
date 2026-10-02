@@ -119,7 +119,7 @@ function bookingResolveCustomer(array $contact): array
  * @param array{name: string, phone: string, email: string} $contact
  * @param array{name: string, species: string, breed: ?string, weight: ?string}|null $newPet null — выбран существующий
  * @return array{status: 'created', booking_id: int, booking_status: string, new_account: array{name: string, email: string, password: string}|null}
- *       | array{status: 'slot_taken'|'invalid'}
+ *       | array{status: 'slot_taken'|'invalid'|'email_taken'}
  */
 function bookingCreate(
     ?int $sessionUserId,
@@ -166,6 +166,13 @@ function bookingCreate(
         $newAccount = null;
         $userId = $sessionUserId;
         if ($userId === null) {
+            // Публичная Запись не подтверждает владение email: на занятый email
+            // не привязываем (чужой кабинет) — гость должен войти. Ручная Запись
+            // персонала (bookingCreateManual) привязывает осознанно.
+            if (userFindByEmail($contact['email']) !== null) {
+                $pdo->rollBack();
+                return ['status' => 'email_taken'];
+            }
             ['user_id' => $userId, 'new_account' => $newAccount] = bookingResolveCustomer($contact);
         }
 

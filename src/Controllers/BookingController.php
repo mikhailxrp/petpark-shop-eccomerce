@@ -26,6 +26,7 @@ final class BookingController
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const VALIDATION_ERROR = 'Проверьте форму: Услуги, Специалист, время, Питомец и контакты обязательны.';
     private const SLOT_TAKEN_ERROR = 'Это время уже занято или стало недоступно. Выберите другое время.';
+    private const EMAIL_TAKEN_ERROR = 'Этот email уже зарегистрирован. Войдите в аккаунт, чтобы записаться.';
     private const RATE_LIMITED_ERROR = 'Слишком много попыток записи. Попробуйте через минуту.';
     private const BOT_NOTICE = 'Спасибо, заявка принята.';
     private const DATE_PATTERN = '/^\d{4}-\d{2}-\d{2}$/';
@@ -144,7 +145,8 @@ final class BookingController
         match ($result['status']) {
             'slot_taken' => $this->failAndBack(self::SLOT_TAKEN_ERROR),
             'invalid'    => $this->failAndBack(self::VALIDATION_ERROR),
-            'created'    => $this->finishCreated($result),
+            'email_taken' => $this->failAndBack(self::EMAIL_TAKEN_ERROR),
+            'created'   => $this->finishCreated($result),
         };
     }
 

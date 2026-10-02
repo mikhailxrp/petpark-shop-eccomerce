@@ -172,7 +172,12 @@ function orderCreateFromRows(
         if ($userId === null) {
             $existingUser = userFindByEmail($contact['email']);
             if ($existingUser !== null) {
-                $userId = (int) $existingUser['id'];
+                // Публичный чекаут не подтверждает владение email — Заказ
+                // гостя на занятый email остаётся гостевым (user_id = NULL,
+                // контакты в contact_*), чтобы не попасть в чужой кабинет.
+                // Персонал (created_by_user_id) оформляет от имени Покупателя —
+                // ему привязка к найденному аккаунту нужна.
+                $userId = $createdByUserId !== null ? (int) $existingUser['id'] : null;
             } else {
                 $password = generatePassword();
                 $userId = userCreateCustomer(
