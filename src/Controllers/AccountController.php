@@ -21,6 +21,7 @@ final class AccountController
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const PET_FORM_FLASH = 'pet_form';
     private const ORDERS_PER_PAGE = 10;
+    private const BOOKINGS_PER_PAGE = 10;
     private const RETURN_REASON_MAX = 1000;
     private const RETURN_REVIEW_HOURS = 24;
     private const RETURN_RATE_LIMIT_ATTEMPTS = 5;
@@ -141,20 +142,42 @@ final class AccountController
     {
         requireRole('customer');
 
+        $userId = (int) $_SESSION['user_id'];
         $now = new \DateTimeImmutable('now');
+
+        $countsByPet = bookingsHistoryCountByPet($userId);
+        $totalPages = max(1, (int) ceil(array_sum($countsByPet) / self::BOOKINGS_PER_PAGE));
+        $page = min(catalogNormalizePage($_GET['page'] ?? null), $totalPages);
+
         $bookings = array_map(
-            static fn (array $booking): array => $booking + [
-                'can_cancel' => bookingCanCancelByCustomer(
-                    new \DateTimeImmutable((string) $booking['scheduled_at']),
-                    $now,
-                    BOOKING_CANCEL_THRESHOLD_HOURS
-                ),
-            ],
-            bookingsUpcomingByUser((int) $_SESSION['user_id'])
+            static function (array $booking) use ($now): array {
+                $isUpcoming = bookingIsUpcoming($booking, $now);
+
+                return $booking + [
+                    'is_upcoming' => $isUpcoming,
+                    'can_cancel'  => $isUpcoming && bookingCanCancelByCustomer(
+                        new \DateTimeImmutable((string) $booking['scheduled_at']),
+                        $now,
+                        BOOKING_CANCEL_THRESHOLD_HOURS
+                    ),
+                ];
+            },
+            bookingsHistoryPageByUser($userId, self::BOOKINGS_PER_PAGE, ($page - 1) * self::BOOKINGS_PER_PAGE)
         );
 
+        // Питомец без Записей вообще показывается пустым на первой странице;
+        // на следующих — только те, у кого есть Записи на этой странице
+        $pageBookingPetIds = array_map(static fn (array $booking): int => (int) $booking['pet_id'], $bookings);
+        $pets = array_values(array_filter(
+            petsByUser($userId),
+            static fn (array $pet): bool => in_array((int) $pet['id'], $pageBookingPetIds, true)
+                || ($page === 1 && !isset($countsByPet[(int) $pet['id']]))
+        ));
+
         render('account/bookings', [
-            'bookings'       => $bookings,
+            'groups'         => bookingsGroupByPet($pets, $bookings, $now),
+            'page'           => $page,
+            'totalPages'     => $totalPages,
             'thresholdHours' => BOOKING_CANCEL_THRESHOLD_HOURS,
             'success'        => getFlash('success'),
             'error'          => getFlash('error'),

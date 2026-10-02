@@ -191,4 +191,52 @@ final class BookingTest extends TestCase
 
         bookingWeekBounds('2026-02-30');
     }
+
+    public function testStatusAndDepositLabels(): void
+    {
+        $this->assertSame('Состоялась', bookingStatusLabel('completed'));
+        $this->assertSame('unknown', bookingStatusLabel('unknown'));
+        $this->assertSame('Возвращён', bookingDepositLabel('returned'));
+        $this->assertNull(bookingDepositLabel('none'));
+    }
+
+    public function testGroupByPetKeepsEmptyPetAndDropsForeignPet(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+        $pets = [['id' => 1, 'name' => 'Барсик'], ['id' => 2, 'name' => 'Шарик']];
+        $bookings = [
+            ['id' => 10, 'pet_id' => 1, 'status' => 'completed', 'scheduled_at' => '2026-09-01 10:00:00'],
+            ['id' => 11, 'pet_id' => 99, 'status' => 'confirmed', 'scheduled_at' => '2026-10-07 10:00:00'],
+        ];
+
+        $groups = bookingsGroupByPet($pets, $bookings, $now);
+
+        $this->assertCount(2, $groups);
+        $this->assertSame([10], array_column($groups[0]['bookings'], 'id'));
+        $this->assertSame([], $groups[1]['bookings']);
+    }
+
+    public function testGroupByPetOrdersUpcomingFirstThenPastNewestFirst(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+        $bookings = [
+            ['id' => 1, 'pet_id' => 1, 'status' => 'completed', 'scheduled_at' => '2026-09-01 10:00:00'],
+            ['id' => 2, 'pet_id' => 1, 'status' => 'confirmed', 'scheduled_at' => '2026-10-20 10:00:00'],
+            ['id' => 3, 'pet_id' => 1, 'status' => 'cancelled', 'scheduled_at' => '2026-10-08 10:00:00'],
+            ['id' => 4, 'pet_id' => 1, 'status' => 'confirmed', 'scheduled_at' => '2026-10-07 10:00:00'],
+            ['id' => 5, 'pet_id' => 1, 'status' => 'no_show', 'scheduled_at' => '2026-09-15 10:00:00'],
+        ];
+
+        $groups = bookingsGroupByPet([['id' => 1]], $bookings, $now);
+
+        $this->assertSame([4, 2, 3, 5, 1], array_column($groups[0]['bookings'], 'id'));
+    }
+
+    public function testPastConfirmedBookingIsNotUpcoming(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+
+        $this->assertFalse(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 11:00:00'], $now));
+        $this->assertTrue(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 12:00:00'], $now));
+    }
 }

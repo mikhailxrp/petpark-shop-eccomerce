@@ -2339,6 +2339,31 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     background-color: var(--order-status-cancelled);
 }
 
+.booking-pet {
+    margin-bottom: var(--account-gap);
+}
+
+.booking-status {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 12px;
+    border-radius: 45px;
+    background-color: var(--order-status-active);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.booking-status--completed {
+    background-color: var(--order-status-done);
+}
+
+.booking-status--cancelled,
+.booking-status--no_show {
+    background-color: var(--order-status-cancelled);
+}
+
 .order-items {
     margin: 0 0 var(--account-gap);
     padding: 0;

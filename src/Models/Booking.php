@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 const BOOKINGS_UPCOMING_LIMIT = 50; // «Мои записи»: потолок списка
 
+// Статусы, которые Покупатель видит в истории; slot_selected и slot_released — нет
+const BOOKINGS_HISTORY_STATUSES = ['confirmed', 'completed', 'no_show', 'cancelled'];
+
 /**
  * Занятые интервалы Специалиста на дату в формате, который ждёт
  * bookingFreeSlots(): начало и длина блока (Услуги + буфер груминга).
@@ -465,6 +468,56 @@ function bookingsUpcomingByUser(int $userId): array
         LIMIT " . BOOKINGS_UPCOMING_LIMIT . '
     ');
     $stmt->execute([$userId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Сколько видимых в истории Записей у каждого Питомца Покупателя:
+ * [pet_id => количество]. Сумма — для пагинации, ключи — какие Питомцы
+ * без Записей вообще.
+ *
+ * @return array<int, int>
+ */
+function bookingsHistoryCountByPet(int $userId): array
+{
+    $placeholders = implode(',', array_fill(0, count(BOOKINGS_HISTORY_STATUSES), '?'));
+    $stmt = getPdo()->prepare(
+        "SELECT pet_id, COUNT(*) AS total FROM bookings
+         WHERE user_id = ? AND status IN ($placeholders)
+         GROUP BY pet_id"
+    );
+    $stmt->execute([$userId, ...BOOKINGS_HISTORY_STATUSES]);
+
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $counts[(int) $row['pet_id']] = (int) $row['total'];
+    }
+
+    return $counts;
+}
+
+/**
+ * Страница истории Записей Покупателя, новые первыми (FR-ACC-002).
+ *
+ * @return list<array<string, mixed>>
+ */
+function bookingsHistoryPageByUser(int $userId, int $limit, int $offset): array
+{
+    $placeholders = implode(',', array_fill(0, count(BOOKINGS_HISTORY_STATUSES), '?'));
+    $stmt = getPdo()->prepare(
+        "SELECT b.id, b.pet_id, b.status, b.scheduled_at, b.deposit_amount, b.deposit_status,
+                u.name AS specialist_name,
+                (SELECT GROUP_CONCAT(bs.service_name ORDER BY bs.sort_order SEPARATOR ', ')
+                 FROM booking_services bs WHERE bs.booking_id = b.id) AS service_names
+         FROM bookings b
+         JOIN specialists sp ON sp.id = b.specialist_id
+         JOIN users u ON u.id = sp.user_id
+         WHERE b.user_id = ? AND b.status IN ($placeholders)
+         ORDER BY b.scheduled_at DESC, b.id DESC
+         LIMIT $limit OFFSET $offset"
+    );
+    $stmt->execute([$userId, ...BOOKINGS_HISTORY_STATUSES]);
 
     return $stmt->fetchAll();
 }

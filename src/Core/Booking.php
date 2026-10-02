@@ -186,3 +186,76 @@ function bookingFreeSlots(
 
     return $slots;
 }
+
+/** Подписи bookings.status для Покупателя (FR-ACC-002). */
+const BOOKING_STATUS_LABELS = [
+    'confirmed' => 'Подтверждена',
+    'completed' => 'Состоялась',
+    'no_show'   => 'Неявка',
+    'cancelled' => 'Отменена',
+];
+
+/** Подписи bookings.deposit_status; `none` — строки «Депозит» нет вовсе. */
+const BOOKING_DEPOSIT_LABELS = [
+    'held'      => 'Внесён, вернём при отмене',
+    'returned'  => 'Возвращён',
+    'forfeited' => 'Не возвращается (неявка)',
+];
+
+/** Подпись статуса Записи; неизвестный статус выводится как есть. */
+function bookingStatusLabel(string $status): string
+{
+    return BOOKING_STATUS_LABELS[$status] ?? $status;
+}
+
+/** Подпись Депозита; null — Депозита не было, показывать нечего. */
+function bookingDepositLabel(string $depositStatus): ?string
+{
+    return BOOKING_DEPOSIT_LABELS[$depositStatus] ?? null;
+}
+
+/** Предстоящая Запись: подтверждена и визит ещё не начался. */
+function bookingIsUpcoming(array $booking, DateTimeImmutable $now): bool
+{
+    return $booking['status'] === 'confirmed'
+        && new DateTimeImmutable((string) $booking['scheduled_at']) >= $now;
+}
+
+/**
+ * Записи по Питомцам для «Мои записи» (FR-ACC-002). Каждый Питомец из $pets
+ * попадает в результат, даже без Записей; Запись с неизвестным `pet_id`
+ * отбрасывается. Внутри Питомца: сначала предстоящие (ближайшая первой),
+ * затем остальные (новые первыми).
+ *
+ * @param list<array<string, mixed>> $pets     строки с ключом `id`
+ * @param list<array<string, mixed>> $bookings строки с ключами `pet_id`, `status`, `scheduled_at`
+ * @return list<array{pet: array<string, mixed>, bookings: list<array<string, mixed>>}>
+ */
+function bookingsGroupByPet(array $pets, array $bookings, DateTimeImmutable $now): array
+{
+    $upcoming = [];
+    $past = [];
+    foreach ($bookings as $booking) {
+        $petId = (int) $booking['pet_id'];
+        if (bookingIsUpcoming($booking, $now)) {
+            $upcoming[$petId][] = $booking;
+        } else {
+            $past[$petId][] = $booking;
+        }
+    }
+
+    $byDate = static fn (array $a, array $b): int => strcmp((string) $a['scheduled_at'], (string) $b['scheduled_at']);
+
+    $groups = [];
+    foreach ($pets as $pet) {
+        $petId = (int) $pet['id'];
+        $petUpcoming = $upcoming[$petId] ?? [];
+        $petPast = $past[$petId] ?? [];
+        usort($petUpcoming, $byDate);
+        usort($petPast, static fn (array $a, array $b): int => $byDate($b, $a));
+
+        $groups[] = ['pet' => $pet, 'bookings' => [...$petUpcoming, ...$petPast]];
+    }
+
+    return $groups;
+}
