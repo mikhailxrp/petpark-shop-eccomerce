@@ -99,7 +99,7 @@ final class FunctionsTest extends TestCase
         $this->assertSame('/account', homePathForRole('customer'));
         $this->assertSame('/specialist', homePathForRole('specialist'));
         $this->assertSame('/admin', homePathForRole('shift_admin'));
-        $this->assertSame('/admin', homePathForRole('content_editor'));
+        $this->assertSame('/admin/products', homePathForRole('content_editor'));
         $this->assertSame('/admin', homePathForRole('owner'));
     }
 

@@ -34,6 +34,7 @@ return [
         '/admin/returns'       => ['Admin\ReturnController', 'index'],
         '/admin/returns/{id}'  => ['Admin\ReturnController', 'show'],
         '/admin/stock'         => ['Admin\StockController', 'index'],
+        '/admin/products'      => ['Admin\ProductController', 'index'],
         '/admin/inbox'         => ['Admin\InboxController', 'index'],
         '/admin/inbox/poll'    => ['Admin\InboxController', 'poll'],
         '/admin/inbox/{id}'    => ['Admin\InboxController', 'show'],

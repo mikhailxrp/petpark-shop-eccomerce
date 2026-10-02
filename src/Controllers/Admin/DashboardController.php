@@ -14,7 +14,7 @@ final class DashboardController
 {
     public function index(): void
     {
-        requireRole('shift_admin', 'content_editor', 'owner');
+        requireRole('shift_admin', 'owner');
 
         $this->renderDashboard();
     }

@@ -98,7 +98,8 @@ function homePathForRole(string $role): string
     return match ($role) {
         'customer' => '/account',
         'specialist' => '/specialist',
-        'shift_admin', 'content_editor', 'owner' => '/admin',
+        'shift_admin', 'owner' => '/admin',
+        'content_editor' => '/admin/products',
         default => '/',
     };
 }

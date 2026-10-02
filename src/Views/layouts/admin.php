@@ -7,7 +7,9 @@ declare(strict_types=1);
  * персонала. Сайдбар — «Дашборд» + «Отзывы» (Таск 8, только
  * `shift_admin`/`owner` — `content_editor`/`specialist` не модерируют,
  * admin-assembly.md); остальные разделы появятся в более поздних
- * тасках/фазах.
+ * тасках/фазах. «Товары» — `owner` и `content_editor` (phase-7.md,
+ * Таск 7); у Фрилансера «Дашборда» нет — его домашняя страница и есть
+ * /admin/products.
  *
  * @var string $pageTitle
  * @var string $content   Готовый HTML блока контента (собран через ob_start() во View)
@@ -80,12 +82,23 @@ declare(strict_types=1);
                 <nav class="main-menu-container nav nav-pills flex-column">
                     <ul class="main-menu">
                         <li class="slide__category"><span class="category-name"><?= e($roleLabel) ?></span></li>
-                        <li class="slide<?= $currentPath === $homeUrl ? ' active' : '' ?>">
-                            <a href="<?= e($homeUrl) ?>" class="side-menu__item<?= $currentPath === $homeUrl ? ' active' : '' ?>">
-                                <i class="fe fe-home side-menu__icon"></i>
-                                <span class="side-menu__label">Дашборд</span>
-                            </a>
-                        </li>
+                        <?php if ($userRole !== 'content_editor'): ?>
+                            <li class="slide<?= $currentPath === $homeUrl ? ' active' : '' ?>">
+                                <a href="<?= e($homeUrl) ?>" class="side-menu__item<?= $currentPath === $homeUrl ? ' active' : '' ?>">
+                                    <i class="fe fe-home side-menu__icon"></i>
+                                    <span class="side-menu__label">Дашборд</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
+                        <?php if (in_array($userRole, ['owner', 'content_editor'], true)): ?>
+                            <?php $productsActive = str_starts_with($currentPath, '/admin/products'); ?>
+                            <li class="slide<?= $productsActive ? ' active' : '' ?>">
+                                <a href="/admin/products" class="side-menu__item<?= $productsActive ? ' active' : '' ?>">
+                                    <i class="fe fe-shopping-bag side-menu__icon"></i>
+                                    <span class="side-menu__label">Товары</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (in_array($userRole, ['shift_admin', 'owner'], true)): ?>
                             <?php $ordersActive = str_starts_with($currentPath, '/admin/orders'); ?>
                             <li class="slide<?= $ordersActive ? ' active' : '' ?>">

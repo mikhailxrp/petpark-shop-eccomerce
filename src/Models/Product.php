@@ -1058,3 +1058,107 @@ function productConfirmedAttributesCoverage(): array
 
     return ['total' => (int) $row['total'], 'confirmed' => (int) $row['confirmed']];
 }
+
+// ─── Список Товаров в админке (FR-ADM-001, phase-7 Таск 7) ───────────────
+
+/**
+ * Общее WHERE списка Товаров в админке: подстрока в названии, основная
+ * Категория, статус (`active`/`inactive`; пусто — все). Единственное место
+ * сборки условий — для productAdminCount() и productAdminList().
+ *
+ * @return array{0: string, 1: array<string, mixed>}
+ */
+function productAdminConditions(string $query, int $categoryId, string $status): array
+{
+    $conditions = ['1 = 1'];
+    $params = [];
+
+    if ($query !== '') {
+        $conditions[] = 'p.name LIKE :name_part';
+        $params['name_part'] = '%' . addcslashes($query, '\%_') . '%';
+    }
+    if ($categoryId > 0) {
+        $conditions[] = 'p.category_id = :category_id';
+        $params['category_id'] = $categoryId;
+    }
+    if ($status === 'active') {
+        $conditions[] = 'p.is_active = 1';
+    } elseif ($status === 'inactive') {
+        $conditions[] = 'p.is_active = 0';
+    }
+
+    return [implode(' AND ', $conditions), $params];
+}
+
+function productAdminCount(string $query, int $categoryId, string $status): int
+{
+    [$where, $params] = productAdminConditions($query, $categoryId, $status);
+
+    $stmt = getPdo()->prepare("SELECT COUNT(*) FROM products p WHERE {$where}");
+    $stmt->execute($params);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Страница списка Товаров для админки: цена — диапазон эффективной цены
+ * активных Вариантов (как на витрине), наличие — свободный остаток
+ * активных Вариантов, статус Характеристик — `drafts` (есть открытые
+ * черновики ИИ) / `confirmed` / `none`. Агрегаты — одним запросом.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productAdminList(string $query, int $categoryId, string $status, int $limit, int $offset): array
+{
+    [$where, $params] = productAdminConditions($query, $categoryId, $status);
+
+    $stmt = getPdo()->prepare("
+        SELECT
+            p.id, p.name, p.is_active,
+            c.name AS category_name,
+            b.name AS brand_name,
+            v.price_min, v.price_max, v.available_quantity,
+            img.path AS image_path,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM product_attribute_drafts d
+                    WHERE d.product_id = p.id AND d.status IN ('pending', 'needs_decision')
+                ) THEN 'drafts'
+                WHEN EXISTS (
+                    SELECT 1 FROM product_attributes a WHERE a.product_id = p.id
+                ) THEN 'confirmed'
+                ELSE 'none'
+            END AS attributes_status
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        LEFT JOIN (
+            SELECT product_id,
+                   MIN(IFNULL(discount_price, price)) AS price_min,
+                   MAX(IFNULL(discount_price, price)) AS price_max,
+                   SUM(GREATEST(stock_quantity - reserved_quantity, 0)) AS available_quantity
+            FROM product_variants
+            WHERE is_active = 1
+            GROUP BY product_id
+        ) v ON v.product_id = p.id
+        LEFT JOIN (
+            SELECT product_id, path,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY product_id
+                       ORDER BY is_main DESC, sort_order ASC, id ASC
+                   ) AS rn
+            FROM product_images
+        ) img ON img.product_id = p.id AND img.rn = 1
+        WHERE {$where}
+        ORDER BY p.name ASC, p.id ASC
+        LIMIT :row_limit OFFSET :row_offset
+    ");
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue('row_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
