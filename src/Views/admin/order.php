@@ -14,6 +14,7 @@ declare(strict_types=1);
  * @var array<string, mixed> $order orderFindForAdmin()
  * @var array<int, array<string, mixed>> $items orderItemsForOrder() — снэпшоты Позиций
  * @var array<int, string> $transitions допустимые статусы, в которые можно перейти
+ * @var bool $managedBySite Заказ ведётся на сайте (false — Заказ с площадки, только чтение)
  * @var bool $canEditItems правка состава и цен доступна (new/confirmed/assembled)
  * @var string $freeThreshold порог бесплатной доставки курьером (BR-006)
  * @var string $courierCost стоимость курьерской доставки (BR-006)
@@ -30,7 +31,9 @@ $transitionLabels = [
     'picked_up'        => 'Выдан',
     'cancelled'        => 'Отменить Заказ',
 ];
-$canMarkPaid = $order['payment_method'] === 'cash_or_card_on_delivery'
+$sourceLabel = ORDER_SOURCE_LABELS[$order['source']] ?? (string) $order['source'];
+$canMarkPaid = $managedBySite
+    && $order['payment_method'] === 'cash_or_card_on_delivery'
     && $order['payment_status'] === 'unpaid'
     && $order['status'] !== 'cancelled';
 
@@ -73,6 +76,9 @@ ob_start();
         </p>
     </div>
     <div class="mt-3 mt-md-0">
+        <?php if (!$managedBySite): ?>
+            <span class="badge bg-dark"><?= e($sourceLabel) ?></span>
+        <?php endif; ?>
         <?php $badgeStatus = (string) $order['status']; ?>
         <?php include __DIR__ . '/../components/admin/order-status-badge.php'; ?>
         <a href="/admin/orders" class="btn btn-outline-secondary btn-sm ms-2">К списку</a>
@@ -118,6 +124,18 @@ ob_start();
     </div>
 </div>
 
+<?php if (!$managedBySite): ?>
+    <div class="card">
+        <div class="card-header"><h2 class="card-title">Заказ с площадки</h2></div>
+        <div class="card-body">
+            <p class="mb-0 text-muted">
+                Заказ получен с площадки «<?= e($sourceLabel) ?>», номер на площадке:
+                <?= e((string) ($order['external_order_id'] ?? '—')) ?>.
+                Статусом, оплатой и составом управляет площадка — на сайте Заказ только для чтения.
+            </p>
+        </div>
+    </div>
+<?php else: ?>
 <div class="card">
     <div class="card-header"><h2 class="card-title">AmoCRM (демо)</h2></div>
     <div class="card-body">
@@ -147,6 +165,7 @@ ob_start();
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="card">
     <div class="card-header"><h2 class="card-title">Состав Заказа</h2></div>

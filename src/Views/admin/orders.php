@@ -12,6 +12,7 @@ declare(strict_types=1);
  * @var string $userRole
  * @var array<int, array<string, mixed>> $orders orderListForAdmin()
  * @var string|null $status Активный фильтр по orders.status
+ * @var string|null $source Активный фильтр по orders.source
  * @var int $page
  * @var int $totalPages
  * @var int $total
@@ -29,10 +30,15 @@ $statusOptions = [
     'cancelled'        => 'Отменён',
 ];
 
-$pageUrl = static function (int $targetPage) use ($status): string {
+$sourceOptions = ['' => 'Все источники'] + ORDER_SOURCE_LABELS;
+
+$pageUrl = static function (int $targetPage) use ($status, $source): string {
     $query = [];
     if ($status !== null) {
         $query['status'] = $status;
+    }
+    if ($source !== null) {
+        $query['source'] = $source;
     }
     if ($targetPage > 1) {
         $query['page'] = $targetPage;
@@ -61,6 +67,14 @@ ob_start();
                 <select id="orders-status" name="status" class="form-select">
                     <?php foreach ($statusOptions as $value => $label): ?>
                         <option value="<?= e((string) $value) ?>"<?= ($status ?? '') === (string) $value ? ' selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-12 col-md-4">
+                <label for="orders-source" class="visually-hidden">Источник</label>
+                <select id="orders-source" name="source" class="form-select">
+                    <?php foreach ($sourceOptions as $value => $label): ?>
+                        <option value="<?= e((string) $value) ?>"<?= ($source ?? '') === (string) $value ? ' selected' : '' ?>><?= e($label) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -102,7 +116,12 @@ ob_start();
                             };
                             ?>
                             <tr>
-                                <th scope="row">№<?= (int) $row['id'] ?></th>
+                                <th scope="row">
+                                    №<?= (int) $row['id'] ?>
+                                    <?php if (!orderIsManagedBySite((string) $row['source'])): ?>
+                                        <div><span class="badge bg-dark"><?= e(ORDER_SOURCE_LABELS[$row['source']] ?? (string) $row['source']) ?></span></div>
+                                    <?php endif; ?>
+                                </th>
                                 <td>
                                     <?= e((string) ($row['contact_name'] ?? '')) ?>
                                     <div class="text-muted fs-12"><?= e((string) ($row['contact_phone'] ?? '')) ?></div>

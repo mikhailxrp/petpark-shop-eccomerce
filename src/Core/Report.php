@@ -184,6 +184,33 @@ function reportServicesBreakdown(array $rows): array
 }
 
 /**
+ * Выручка по источникам Заказа: сайт и обе площадки присутствуют всегда
+ * (пусто → нули), порядок — как в ORDER_SOURCE_LABELS.
+ *
+ * @param array<int, array{source: string, orders_count: int|string, revenue: string}> $rows
+ * @return list<array{source: string, label: string, orders_count: int, revenue: string}>
+ */
+function reportSourcesBreakdown(array $rows): array
+{
+    $bySource = [];
+    foreach ($rows as $row) {
+        $bySource[(string) $row['source']] = $row;
+    }
+
+    $result = [];
+    foreach (ORDER_SOURCE_LABELS as $source => $label) {
+        $result[] = [
+            'source'       => $source,
+            'label'        => $label,
+            'orders_count' => (int) ($bySource[$source]['orders_count'] ?? 0),
+            'revenue'      => (string) ($bySource[$source]['revenue'] ?? '0.00'),
+        ];
+    }
+
+    return $result;
+}
+
+/**
  * Подпись периода для заголовка: «05.10.2026», «05.10 – 11.10.2026», «10.2026».
  *
  * @param array{from: DateTimeImmutable, to: DateTimeImmutable} $bounds

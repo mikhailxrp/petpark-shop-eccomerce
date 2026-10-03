@@ -48,7 +48,8 @@ final class ReportController
             'date'        => $date->format(REPORT_DATE_FORMAT),
             'periodLabel' => reportPeriodLabel($period, $bounds),
             'orders'      => reportRevenueSeries(reportDays($bounds), reportOrdersByDay($from, $to)),
-            'topProducts' => reportTopProducts($from, $to, REPORT_TOP_PRODUCTS_LIMIT),
+            'sources'     => reportSourcesBreakdown(reportRevenueBySource($from, $to)),
+            'topProducts' =>reportTopProducts($from, $to, REPORT_TOP_PRODUCTS_LIMIT),
             'services'    => reportServicesBreakdown(reportServicesByKind($from, $to)),
         ]);
     }

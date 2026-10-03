@@ -31,7 +31,8 @@ final class OrderController
     private const MAX_ORDER_LINES = 50;
     private const CREATE_VALIDATION_ERROR = 'Проверьте форму: контакты, способ получения и оплаты, адрес для курьера и хотя бы одна Позиция обязательны.';
     private const CREATE_VARIANT_ERROR = 'Один из выбранных Вариантов не найден или снят с продажи.';
-    private const MARK_PAID_REJECTED_ERROR = 'Отметить оплату нельзя: способ оплаты другой, Заказ уже оплачен или отменён.';
+    private const MARKETPLACE_ORDER_ERROR = 'Заказ с площадки только для чтения: статусом, оплатой и составом управляет площадка.';
+    private const MARK_PAID_REJECTED_ERROR ='Отметить оплату нельзя: способ оплаты другой, Заказ уже оплачен или отменён.';
 
     public function index(): void
     {
@@ -42,7 +43,12 @@ final class OrderController
             ? $statusInput
             : null;
 
-        $total = orderCountForAdmin($status);
+        $sourceInput = input('source', '');
+        $source = is_string($sourceInput) && array_key_exists($sourceInput, ORDER_SOURCE_LABELS)
+            ? $sourceInput
+            : null;
+
+        $total = orderCountForAdmin($status, $source);
         $totalPages = max(1, (int) ceil($total / self::PER_PAGE));
 
         $pageInput = input('page', '1');
@@ -57,8 +63,9 @@ final class OrderController
             'roleLabel'  => adminRoleLabel($role),
             'homeUrl'    => homePathForRole($role),
             'userRole'   => $role,
-            'orders'     => orderListForAdmin($status, self::PER_PAGE, ($page - 1) * self::PER_PAGE),
+            'orders'     => orderListForAdmin($status, self::PER_PAGE, ($page - 1) * self::PER_PAGE, $source),
             'status'     => $status,
+            'source'     => $source,
             'page'       => $page,
             'totalPages' => $totalPages,
             'total'      => $total,
@@ -427,7 +434,8 @@ final class OrderController
             'order'     => $order,
             'items'     => orderItemsForOrder((int) $order['id']),
             'transitions' => $this->availableTransitions($order),
-            'canEditItems' => orderIsEditable((string) $order['status']),
+            'managedBySite' => orderIsManagedBySite((string) $order['source']),
+            'canEditItems' => orderIsManagedBySite((string) $order['source']) && orderIsEditable((string) $order['status']),
             'freeThreshold' => DELIVERY_FREE_THRESHOLD,
             'courierCost'   => DELIVERY_COURIER_COST,
             'success'   => getFlash('success'),
@@ -449,6 +457,7 @@ final class OrderController
         }
 
         $orderId = (int) $order['id'];
+        $this->rejectMarketplaceOrder($order);
         $target = input('status', '');
 
         if (!is_string($target) || !in_array($target, $this->availableTransitions($order), true)) {
@@ -475,13 +484,16 @@ final class OrderController
         requireRole('shift_admin', 'owner');
         requireCsrf();
 
-        $orderId = ctype_digit($id) ? (int) $id : 0;
+        $order = ctype_digit($id) ? orderFindForAdmin((int) $id) : null;
 
-        if ($orderId === 0 || orderFindById($orderId) === null) {
+        if ($order === null) {
             http_response_code(404);
             render('errors/404');
             return;
         }
+
+        $orderId = (int) $order['id'];
+        $this->rejectMarketplaceOrder($order);
 
         if (orderMarkPaid($orderId)) {
             setFlash('success', 'Оплата при получении отмечена.');
@@ -510,6 +522,7 @@ final class OrderController
         }
 
         $orderId = (int) $order['id'];
+        $this->rejectMarketplaceOrder($order);
         $change = $this->parseItemChange();
 
         if ($change === null) {
@@ -651,6 +664,10 @@ final class OrderController
      */
     private function availableTransitions(array $order): array
     {
+        if (!orderIsManagedBySite((string) $order['source'])) {
+            return [];
+        }
+
         $allowed = ORDER_STATUS_TRANSITIONS[(string) $order['status']] ?? [];
 
         return array_values(array_filter($allowed, static fn (string $to): bool => match ($to) {
@@ -658,6 +675,19 @@ final class OrderController
             'ready_for_pickup' => $order['delivery_method'] === 'pickup',
             default            => true,
         }));
+    }
+
+    /**
+     * Заказ с площадки менять нельзя: флеш + возврат в карточку (redirect() завершает запрос).
+     *
+     * @param array<string, mixed> $order
+     */
+    private function rejectMarketplaceOrder(array $order): void
+    {
+        if (!orderIsManagedBySite((string) $order['source'])) {
+            setFlash('error', self::MARKETPLACE_ORDER_ERROR);
+            redirect('/admin/orders/' . (int) $order['id']);
+        }
     }
 
     /** @param array<string, mixed> $order */

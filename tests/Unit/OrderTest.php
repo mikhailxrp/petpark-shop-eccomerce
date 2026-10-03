@@ -92,6 +92,14 @@ final class OrderTest extends TestCase
         \orderDeliveryCost('drone', '100.00', self::FREE_THRESHOLD, self::COURIER_COST);
     }
 
+    public function testOnlySiteOrdersAreManagedBySite(): void
+    {
+        $this->assertTrue(\orderIsManagedBySite('site'));
+        $this->assertFalse(\orderIsManagedBySite('wildberries'));
+        $this->assertFalse(\orderIsManagedBySite('ozon'));
+        $this->assertFalse(\orderIsManagedBySite(''));
+    }
+
     public function testAllowedStatusTransitions(): void
     {
         $this->assertTrue(\orderCanTransition('new', 'confirmed'));

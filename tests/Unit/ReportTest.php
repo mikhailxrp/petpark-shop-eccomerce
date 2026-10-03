@@ -142,6 +142,19 @@ final class ReportTest extends TestCase
         $this->assertSame('500.00', $result['kinds'][2]['revenue']);
     }
 
+    public function testSourcesBreakdownKeepsAllSourcesInFixedOrder(): void
+    {
+        $result = \reportSourcesBreakdown([
+            ['source' => 'ozon', 'orders_count' => '2', 'revenue' => '3000.50'],
+            ['source' => 'site', 'orders_count' => '1', 'revenue' => '999.00'],
+        ]);
+
+        $this->assertSame(['site', 'wildberries', 'ozon'], array_column($result, 'source'));
+        $this->assertSame([1, 0, 2], array_column($result, 'orders_count'));
+        $this->assertSame('0.00', $result[1]['revenue']);
+        $this->assertSame('3000.50', $result[2]['revenue']);
+    }
+
     public function testPeriodLabel(): void
     {
         $date = new DateTimeImmutable('2026-10-07');

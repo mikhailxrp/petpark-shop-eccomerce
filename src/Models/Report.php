@@ -28,6 +28,24 @@ function reportOrdersByDay(string $from, string $to): array
 }
 
 /**
+ * Число Заказов и выручка по источнику (`orders.source`); `cancelled` не учитывается.
+ *
+ * @return array<int, array{source: string, orders_count: int|string, revenue: string}>
+ */
+function reportRevenueBySource(string $from, string $to): array
+{
+    $stmt = getPdo()->prepare(
+        "SELECT source, COUNT(*) AS orders_count, SUM(total) AS revenue
+         FROM orders
+         WHERE status <> 'cancelled' AND created_at >= :from AND created_at < :to
+         GROUP BY source"
+    );
+    $stmt->execute(['from' => $from, 'to' => $to]);
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Самые продаваемые Товары по снэпшоту `order_items.product_name`.
  *
  * @return array<int, array{product_name: string, quantity: int|string, revenue: string}>
