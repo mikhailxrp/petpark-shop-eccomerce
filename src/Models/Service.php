@@ -22,6 +22,40 @@ function servicesActive(): array
 }
 
 /**
+ * Активные Услуги с slug для публичного списка `/services`. Услуга без slug
+ * (заведена вне сида) страницы не имеет и в список не попадает.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function servicesPublicList(): array
+{
+    return getPdo()->query(
+        'SELECT id, name, slug, kind, duration_minutes, price, deposit_amount, description
+         FROM services
+         WHERE is_active = 1 AND slug IS NOT NULL
+         ORDER BY kind, id'
+    )->fetchAll();
+}
+
+/**
+ * Активная Услуга по slug для `/services/{slug}`; null — нет такой или снята.
+ *
+ * @return array<string, mixed>|null
+ */
+function serviceFindActiveBySlug(string $slug): ?array
+{
+    $stmt = getPdo()->prepare(
+        'SELECT id, name, slug, kind, duration_minutes, price, deposit_amount, description
+         FROM services
+         WHERE is_active = 1 AND slug = :slug'
+    );
+    $stmt->execute(['slug' => $slug]);
+    $row = $stmt->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
  * Активные Услуги по id, в порядке возрастания id. Несуществующие и
  * снятые с продажи в результат не попадают — вызывающий сравнивает длину.
  *

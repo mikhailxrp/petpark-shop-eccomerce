@@ -1029,7 +1029,8 @@ select.nice-select::-ms-expand {
  * браузерной ширине по умолчанию и прижато к левому краю (скриншот
  * пользователя). Дублируем те же значения под наш селектор.
  */
-form.add-review.comment.leave-comment input[type="email"] {
+form.add-review.comment.leave-comment input[type="email"],
+form.add-review.comment.leave-comment input[type="tel"] {
     width: 100%;
     padding-left: 30px;
     border: 0;
@@ -2453,4 +2454,369 @@ table.shop_table td.product-name img {
 .banner-text .banner-title--xlong {
     font-size: clamp(22px, 2.6vw, 32px);
     line-height: 1.2;
+}
+
+/*
+ * Страница «О компании» (/about, content-page.php, phase-8.md Таск 1).
+ * В макете about.html фоны секций заданы инлайн-стилем — выносим в
+ * классы (инлайн-стили в Views запрещены).
+ */
+.about-care-services {
+    background-image: url(../img/healthy-product.png);
+    background-color: #f5f5f5;
+}
+
+.about-reviews {
+    background-image: url(../img/client-b.jpg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.about-reviews .rated {
+    align-items: center;
+    gap: 16px;
+    width: fit-content;
+    margin: 40px auto 0;
+    padding: 16px 32px;
+    background-color: #feda46;
+    border-radius: 51px;
+}
+
+.about-reviews .rated ul.star {
+    color: #000;
+}
+
+/* Вступление из `body` — абзацы и списки редактора, как `.love-your-pets p` макета. */
+.about__intro p {
+    margin-bottom: 16px;
+}
+
+.about__intro ul,
+.about__intro ol {
+    margin-bottom: 16px;
+    padding-left: 20px;
+}
+
+/* Фото карточки «We provide» в макете квадратные 300×300; в БД/сиде — 378×300. */
+.we-provide-img img {
+    width: 300px;
+    max-width: 100%;
+    height: 300px;
+    object-fit: cover;
+}
+
+/* Галерея: фото разной высоты из одной колонки вписываются в сетку макета. */
+.about-gallery-img img {
+    width: 100%;
+    height: 210px;
+    object-fit: cover;
+}
+
+.about-gallery-img--tall img {
+    height: 470px;
+}
+
+/* Счётчики: в макете число/подпись — `h2`/`h3`, здесь `p` (не засоряем структуру заголовков). */
+.count-text__number {
+    font-family: 'DynaPuff', sans-serif;
+    font-size: 90px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.count-text__label {
+    margin-bottom: -16px;
+    font-size: 18px;
+    color: #666666;
+    transform: translateY(-16px);
+}
+
+@media (max-width: 1400px) {
+    .count-text__number {
+        font-size: 70px;
+    }
+
+    .count-text__label {
+        transform: translateY(-8px);
+    }
+}
+
+@media (max-width: 767.98px) {
+    .about-gallery-img--tall img {
+        height: 320px;
+    }
+}
+
+@media (max-width: 576px) {
+    .count-text__number {
+        font-size: 54px;
+    }
+
+    .count-text__label {
+        transform: translateY(0);
+    }
+}
+
+/* Карточки «Забота о питомцах» — одной высоты: колонки row растянуты, карточка занимает всю колонку. */
+.about-care-services .pet-grooming {
+    height: 100%;
+}
+
+/*
+ * «История» на /about: в макете стрелка `.history-text:before` — фикс. 186px,
+ * под длинные тексты макета; у коротких карточек она торчала ниже карточки.
+ * Привязываем высоту стрелки к высоте карточки. Отступ над подзаголовком —
+ * в макете он стоял отдельной секцией, здесь идёт сразу за шапкой блока.
+ */
+.about-history .history-text:before {
+    height: 100%;
+    bottom: auto;
+}
+
+.about-history .history-text {
+    min-height: 156px;
+}
+
+.about-history h3.history {
+    margin-top: 50px;
+}
+
+/* Ссылки подвала на документы и «Контакты» (components/footer-legal.php). */
+.footer-legal__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.footer-legal__link {
+    font-weight: bold;
+    color: #000;
+}
+
+.footer-legal__link:hover {
+    color: var(--color-primary);
+}
+
+@media (max-width: 767.98px) {
+    .footer-legal {
+        margin-top: 1rem;
+    }
+}
+
+/* Юридические документы (/privacy, /offer): структура текста из белого списка тегов. */
+.legal-page__body h2 {
+    margin: 2rem 0 1rem;
+    font-size: 1.75rem;
+}
+
+.legal-page__body h3 {
+    margin: 1.5rem 0 0.75rem;
+    font-size: 1.25rem;
+}
+
+.legal-page__body p,
+.legal-page__body li {
+    color: var(--color-text);
+    line-height: 1.7;
+}
+
+.legal-page__body ul,
+.legal-page__body ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.legal-page__body ul {
+    list-style: disc;
+}
+
+.legal-page__body ol {
+    list-style: decimal;
+}
+
+/* «Контакты»: вступление, часы работы, карточка адреса. */
+.contacts__intro {
+    max-width: 720px;
+    margin: 1rem auto 0;
+}
+
+.contacts__hours {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.contacts__subtitle {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: bold;
+}
+
+.head-office .button {
+    margin-top: 1rem;
+}
+
+.head-office .social-icon {
+    margin-top: 1rem;
+    padding-left: 20px;
+}
+
+/* «Контакты»: карточки адреса и мессенджеров одной высоты (колонки row тянутся по высоте). */
+@media (min-width: 992px) {
+    .contacts__card {
+        height: 100%;
+        margin-bottom: 0;
+    }
+}
+
+/* «Контакты»: форма обратной связи — ошибки у полей (поля стилизует form.add-review). */
+.contact-form .is-invalid {
+    box-shadow: 0 0 0 2px #dc3545;
+}
+
+.contact-form__error {
+    margin: -12px 0 16px 20px;
+    font-size: 0.875rem;
+    color: #dc3545;
+}
+
+:root {
+    --service-card-gap: 24px;
+    --pricing-anchor-offset: 100px;
+}
+
+/* Услуги (phase-8.md, Таск 4): заголовки карточек — h2/h3 по смыслу, вид как у h4/h3 макета. */
+.service-card__title {
+    padding-top: 16px;
+    padding-bottom: 10px;
+    font-size: 26px;
+    font-weight: 800;
+}
+
+/* Колонка даёт отступ между рядами, карточка тянется на всю высоту ряда. */
+.service-card-col {
+    margin-bottom: var(--service-card-gap);
+}
+
+.service-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.service-card__meta {
+    margin-top: auto;
+    font-weight: 700;
+}
+
+.service-card__link {
+    align-self: flex-start;
+    margin-top: 16px;
+}
+
+.service-details__title {
+    padding-top: 30px;
+    padding-bottom: 14px;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.service-details__facts {
+    margin-bottom: 24px;
+}
+
+.service-details__facts dt {
+    font-weight: 700;
+}
+
+.service-details__facts dd {
+    margin-bottom: 8px;
+}
+
+/* Профиль Специалиста: h2 вместо h4 макета (один h1 — в баннере) */
+.team-details__name {
+    padding-top: 2px;
+    padding-bottom: 20px;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.page-back {
+    /* footer.two заезжает на -70…-80px вверх и перекрывал бы ссылку */
+    padding-bottom: 140px;
+}
+
+.team-details__button {
+    margin-top: 24px;
+}
+
+.team-details__services-title {
+    padding-bottom: 14px;
+}
+
+.team-details__services {
+    padding-left: 20px;
+    list-style: disc;
+}
+
+.team-video .video > svg {
+    position: absolute;
+    top: -5%;
+    left: -5%;
+}
+
+.team-video .video > img {
+    position: relative;
+    width: 100%;
+    max-width: 437px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+}
+
+/* Загруженное фото любых пропорций обрезается под круг, а не растягивает его */
+.team-working img {
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+}
+
+@media (max-width: 767px) {
+    .team-video .video > svg {
+        display: none;
+    }
+}
+
+@media (max-width: 991px) {
+    .team-details__name {
+        font-size: 30px;
+    }
+
+    .service-details__title {
+        font-size: 30px;
+    }
+}
+
+@media (max-width: 767px) {
+    .service-card__title {
+        padding-top: 24px;
+        padding-bottom: 6px;
+        font-size: 20px;
+    }
+}
+
+/* Тарифы (phase-8.md, Таск 5): секции груминг/ветеринария, якоря из меню Услуг. */
+.pricing-section {
+    scroll-margin-top: var(--pricing-anchor-offset);
+}
+
+.pricing-section__title {
+    margin-bottom: 24px;
+}
+
+.pricing-section__meta {
+    font-weight: 700;
 }

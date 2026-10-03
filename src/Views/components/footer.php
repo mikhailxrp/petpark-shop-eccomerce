@@ -36,7 +36,7 @@
 
                             <i class="fa-solid fa-angle-right"></i>
 
-                            <a href="/booking">Груминг</a>
+                            <a href="/pricing#grooming">Груминг</a>
 
                         </li>
 
@@ -44,7 +44,7 @@
 
                             <i class="fa-solid fa-angle-right"></i>
 
-                            <a href="/booking">Ветконсультации</a>
+                            <a href="/pricing#vet">Ветконсультации</a>
 
                         </li>
 
@@ -65,7 +65,7 @@
                                 </g>
                             </svg>
                         </i>
-                        <a href="tel:+78000000000">+7 (800) 000-00-00</a>
+                        <a href="tel:<?= e(SHOP_PHONE_TEL) ?>"><?= e(SHOP_PHONE) ?></a>
                     </div>
                     <div class="phone">
                         <i>
@@ -74,7 +74,7 @@
                     M51.213,401l135.489-135.489L256,325.896l69.298-60.384L460.787,401H51.213z M482,379.788L347.969,245.756L482,128.967V379.788z"></path>
                             </svg>
                         </i>
-                        <a href="mailto:info@petpark.ru">info@petpark.ru</a>
+                        <a href="mailto:<?= e(SHOP_EMAIL) ?>"><?= e(SHOP_EMAIL) ?></a>
                     </div>
                     <div class="phone mb-0 d-flax align-items-center">
                         <i>
@@ -111,6 +111,7 @@
         <div class="container">
             <div class="copyright">
                 <p>PetPark — Copyright 2026</p>
+                <?php include __DIR__ . '/footer-legal.php'; ?>
             </div>
         </div>
     </div>

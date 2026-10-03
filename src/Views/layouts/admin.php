@@ -108,6 +108,14 @@ declare(strict_types=1);
                                 </a>
                             </li>
                         <?php endif; ?>
+                        <?php if ($userRole === 'specialist'): ?>
+                            <li class="slide<?= $currentPath === '/specialist/profile' ? ' active' : '' ?>">
+                                <a href="/specialist/profile" class="side-menu__item<?= $currentPath === '/specialist/profile' ? ' active' : '' ?>">
+                                    <i class="fe fe-user-check side-menu__icon"></i>
+                                    <span class="side-menu__label">Мой профиль</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (in_array($userRole, ['shift_admin', 'owner'], true)): ?>
                             <?php $ordersActive = str_starts_with($currentPath, '/admin/orders'); ?>
                             <li class="slide<?= $ordersActive ? ' active' : '' ?>">
@@ -166,6 +174,13 @@ declare(strict_types=1);
                                 <a href="/admin/reviews" class="side-menu__item<?= $currentPath === '/admin/reviews' ? ' active' : '' ?>">
                                     <i class="fe fe-star side-menu__icon"></i>
                                     <span class="side-menu__label">Отзывы</span>
+                                </a>
+                            </li>
+                            <?php $pagesActive = str_starts_with($currentPath, '/admin/pages'); ?>
+                            <li class="slide<?= $pagesActive ? ' active' : '' ?>">
+                                <a href="/admin/pages" class="side-menu__item<?= $pagesActive ? ' active' : '' ?>">
+                                    <i class="fe fe-file-text side-menu__icon"></i>
+                                    <span class="side-menu__label">Страницы</span>
                                 </a>
                             </li>
                             <?php $staffActive = str_starts_with($currentPath, '/admin/staff'); ?>

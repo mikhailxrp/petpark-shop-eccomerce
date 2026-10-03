@@ -569,6 +569,47 @@ if ($servicesKindExists === 0) {
     $pdo->exec("ALTER TABLE services ADD COLUMN kind ENUM('grooming', 'vet') NOT NULL DEFAULT 'grooming' AFTER name");
 }
 
+// Публичные страницы Услуг (phase-8.md, Таск 4): slug для URL и описание.
+// slug NULL-able — строки заводятся сидом (ADR-013), UNIQUE допускает несколько NULL.
+$servicesSlugExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'slug'
+")->fetchColumn();
+
+if ($servicesSlugExists === 0) {
+    $pdo->exec("ALTER TABLE services ADD COLUMN slug VARCHAR(120) NULL AFTER name, ADD UNIQUE KEY uq_services_slug (slug)");
+}
+
+$servicesDescriptionExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'description'
+")->fetchColumn();
+
+if ($servicesDescriptionExists === 0) {
+    $pdo->exec("ALTER TABLE services ADD COLUMN description TEXT NULL AFTER deposit_amount");
+}
+
+// Публичные профили Специалистов (phase-8.md, Таск 6): slug для /team/{slug},
+// должность, биография, фото. Всё NULL-able — строки заводятся сидом и формой
+// сотрудника; UNIQUE по slug допускает несколько NULL (по паттерну services.slug).
+$specialistsNewColumns = [
+    'slug'       => "ADD COLUMN slug VARCHAR(120) NULL AFTER user_id, ADD UNIQUE KEY uq_specialists_slug (slug)",
+    'position'   => "ADD COLUMN position VARCHAR(120) NULL AFTER slug",
+    'bio'        => "ADD COLUMN bio TEXT NULL AFTER position",
+    'photo_path' => "ADD COLUMN photo_path VARCHAR(255) NULL AFTER bio",
+];
+
+foreach ($specialistsNewColumns as $column => $alter) {
+    $columnExists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'specialists' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($columnExists === 0) {
+        $pdo->exec("ALTER TABLE specialists {$alter}");
+    }
+}
+
 $paymentLogsBookingExists = (int) $pdo->query("
     SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_logs' AND COLUMN_NAME = 'booking_id'
@@ -730,6 +771,21 @@ $pdo->exec("
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
         CONSTRAINT fk_reviews_moderated_by_user
             FOREIGN KEY (moderated_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
+// ─── contact_requests ───────────────────────────────────────────────────
+// Обращения с формы на /contacts (phase-8, Таск 3). Экрана просмотра нет —
+// письмо магазину уходит через notifications, таблица хранит копию.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS contact_requests (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(100) NOT NULL,
+        phone      VARCHAR(20) NOT NULL,
+        email      VARCHAR(255) NOT NULL,
+        message    TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 

@@ -179,6 +179,25 @@ function notifierEnqueueReturnMessage(array $return, string $message): bool
 }
 
 /**
+ * Поставить в очередь письмо магазину об обращении с `/contacts`. Получатель —
+ * SHOP_EMAIL (один источник с шапкой и «Контактами»); дубль исключён ключом
+ * `contact:{id}`. Тема без пользовательского ввода.
+ *
+ * @param array{id: int, name: string, phone: string, email: string, message: string} $request
+ * @return bool false — письмо уже стояло в очереди
+ */
+function notifierEnqueueContactRequest(array $request): bool
+{
+    return notificationEnqueue(
+        'contact:' . $request['id'],
+        SHOP_EMAIL,
+        SHOP_NAME,
+        'Новое обращение с сайта №' . $request['id'] . ' — ' . SHOP_NAME,
+        renderToString('emails/contact-request', ['request' => $request])
+    );
+}
+
+/**
  * Напоминания за NOTIFICATION_BOOKING_REMINDER_HOURS до визита. Проверка идёт
  * на веб-запросах не чаще раза в NOTIFICATION_REMINDER_CHECK_INTERVAL_SECONDS
  * (отметка времени — файл в storage/cache/); дубль исключён ключом
