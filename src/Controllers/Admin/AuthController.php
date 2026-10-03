@@ -43,6 +43,7 @@ final class AuthController
         if (
             $user === null
             || $user['role'] === 'customer'
+            || (int) $user['is_active'] !== 1
             || !password_verify($password, $user['password_hash'])
         ) {
             hitRateLimit('admin-login');

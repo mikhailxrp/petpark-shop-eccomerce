@@ -36,6 +36,18 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// is_active (ADR-033, phase-7.md Таск 5) — отключение сотрудника без
+// физического удаления: на users ссылаются Заказы и Записи. Добавлена после
+// первого запуска install.php — проверяем через information_schema.
+$isActiveColumnExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_active'
+")->fetchColumn();
+
+if ($isActiveColumnExists === 0) {
+    $pdo->exec("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER role");
+}
+
 // ─── categories ─────────────────────────────────────────────────────────
 
 $pdo->exec("

@@ -87,6 +87,7 @@ final class CatalogController
                 'totalPages' => $totalPages,
                 'actionPath' => $actionPath,
                 'queryState' => $queryState,
+                'favoriteVariantIds' => favoriteVariantIdsForCurrentCustomer(),
             ]);
             return;
         }
@@ -110,6 +111,7 @@ final class CatalogController
             'priceMin'        => $priceMin,
             'priceMax'        => $priceMax,
             'priceBounds'     => productPriceRange(),
+            'favoriteVariantIds' => favoriteVariantIdsForCurrentCustomer(),
             'hasFilters'      => $queryState !== [] || isset($_GET['sort']) || $page > 1,
         ]);
     }

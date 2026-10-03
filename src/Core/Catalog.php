@@ -27,6 +27,18 @@ const CATALOG_SORT_LABELS = [
     'new'        => 'Сначала новые',
 ];
 
+// Заглушка для Товара без фото в product_images.
+const CATALOG_IMAGE_FALLBACK = '/assets/img/food-1.png';
+
+/**
+ * URL фото Товара из product_images.path (относительно public/uploads/);
+ * нет фото — заглушка.
+ */
+function catalogImageUrl(?string $path): string
+{
+    return $path !== null && $path !== '' ? '/uploads/' . ltrim($path, '/') : CATALOG_IMAGE_FALLBACK;
+}
+
 function catalogNormalizeSort(mixed $sort): string
 {
     return is_string($sort) && in_array($sort, CATALOG_SORT_OPTIONS, true) ? $sort : 'popularity';

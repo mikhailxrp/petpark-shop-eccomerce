@@ -222,3 +222,50 @@ button.sidemenu-toggle {
 .chat-bubble--in { align-self: flex-start; background-color: var(--bs-tertiary-bg, #f1f3f5); }
 .chat-bubble--out { align-self: flex-end; background-color: var(--bs-primary-bg-subtle, #dbe4ff); }
 .chat-bubble__time { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: var(--bs-secondary-color, #6c757d); }
+
+/* Список сотрудников (phase-7.md, Таск 5): на узком экране строка — карточка с подписями полей */
+
+.staff-table__head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.staff-table__row { display: block; padding: 0.75rem 0; border-bottom: 1px solid var(--bs-border-color, #dee2e6); }
+.staff-table__cell { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; overflow-wrap: anywhere; border: 0; }
+.staff-table__cell::before { flex: 0 0 auto; font-weight: 600; color: var(--bs-secondary-color, #6c757d); content: attr(data-label); }
+.staff-table__cell--name { font-weight: 600; }
+.staff-table__cell--name::before { content: none; }
+.staff-table__cell--actions { justify-content: flex-end; }
+
+@media (min-width: 1200px) {
+    .staff-table__head { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+    .staff-table__row { display: table-row; padding: 0; }
+    .staff-table__cell { display: table-cell; gap: 0; padding: 0.75rem; overflow-wrap: normal; white-space: nowrap; border-bottom: 1px solid var(--bs-border-color, #dee2e6); }
+    .staff-table__cell::before { content: none; }
+    .staff-table__cell--name { font-weight: 400; }
+    .staff-table__cell--actions { text-align: end; }
+}
+
+/* Карточка клиента (phase-7.md, Таск 11): до 768px строка таблицы — карточка с подписями полей, без горизонтальной прокрутки */
+
+.client-table, .client-table tbody { display: block; }
+.client-table__head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.client-table__row { display: block; padding: 0.75rem 0; border-bottom: 1px solid var(--bs-border-color, #dee2e6); }
+.client-table__cell { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; overflow-wrap: anywhere; text-align: end; border: 0; }
+.client-table__cell::before { flex: 0 0 auto; font-weight: 600; color: var(--bs-secondary-color, #6c757d); text-align: start; content: attr(data-label); }
+.client-table__cell--main { justify-content: flex-start; font-weight: 600; text-align: start; }
+.client-table__cell--main::before { content: none; }
+.client-table__cell--actions { justify-content: flex-end; }
+
+@media (min-width: 768px) {
+    .client-table { display: table; }
+    .client-table tbody { display: table-row-group; }
+    .client-table__head { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+    .client-table__row { display: table-row; padding: 0; }
+    .client-table__cell { display: table-cell; gap: 0; padding: 0.75rem; overflow-wrap: normal; text-align: start; border-bottom: 1px solid var(--bs-border-color, #dee2e6); }
+    .client-table__cell::before { content: none; }
+    .client-table__cell--main { font-weight: 600; }
+    .client-table__cell--actions { text-align: end; }
+}
+
+.report-chart { position: relative; height: 14rem; }
+
+@media (min-width: 768px) {
+    .report-chart { height: 16rem; }
+}

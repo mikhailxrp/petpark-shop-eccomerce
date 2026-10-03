@@ -334,6 +334,24 @@ function productFindBySlug(string $slug): ?array
 }
 
 /**
+ * Фото Товара для галереи Карточки: главное первым, затем по sort_order.
+ *
+ * @return array<int, string> пути относительно public/uploads/
+ */
+function productImagePaths(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT path
+        FROM product_images
+        WHERE product_id = ?
+        ORDER BY is_main DESC, sort_order ASC, id ASC
+    ');
+    $stmt->execute([$productId]);
+
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
  * Активные Варианты Товара для переключателя на Карточке (FR-CARD-001) —
  * упорядочены по эффективной цене, чтобы совпадать с дефолтом
  * catalogSelectVariant() (Core/Catalog.php).
@@ -688,9 +706,9 @@ function productVariantSetStockFromMoySklad(int $variantId, int $quantity): void
     $stmt->execute(['quantity' => $quantity, 'id' => $variantId]);
 }
 
-// ─── ИИ-описания (FR-AI-002, phase-5 Таск 5) ────────────────────────────
-// Черновик живёт в products.description_draft; description меняет только
-// productDescriptionPublish() — решение Владельца.
+// ─── Данные для ИИ-описания (FR-AI-002) ──────────────────────────────────
+// Генерация идёт из карточки Товара (phase-7, Таск 9): результат подставляется в
+// поле формы и пишется в products.description обычным сохранением формы.
 
 /**
  * Данные Товара для генерации: только то, что допустимо отдать ИИ (название,
@@ -729,211 +747,6 @@ function productConfirmedAttributes(int $productId): array
     }
 
     return $attributes;
-}
-
-/** Записывает (заменяет) только черновик — description не трогается. */
-function productDescriptionDraftSave(int $productId, string $draft): void
-{
-    getPdo()->prepare('UPDATE products SET description_draft = ? WHERE id = ?')
-        ->execute([$draft, $productId]);
-}
-
-/**
- * Публикация: текст (черновик или его правка) → description, черновик
- * обнуляется, исход пишется в ai_draft_outcomes — всё атомарно. Публикуется
- * только при открытом черновике (FOR UPDATE): повтор формы ничего не меняет.
- *
- * @param string $text нормализованный итоговый текст
- * @return string|null исход (accepted / edited); null — открытого черновика нет
- */
-function productDescriptionPublish(int $productId, string $text): ?string
-{
-    $pdo = getPdo();
-    $pdo->beginTransaction();
-    try {
-        $stmt = $pdo->prepare('SELECT description_draft FROM products WHERE id = ? FOR UPDATE');
-        $stmt->execute([$productId]);
-        $draft = $stmt->fetchColumn();
-
-        if (!is_string($draft)) {
-            $pdo->rollBack();
-
-            return null;
-        }
-
-        $outcome = descriptionNormalize($draft) === $text ? 'accepted' : 'edited';
-
-        $pdo->prepare('UPDATE products SET description = ?, description_draft = NULL WHERE id = ?')
-            ->execute([$text, $productId]);
-        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, ?)")
-            ->execute([$productId, $outcome]);
-
-        $pdo->commit();
-
-        return $outcome;
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-    }
-}
-
-/**
- * Отклонение черновика: обнуляет его и пишет исход rejected.
- *
- * @return bool false — открытого черновика нет
- */
-function productDescriptionDiscard(int $productId): bool
-{
-    $pdo = getPdo();
-    $pdo->beginTransaction();
-    try {
-        $stmt = $pdo->prepare('UPDATE products SET description_draft = NULL WHERE id = ? AND description_draft IS NOT NULL');
-        $stmt->execute([$productId]);
-
-        if ($stmt->rowCount() === 0) {
-            $pdo->rollBack();
-
-            return false;
-        }
-
-        $pdo->prepare("INSERT INTO ai_draft_outcomes (kind, ref_id, outcome) VALUES ('description', ?, 'rejected')")
-            ->execute([$productId]);
-
-        $pdo->commit();
-
-        return true;
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-    }
-}
-
-/**
- * Очередь пакета: активные Товары Категорий без текущего черновика.
- * Плейсхолдеры: N Категорий.
- *
- * @param list<int> $categoryIds
- */
-function productDescriptionQueueWhere(array $categoryIds): string
-{
-    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
-
-    return "p.is_active = 1 AND p.description_draft IS NULL AND p.category_id IN ({$placeholders})";
-}
-
-/**
- * Порция очереди. Курсор id > $afterId — Товар с ошибкой не берётся повторно
- * в том же запуске.
- *
- * @param list<int> $categoryIds
- * @return array<int, array{id: int, name: string}>
- */
-function productDescriptionQueue(array $categoryIds, int $afterId, int $limit): array
-{
-    if ($categoryIds === []) {
-        return [];
-    }
-
-    $stmt = getPdo()->prepare(
-        'SELECT p.id, p.name FROM products p
-         WHERE p.id > ? AND ' . productDescriptionQueueWhere($categoryIds) . '
-         ORDER BY p.id LIMIT ?'
-    );
-    $position = 1;
-    $stmt->bindValue($position++, $afterId, PDO::PARAM_INT);
-    foreach ($categoryIds as $categoryId) {
-        $stmt->bindValue($position++, $categoryId, PDO::PARAM_INT);
-    }
-    $stmt->bindValue($position, $limit, PDO::PARAM_INT);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-}
-
-/** @param list<int> $categoryIds */
-function productDescriptionQueueCount(array $categoryIds): int
-{
-    if ($categoryIds === []) {
-        return 0;
-    }
-
-    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM products p WHERE ' . productDescriptionQueueWhere($categoryIds));
-    $stmt->execute($categoryIds);
-
-    return (int) $stmt->fetchColumn();
-}
-
-/** Товаров с открытым черновиком описания. */
-function productDescriptionDraftCount(): int
-{
-    return (int) getPdo()->query('SELECT COUNT(*) FROM products WHERE description_draft IS NOT NULL')->fetchColumn();
-}
-
-/**
- * Условие списка страницы: Категории (null — все) и/или только с черновиком.
- *
- * @param list<int>|null $categoryIds
- * @return array{0: string, 1: list<int>} условие и значения плейсхолдеров
- */
-function productDescriptionListWhere(?array $categoryIds, bool $draftsOnly): array
-{
-    $conditions = ['1 = 1'];
-    $params = [];
-
-    if ($categoryIds !== null) {
-        $conditions[] = 'p.category_id IN (' . implode(',', array_fill(0, count($categoryIds), '?')) . ')';
-        array_push($params, ...$categoryIds);
-    }
-    if ($draftsOnly) {
-        $conditions[] = 'p.description_draft IS NOT NULL';
-    }
-
-    return [implode(' AND ', $conditions), $params];
-}
-
-/** @param list<int>|null $categoryIds */
-function productDescriptionListCount(?array $categoryIds, bool $draftsOnly): int
-{
-    if ($categoryIds === []) {
-        return 0;
-    }
-
-    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
-    $stmt = getPdo()->prepare("SELECT COUNT(*) FROM products p WHERE {$where}");
-    $stmt->execute($params);
-
-    return (int) $stmt->fetchColumn();
-}
-
-/**
- * Страница Товаров для экрана генерации — с текущим описанием и черновиком.
- *
- * @param list<int>|null $categoryIds
- * @return array<int, array{id: int, name: string, description: string|null, description_draft: string|null, category_name: string}>
- */
-function productDescriptionList(?array $categoryIds, bool $draftsOnly, int $limit, int $offset): array
-{
-    if ($categoryIds === []) {
-        return [];
-    }
-
-    [$where, $params] = productDescriptionListWhere($categoryIds, $draftsOnly);
-    $stmt = getPdo()->prepare(
-        "SELECT p.id, p.name, p.description, p.description_draft, c.name AS category_name
-         FROM products p
-         JOIN categories c ON c.id = p.category_id
-         WHERE {$where}
-         ORDER BY p.id LIMIT ? OFFSET ?"
-    );
-    $position = 1;
-    foreach ($params as $param) {
-        $stmt->bindValue($position++, $param, PDO::PARAM_INT);
-    }
-    $stmt->bindValue($position++, $limit, PDO::PARAM_INT);
-    $stmt->bindValue($position, $offset, PDO::PARAM_INT);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
 }
 
 /**
@@ -1057,4 +870,469 @@ function productConfirmedAttributesCoverage(): array
     ')->fetch();
 
     return ['total' => (int) $row['total'], 'confirmed' => (int) $row['confirmed']];
+}
+
+// ─── Список Товаров в админке (FR-ADM-001, phase-7 Таск 7) ───────────────
+
+/**
+ * Общее WHERE списка Товаров в админке: подстрока в названии, основная
+ * Категория, статус (`active`/`inactive`; пусто — все). Единственное место
+ * сборки условий — для productAdminCount() и productAdminList().
+ *
+ * @return array{0: string, 1: array<string, mixed>}
+ */
+function productAdminConditions(string $query, int $categoryId, string $status): array
+{
+    $conditions = ['1 = 1'];
+    $params = [];
+
+    if ($query !== '') {
+        $conditions[] = 'p.name LIKE :name_part';
+        $params['name_part'] = '%' . addcslashes($query, '\%_') . '%';
+    }
+    if ($categoryId > 0) {
+        $conditions[] = 'p.category_id = :category_id';
+        $params['category_id'] = $categoryId;
+    }
+    if ($status === 'active') {
+        $conditions[] = 'p.is_active = 1';
+    } elseif ($status === 'inactive') {
+        $conditions[] = 'p.is_active = 0';
+    }
+
+    return [implode(' AND ', $conditions), $params];
+}
+
+function productAdminCount(string $query, int $categoryId, string $status): int
+{
+    [$where, $params] = productAdminConditions($query, $categoryId, $status);
+
+    $stmt = getPdo()->prepare("SELECT COUNT(*) FROM products p WHERE {$where}");
+    $stmt->execute($params);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Страница списка Товаров для админки: цена — диапазон эффективной цены
+ * активных Вариантов (как на витрине), наличие — свободный остаток
+ * активных Вариантов, статус Характеристик — `drafts` (есть открытые
+ * черновики ИИ) / `confirmed` / `none`. Агрегаты — одним запросом.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productAdminList(string $query, int $categoryId, string $status, int $limit, int $offset): array
+{
+    [$where, $params] = productAdminConditions($query, $categoryId, $status);
+
+    $stmt = getPdo()->prepare("
+        SELECT
+            p.id, p.name, p.is_active,
+            c.name AS category_name,
+            b.name AS brand_name,
+            v.price_min, v.price_max, v.available_quantity,
+            img.path AS image_path,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM product_attribute_drafts d
+                    WHERE d.product_id = p.id AND d.status IN ('pending', 'needs_decision')
+                ) THEN 'drafts'
+                WHEN EXISTS (
+                    SELECT 1 FROM product_attributes a WHERE a.product_id = p.id
+                ) THEN 'confirmed'
+                ELSE 'none'
+            END AS attributes_status
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN brands b ON b.id = p.brand_id
+        LEFT JOIN (
+            SELECT product_id,
+                   MIN(IFNULL(discount_price, price)) AS price_min,
+                   MAX(IFNULL(discount_price, price)) AS price_max,
+                   SUM(GREATEST(stock_quantity - reserved_quantity, 0)) AS available_quantity
+            FROM product_variants
+            WHERE is_active = 1
+            GROUP BY product_id
+        ) v ON v.product_id = p.id
+        LEFT JOIN (
+            SELECT product_id, path,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY product_id
+                       ORDER BY is_main DESC, sort_order ASC, id ASC
+                   ) AS rn
+            FROM product_images
+        ) img ON img.product_id = p.id AND img.rn = 1
+        WHERE {$where}
+        ORDER BY p.name ASC, p.id ASC
+        LIMIT :row_limit OFFSET :row_offset
+    ");
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue('row_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Товар для формы правки (включая неактивный) с id дополнительной категории
+ * (0 — нет). `description_draft` форма не трогает.
+ *
+ * @return array<string, mixed>|null
+ */
+function productAdminFind(int $productId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT p.id, p.category_id, p.brand_id, p.name, p.slug, p.description, p.is_active,
+               IFNULL(sc.category_id, 0) AS secondary_category_id
+        FROM products p
+        LEFT JOIN product_secondary_categories sc ON sc.product_id = p.id
+        WHERE p.id = ?
+    ');
+    $stmt->execute([$productId]);
+    $product = $stmt->fetch();
+
+    return $product !== false ? $product : null;
+}
+
+/**
+ * Все фото Товара для формы: порядок как на Карточке (главное первым).
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function productAdminImages(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, path, sort_order, is_main
+        FROM product_images
+        WHERE product_id = ?
+        ORDER BY is_main DESC, sort_order ASC, id ASC
+    ');
+    $stmt->execute([$productId]);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Занят ли `slug` другим Товаром (`$exceptProductId` — сам правящийся, 0 для нового).
+ */
+function productSlugTaken(string $slug, int $exceptProductId): bool
+{
+    $stmt = getPdo()->prepare('SELECT 1 FROM products WHERE slug = ? AND id <> ? LIMIT 1');
+    $stmt->execute([$slug, $exceptProductId]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * Деактивация/активация Товара (физически Товары не удаляют).
+ */
+function productSetActive(int $productId, bool $active): void
+{
+    getPdo()->prepare('UPDATE products SET is_active = ? WHERE id = ?')
+        ->execute([$active ? 1 : 0, $productId]);
+}
+
+/**
+ * Создание/правка Товара одной транзакцией: поля, дополнительная категория,
+ * фото. `$full = false` (Фрилансер) обновляет только название и описание.
+ * Для нового Товара `$full` должен быть true.
+ *
+ * Фото: убираются `$removeImageIds` (только принадлежащие этому Товару),
+ * оставшиеся переупорядочиваются по `$imageOrder` (id → порядок), новые
+ * `$newPaths` встают в конец; затем sort_order нумеруется заново, а главным
+ * становится `$main` (`['existing' => id]` или `['new' => индекс]`), иначе
+ * первое фото. Файлы с диска функция не трогает — пути удалённых возвращает.
+ *
+ * @param array<string, mixed> $fields name, description (+ slug, category_id, secondary_category_id, brand_id при $full)
+ * @param list<int> $removeImageIds
+ * @param array<int, int> $imageOrder
+ * @param list<string> $newPaths
+ * @param array{existing?: int, new?: int}|null $main
+ * @return array{id: int, removed_paths: list<string>}
+ */
+function productAdminSave(
+    ?int $productId,
+    bool $full,
+    array $fields,
+    array $removeImageIds,
+    array $imageOrder,
+    array $newPaths,
+    ?array $main
+): array {
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $description = $fields['description'] === '' ? null : $fields['description'];
+
+        if ($productId === null) {
+            $pdo->prepare('
+                INSERT INTO products (category_id, brand_id, name, slug, description)
+                VALUES (?, ?, ?, ?, ?)
+            ')->execute([
+                $fields['category_id'],
+                $fields['brand_id'] > 0 ? $fields['brand_id'] : null,
+                $fields['name'],
+                $fields['slug'],
+                $description,
+            ]);
+            $productId = (int) $pdo->lastInsertId();
+        } elseif ($full) {
+            $pdo->prepare('
+                UPDATE products
+                SET category_id = ?, brand_id = ?, name = ?, slug = ?, description = ?
+                WHERE id = ?
+            ')->execute([
+                $fields['category_id'],
+                $fields['brand_id'] > 0 ? $fields['brand_id'] : null,
+                $fields['name'],
+                $fields['slug'],
+                $description,
+                $productId,
+            ]);
+        } else {
+            $pdo->prepare('UPDATE products SET name = ?, description = ? WHERE id = ?')
+                ->execute([$fields['name'], $description, $productId]);
+        }
+
+        if ($full) {
+            $pdo->prepare('DELETE FROM product_secondary_categories WHERE product_id = ?')->execute([$productId]);
+            if ($fields['secondary_category_id'] > 0) {
+                $pdo->prepare('INSERT INTO product_secondary_categories (product_id, category_id) VALUES (?, ?)')
+                    ->execute([$productId, $fields['secondary_category_id']]);
+            }
+        }
+
+        $stmt = $pdo->prepare('
+            SELECT id, path, sort_order
+            FROM product_images
+            WHERE product_id = ?
+            ORDER BY sort_order ASC, id ASC
+            FOR UPDATE
+        ');
+        $stmt->execute([$productId]);
+        $existing = $stmt->fetchAll();
+
+        $removedPaths = [];
+        $kept = [];
+        foreach ($existing as $image) {
+            if (in_array((int) $image['id'], $removeImageIds, true)) {
+                $removedPaths[] = (string) $image['path'];
+                $pdo->prepare('DELETE FROM product_images WHERE id = ? AND product_id = ?')
+                    ->execute([(int) $image['id'], $productId]);
+                continue;
+            }
+            $kept[] = [
+                'id'  => (int) $image['id'],
+                'key' => $imageOrder[(int) $image['id']] ?? (int) $image['sort_order'],
+            ];
+        }
+        usort($kept, static fn (array $a, array $b): int => [$a['key'], $a['id']] <=> [$b['key'], $b['id']]);
+
+        $orderedIds = array_column($kept, 'id');
+        $position = 0;
+        foreach ($orderedIds as $imageId) {
+            $pdo->prepare('UPDATE product_images SET sort_order = ? WHERE id = ?')->execute([$position++, $imageId]);
+        }
+
+        $newIds = [];
+        foreach ($newPaths as $path) {
+            $pdo->prepare('INSERT INTO product_images (product_id, path, sort_order, is_main) VALUES (?, ?, ?, 0)')
+                ->execute([$productId, $path, $position++]);
+            $newIds[] = (int) $pdo->lastInsertId();
+        }
+
+        $allIds = array_merge($orderedIds, $newIds);
+        if ($allIds !== []) {
+            $mainId = match (true) {
+                isset($main['existing']) && in_array($main['existing'], $orderedIds, true) => $main['existing'],
+                isset($main['new']) && isset($newIds[$main['new']]) => $newIds[$main['new']],
+                default => $allIds[0],
+            };
+            $pdo->prepare('UPDATE product_images SET is_main = (id = ?) WHERE product_id = ?')
+                ->execute([$mainId, $productId]);
+        }
+
+        $pdo->commit();
+
+        return ['id' => $productId, 'removed_paths' => $removedPaths];
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+// ─── Варианты и Характеристики в форме Товара (phase-7.md, Таск 9) ─────────
+
+/**
+ * Все Варианты Товара для формы (включая неактивные) со значениями «вес
+ * упаковки»/«вкус». Остаток — как есть, решение «показать индикатор» — во View.
+ *
+ * @return array<int, array<string, mixed>> строка Варианта + `attributes` (attr_name => значение)
+ */
+function productAdminVariants(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, sku, price, discount_price, stock_quantity, reserved_quantity, is_active
+        FROM product_variants
+        WHERE product_id = ?
+        ORDER BY id ASC
+    ');
+    $stmt->execute([$productId]);
+    $variants = $stmt->fetchAll();
+
+    if ($variants === []) {
+        return [];
+    }
+
+    $ids = array_map(static fn (array $row): int => (int) $row['id'], $variants);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = getPdo()->prepare("
+        SELECT variant_id, attr_name, attr_value
+        FROM product_variant_attributes
+        WHERE variant_id IN ({$placeholders})
+        ORDER BY id
+    ");
+    $stmt->execute($ids);
+
+    $attributes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $attributes[(int) $row['variant_id']][(string) $row['attr_name']] = (string) $row['attr_value'];
+    }
+
+    foreach ($variants as &$variant) {
+        $variant['attributes'] = $attributes[(int) $variant['id']] ?? [];
+    }
+    unset($variant);
+
+    return $variants;
+}
+
+/**
+ * Вариант именно этого Товара (чужой `variant_id` под чужим `product_id` не найдётся).
+ *
+ * @return array<string, mixed>|null
+ */
+function productVariantFind(int $productId, int $variantId): ?array
+{
+    $stmt = getPdo()->prepare('
+        SELECT id, sku, price, discount_price, stock_quantity, is_active
+        FROM product_variants
+        WHERE id = ? AND product_id = ?
+    ');
+    $stmt->execute([$variantId, $productId]);
+    $variant = $stmt->fetch();
+
+    return $variant !== false ? $variant : null;
+}
+
+function productVariantSkuTaken(string $sku): bool
+{
+    $stmt = getPdo()->prepare('SELECT 1 FROM product_variants WHERE sku = ? LIMIT 1');
+    $stmt->execute([$sku]);
+
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * Заменяет значения «вес упаковки»/«вкус» Варианта; прочие свойства Варианта
+ * (если появятся в данных) не трогает. Зовётся внутри транзакции вызывающего.
+ *
+ * @param array<string, string> $attributes attr_name => значение (только известные имена)
+ */
+function productVariantAttributesReplace(int $variantId, array $attributes): void
+{
+    $pdo = getPdo();
+    $names = PRODUCT_VARIANT_ATTRIBUTE_NAMES;
+    $placeholders = implode(',', array_fill(0, count($names), '?'));
+
+    $pdo->prepare("DELETE FROM product_variant_attributes WHERE variant_id = ? AND attr_name IN ({$placeholders})")
+        ->execute([$variantId, ...$names]);
+
+    $insert = $pdo->prepare('INSERT INTO product_variant_attributes (variant_id, attr_name, attr_value) VALUES (?, ?, ?)');
+    foreach ($attributes as $name => $value) {
+        $insert->execute([$variantId, $name, $value]);
+    }
+}
+
+/**
+ * Новый Вариант и его свойства одной транзакцией. Остаток всегда 0: «внешний»
+ * остаток контроллер записывает отдельно через MoySklad::syncVariant() (заглушка,
+ * ADR-001), Model остаток из формы не пишет.
+ *
+ * @param array<string, mixed> $values sku, price, discount_price, attributes (productVariantValidate())
+ * @return int id Варианта
+ */
+function productVariantCreate(int $productId, array $values): int
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('
+            INSERT INTO product_variants (product_id, sku, price, discount_price, stock_quantity, is_active)
+            VALUES (?, ?, ?, ?, 0, 1)
+        ')->execute([$productId, $values['sku'], $values['price'], $values['discount_price']]);
+        $variantId = (int) $pdo->lastInsertId();
+
+        productVariantAttributesReplace($variantId, $values['attributes']);
+
+        $pdo->commit();
+
+        return $variantId;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Правка существующего Варианта: только скидка, активность и свойства.
+ * `price`, `sku` и остаток не входят в запрос — их из POST не принять физически.
+ *
+ * @param array<string, mixed> $values discount_price, is_active, attributes (productVariantValidate())
+ */
+function productVariantUpdate(int $productId, int $variantId, array $values): void
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE product_variants SET discount_price = ?, is_active = ? WHERE id = ? AND product_id = ?')
+            ->execute([$values['discount_price'], $values['is_active'] ? 1 : 0, $variantId, $productId]);
+
+        productVariantAttributesReplace($variantId, $values['attributes']);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Ручной ввод Характеристик Товара из справочника одной транзакцией: значение
+ * заменяет существующее, пустое — убирает Характеристику.
+ *
+ * @param array<string, string> $attributes attr_name => значение ('' — убрать)
+ */
+function productAttributesSave(int $productId, array $attributes): void
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+    try {
+        foreach ($attributes as $name => $value) {
+            if ($value === '') {
+                $pdo->prepare('DELETE FROM product_attributes WHERE product_id = ? AND attr_name = ?')
+                    ->execute([$productId, $name]);
+                continue;
+            }
+            productAttributeReplace($productId, $name, $value);
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
 }

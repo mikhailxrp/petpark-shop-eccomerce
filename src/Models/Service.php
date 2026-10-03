@@ -48,7 +48,10 @@ function servicesFindActiveByIds(array $ids): array
 
 /**
  * Специалисты, оказывающие ВСЕ перечисленные Услуги (FR-SV-002): HAVING по
- * числу различных Услуг, а не «хотя бы одну».
+ * числу различных Услуг, а не «хотя бы одну». Отключённый сотрудник
+ * (`users.is_active = 0`, ADR-033) и сотрудник, сменивший роль с
+ * `specialist`, в выборку не попадают — к ним нельзя записаться и перенести
+ * Запись; уже оформленные Записи это не затрагивает.
  *
  * @param list<int> $serviceIds уникальные id
  * @return array<int, array<string, mixed>> id, name, work_start, work_end, day_off
@@ -66,6 +69,7 @@ function specialistsForServices(array $serviceIds): array
          JOIN users u ON u.id = sp.user_id
          JOIN specialist_services ss ON ss.specialist_id = sp.id
          WHERE ss.service_id IN ({$placeholders})
+           AND u.is_active = 1 AND u.role = 'specialist'
          GROUP BY sp.id, u.name, sp.work_start, sp.work_end, sp.day_off
          HAVING COUNT(DISTINCT ss.service_id) = ?
          ORDER BY u.name, sp.id"

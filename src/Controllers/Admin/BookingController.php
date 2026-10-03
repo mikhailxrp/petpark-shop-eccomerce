@@ -58,7 +58,8 @@ final class BookingController
     /** Календарь Специалиста на `/specialist` — вызывается из DashboardController. */
     public function specialistWeek(int $specialistId): void
     {
-        $this->renderWeek('/specialist', $specialistId, []);
+        // «Мои клиенты» (FR-MGR-003) — только клиенты из календаря этого Специалиста.
+        $this->renderWeek('/specialist', $specialistId, [], clientRecent($specialistId, 5));
     }
 
     public function show(string $id): void
@@ -439,8 +440,9 @@ final class BookingController
 
     /**
      * @param list<array{id: int, name: string}> $specialists список для фильтра; пустой — фильтра нет
+     * @param list<array<string, mixed>>|null $recentClients блок «Мои клиенты»; null — не показывать
      */
-    private function renderWeek(string $baseUrl, ?int $specialistId, array $specialists): void
+    private function renderWeek(string $baseUrl, ?int $specialistId, array $specialists, ?array $recentClients = null): void
     {
         bookingReleaseExpired();
 
@@ -475,6 +477,7 @@ final class BookingController
         );
 
         render('admin/bookings', [
+            ...($recentClients !== null ? ['recentClients' => $recentClients] : []),
             'pageTitle'    => 'Записи — PetPark',
             'roleLabel'    => adminRoleLabel($role),
             'homeUrl'      => homePathForRole($role),

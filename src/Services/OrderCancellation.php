@@ -27,12 +27,16 @@ final class OrderCancellation
     {
     }
 
-    /** @return string одна из констант RESULT_* */
-    public function cancel(int $orderId): string
+    /**
+     * @param list<string>|null $allowedFromStatuses допустимые текущие статусы (проверка под
+     *                                               блокировкой); null — любые по карте переходов
+     * @return string одна из констант RESULT_*
+     */
+    public function cancel(int $orderId, ?array $allowedFromStatuses = null): string
     {
         $order = orderFindById($orderId);
 
-        if ($order === null || !orderTransition($orderId, 'cancelled')) {
+        if ($order === null || !orderTransition($orderId, 'cancelled', null, $allowedFromStatuses)) {
             return self::RESULT_NOT_ALLOWED;
         }
 

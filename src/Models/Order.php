@@ -383,6 +383,38 @@ function ordersByUserWithReturnFlag(int $userId): array
 }
 
 /**
+ * Страница Заказов Покупателя для `/account/orders` (FR-ACC-001): новые
+ * первыми, с признаком «по Заказу уже есть заявка на Возврат».
+ *
+ * @return list<array<string, mixed>>
+ */
+function ordersPageByUser(int $userId, int $limit, int $offset): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT o.id, o.status, o.payment_status, o.total, o.created_at,
+               EXISTS (SELECT 1 FROM order_returns r WHERE r.order_id = o.id) AS has_return
+        FROM orders o
+        WHERE o.user_id = :user_id
+        ORDER BY o.created_at DESC, o.id DESC
+        LIMIT :limit OFFSET :offset
+    ');
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+function orderCountByUser(int $userId): int
+{
+    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM orders WHERE user_id = ?');
+    $stmt->execute([$userId]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+/**
  * Единственное место, где меняется orders.status (php.md, «Cart & orders»).
  * Возвращает false, если Заказа нет или переход из текущего статуса не
  * разрешён (в т.ч. повторный вызов после уже выполненного перехода) —
@@ -399,9 +431,16 @@ function ordersByUserWithReturnFlag(int $userId): array
  * остаток при отмене из `confirmed` и дальше; остальное остаток не
  * трогает. Каждый переход пишет `status_changed_at`.
  *
- * @param string|null $paymentStatus новый orders.payment_status; null — не менять
+ * @param string|null       $paymentStatus      новый orders.payment_status; null — не менять
+ * @param list<string>|null $allowedFromStatuses допустимые текущие статусы, проверяются
+ *                                               под блокировкой; null — любые по карте переходов
  */
-function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus = null): bool
+function orderTransition(
+    int $orderId,
+    string $toStatus,
+    ?string $paymentStatus = null,
+    ?array $allowedFromStatuses = null
+): bool
 {
     $pdo = getPdo();
     $ownsTransaction = !$pdo->inTransaction();
@@ -421,7 +460,11 @@ function orderTransition(int $orderId, string $toStatus, ?string $paymentStatus 
         $order = $stmt->fetch();
         $fromStatus = $order !== false ? $order['status'] : false;
 
-        if ($fromStatus === false || !orderCanTransition((string) $fromStatus, $toStatus)) {
+        if (
+            $fromStatus === false
+            || !orderCanTransition((string) $fromStatus, $toStatus)
+            || ($allowedFromStatuses !== null && !in_array((string) $fromStatus, $allowedFromStatuses, true))
+        ) {
             if ($ownsTransaction) {
                 $pdo->rollBack();
             }

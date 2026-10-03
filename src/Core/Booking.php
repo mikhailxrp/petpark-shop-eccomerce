@@ -98,6 +98,72 @@ function bookingTimeToMinutes(string $time): int
 }
 
 /**
+ * Ошибки графика нового Специалиста (phase-7.md, Таск 6): время — "HH:MM",
+ * конец работы позже начала, выходной — пусто (нет выходного) или 0–6
+ * (0 — воскресенье, как `specialists.day_off`). Пустой массив — график верен.
+ *
+ * @return array<string, string> ошибки по полям work_start / work_end / day_off
+ */
+function specialistScheduleErrors(string $workStart, string $workEnd, string $dayOff): array
+{
+    $errors = [];
+    $timePattern = '/^([01]\d|2[0-3]):[0-5]\d$/';
+
+    if (preg_match($timePattern, $workStart) !== 1) {
+        $errors['work_start'] = 'Укажите время начала работы.';
+    }
+    if (preg_match($timePattern, $workEnd) !== 1) {
+        $errors['work_end'] = 'Укажите время окончания работы.';
+    }
+    if ($errors === [] && bookingTimeToMinutes($workEnd) <= bookingTimeToMinutes($workStart)) {
+        $errors['work_end'] = 'Конец работы должен быть позже начала.';
+    }
+    if ($dayOff !== '' && preg_match('/^[0-6]$/', $dayOff) !== 1) {
+        $errors['day_off'] = 'Выберите выходной из списка.';
+    }
+
+    return $errors;
+}
+
+const BOOKING_CONFLICT_LABELS = [
+    'day_off'         => 'выходной',
+    'outside_hours'   => 'вне часов работы',
+    'service_removed' => 'Услуга снята',
+];
+
+/**
+ * Почему будущая Запись не вписывается в новый график Специалиста
+ * (phase-7.md, Таск 13): выпала на выходной, блок (с буфером) выходит за
+ * рабочие часы, или среди её Услуг есть та, что Специалист больше не оказывает.
+ * Пустой список — Запись в порядке. Саму Запись правка не отменяет.
+ *
+ * @param array{work_start: string, work_end: string, day_off: int|string|null} $schedule
+ * @param list<int> $serviceIds Услуги Специалиста после правки
+ * @param array{scheduled_at: string, block_minutes: int, service_ids: list<int>} $booking
+ * @return list<string> ключи BOOKING_CONFLICT_LABELS
+ */
+function bookingScheduleConflicts(array $schedule, array $serviceIds, array $booking): array
+{
+    $start = new DateTimeImmutable($booking['scheduled_at']);
+    $startMinutes = (int) $start->format('G') * 60 + (int) $start->format('i');
+    $reasons = [];
+
+    if ($schedule['day_off'] !== null && (int) $schedule['day_off'] === (int) $start->format('w')) {
+        $reasons[] = 'day_off';
+    }
+    if ($startMinutes < bookingTimeToMinutes($schedule['work_start'])
+        || $startMinutes + $booking['block_minutes'] > bookingTimeToMinutes($schedule['work_end'])
+    ) {
+        $reasons[] = 'outside_hours';
+    }
+    if (array_diff($booking['service_ids'], $serviceIds) !== []) {
+        $reasons[] = 'service_removed';
+    }
+
+    return $reasons;
+}
+
+/**
  * Свободные начала визита Специалиста на дату, по возрастанию, формат "HH:MM".
  *
  * Слот свободен, если блок [начало; начало + $blockMinutes) помещается в
@@ -185,4 +251,77 @@ function bookingFreeSlots(
     }
 
     return $slots;
+}
+
+/** Подписи bookings.status для Покупателя (FR-ACC-002). */
+const BOOKING_STATUS_LABELS = [
+    'confirmed' => 'Подтверждена',
+    'completed' => 'Состоялась',
+    'no_show'   => 'Неявка',
+    'cancelled' => 'Отменена',
+];
+
+/** Подписи bookings.deposit_status; `none` — строки «Депозит» нет вовсе. */
+const BOOKING_DEPOSIT_LABELS = [
+    'held'      => 'Внесён, вернём при отмене',
+    'returned'  => 'Возвращён',
+    'forfeited' => 'Не возвращается (неявка)',
+];
+
+/** Подпись статуса Записи; неизвестный статус выводится как есть. */
+function bookingStatusLabel(string $status): string
+{
+    return BOOKING_STATUS_LABELS[$status] ?? $status;
+}
+
+/** Подпись Депозита; null — Депозита не было, показывать нечего. */
+function bookingDepositLabel(string $depositStatus): ?string
+{
+    return BOOKING_DEPOSIT_LABELS[$depositStatus] ?? null;
+}
+
+/** Предстоящая Запись: подтверждена и визит ещё не начался. */
+function bookingIsUpcoming(array $booking, DateTimeImmutable $now): bool
+{
+    return $booking['status'] === 'confirmed'
+        && new DateTimeImmutable((string) $booking['scheduled_at']) >= $now;
+}
+
+/**
+ * Записи по Питомцам для «Мои записи» (FR-ACC-002). Каждый Питомец из $pets
+ * попадает в результат, даже без Записей; Запись с неизвестным `pet_id`
+ * отбрасывается. Внутри Питомца: сначала предстоящие (ближайшая первой),
+ * затем остальные (новые первыми).
+ *
+ * @param list<array<string, mixed>> $pets     строки с ключом `id`
+ * @param list<array<string, mixed>> $bookings строки с ключами `pet_id`, `status`, `scheduled_at`
+ * @return list<array{pet: array<string, mixed>, bookings: list<array<string, mixed>>}>
+ */
+function bookingsGroupByPet(array $pets, array $bookings, DateTimeImmutable $now): array
+{
+    $upcoming = [];
+    $past = [];
+    foreach ($bookings as $booking) {
+        $petId = (int) $booking['pet_id'];
+        if (bookingIsUpcoming($booking, $now)) {
+            $upcoming[$petId][] = $booking;
+        } else {
+            $past[$petId][] = $booking;
+        }
+    }
+
+    $byDate = static fn (array $a, array $b): int => strcmp((string) $a['scheduled_at'], (string) $b['scheduled_at']);
+
+    $groups = [];
+    foreach ($pets as $pet) {
+        $petId = (int) $pet['id'];
+        $petUpcoming = $upcoming[$petId] ?? [];
+        $petPast = $past[$petId] ?? [];
+        usort($petUpcoming, $byDate);
+        usort($petPast, static fn (array $a, array $b): int => $byDate($b, $a));
+
+        $groups[] = ['pet' => $pet, 'bookings' => [...$petUpcoming, ...$petPast]];
+    }
+
+    return $groups;
 }

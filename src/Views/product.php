@@ -9,6 +9,7 @@ declare(strict_types=1);
  * никакой бизнес-логики цены/наличия во фронтенде. Отзывы (FR-CARD-005)
  * и «В избранное» (FR-CARD-006) — Таск 8, здесь не выводятся.
  * @var array<string, mixed>              $product         productFindBySlug() — id, category_id, name, slug, description, seo_title, seo_description
+ * @var array<int, string>                $imagePaths      productImagePaths() — главное фото первым (пусто — заглушка)
  * @var array<int, array<string, mixed>>  $variants        productVariantsForProduct() + attributes (список attr_value по Варианту)
  * @var array<string, mixed>              $selectedVariant catalogSelectVariant()
  * @var array<int, array<string, mixed>>  $categoryChain   Главная-цепочка parent_id, без корня
@@ -20,6 +21,17 @@ declare(strict_types=1);
  * @var bool                              $isFavorite      favoriteExists() для текущего выбранного Варианта и авторизованного Покупателя
  * @var string|null                       $favoriteNotice  flash 'favorite_notice' — результат последнего переключения «В избранное»
  */
+
+// Длинное название уменьшает шрифт <h1>, чтобы баннер не растягивался
+const BANNER_TITLE_LONG_LENGTH = 30;
+const BANNER_TITLE_XLONG_LENGTH = 70;
+
+$bannerTitleLength = mb_strlen((string) $product['name']);
+$bannerTitleModifier = match (true) {
+    $bannerTitleLength > BANNER_TITLE_XLONG_LENGTH => ' banner-title--xlong',
+    $bannerTitleLength > BANNER_TITLE_LONG_LENGTH  => ' banner-title--long',
+    default                                        => '',
+};
 
 $minPrice = min(array_map(
     static fn (array $variant): float => catalogEffectivePrice(
@@ -95,13 +107,10 @@ $selectedStatus = catalogAvailabilityStatus(
 );
 $selectedAvailable = max(0, (int) $selectedVariant['stock_quantity'] - (int) $selectedVariant['reserved_quantity']);
 
-// Заглушка — та же картинка на всех карточках, что и в листинге
-// каталога (components/product-card.php), для визуальной
-// согласованности между листингом и карточкой одного Товара (реальные
-// фото из product_images пока нигде на витрине не используются, не
-// только здесь).
-$imageUrl = '/assets/img/food-1.png';
-$imageUrls = [APP_URL . $imageUrl];
+// Фото из product_images (главное первым); нет фото — одна заглушка.
+$galleryUrls = array_map('catalogImageUrl', $imagePaths !== [] ? $imagePaths : [null]);
+$imageUrl = $galleryUrls[0];
+$imageUrls = array_map(static fn (string $url): string => APP_URL . $url, $galleryUrls);
 
 // JSON-LD — из тех же $selectedEffectivePrice/$selectedStatus, что рисует
 // видимую цену/наличие ниже, не пересчитывается заново (dod-global.md).
@@ -131,7 +140,7 @@ ob_start();
         <div class="row align-items-center">
             <div class="col-lg-6">
                 <div class="banner-text">
-                    <h1><?= e((string) $product['name']) ?></h1>
+                    <h1 class="banner-title<?= $bannerTitleModifier ?>"><?= e((string) $product['name']) ?></h1>
                     <?php include __DIR__ . '/components/breadcrumbs.php'; ?>
                 </div>
             </div>
@@ -153,19 +162,15 @@ ob_start();
         <div class="row product-info-section">
             <div class="col-lg-5 p-0">
                 <div class="pd-gallery">
-                    <!-- 3 миниатюры на ту же заглушку — по просьбе пользователя
-                         визуально повторяем макет; переключение миниатюр уже
-                         обрабатывает custom.js (.li-pd-imgs click). Когда в
-                         админке появится загрузка реальных фото товара —
-                         миниатюры указывают на них вместо одной заглушки. -->
+                    <!-- Переключение миниатюр обрабатывает custom.js (.li-pd-imgs click) -->
                     <ul class="pd-imgs">
-                        <?php for ($i = 0; $i < 3; $i++): ?>
+                        <?php foreach ($galleryUrls as $i => $galleryUrl): ?>
                             <li class="li-pd-imgs<?= $i === 0 ? ' nav-active' : '' ?>">
                                 <a href="javascript:void(0)">
-                                    <img alt="<?= e((string) $product['name']) ?>" src="<?= e($imageUrl) ?>">
+                                    <img alt="<?= e((string) $product['name']) ?><?= $i > 0 ? ' — фото ' . ($i + 1) : '' ?>" src="<?= e($galleryUrl) ?>">
                                 </a>
                             </li>
-                        <?php endfor; ?>
+                        <?php endforeach; ?>
                     </ul>
                     <div class="pd-main-img">
                         <img id="NZoomImg" alt="<?= e((string) $product['name']) ?>" src="<?= e($imageUrl) ?>">

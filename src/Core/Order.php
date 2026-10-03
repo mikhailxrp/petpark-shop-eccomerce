@@ -29,6 +29,9 @@ const ORDER_STATUS_TRANSITIONS = [
 // Правка состава и цены доступна «до отгрузки» (FR-ORD-004, phase-3.md).
 const ORDER_EDITABLE_STATUSES = ['new', 'confirmed', 'assembled'];
 
+// Покупатель сам отменяет Заказ только до отгрузки (ADR-032).
+const ORDER_CUSTOMER_CANCELLABLE_STATUSES = ['new', 'confirmed', 'assembled'];
+
 const ORDER_ITEM_MAX_QUANTITY = 999;
 
 const ORDER_ADDRESS_MAX_LENGTH = 255;
@@ -157,6 +160,15 @@ function orderRecalculateTotals(
 function orderIsEditable(string $status): bool
 {
     return in_array($status, ORDER_EDITABLE_STATUSES, true);
+}
+
+/**
+ * Показывать ли Покупателю кнопку «Отменить». Только подсказка для View:
+ * окончательную проверку статуса делает orderTransition() под блокировкой.
+ */
+function orderCanBeCancelledByCustomer(string $status): bool
+{
+    return in_array($status, ORDER_CUSTOMER_CANCELLABLE_STATUSES, true);
 }
 
 /**

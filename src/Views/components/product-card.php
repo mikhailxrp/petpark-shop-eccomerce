@@ -8,6 +8,7 @@ declare(strict_types=1);
  *      id, name, slug, category_name, price, discount_price,
  *      stock_quantity, reserved_quantity, image_path, variant_id
  *      (Вариант с каталожной ценой), variant_count (активных Вариантов)
+ * @var array<int, int> $favoriteVariantIds Избранные Варианты Покупателя (необязательно, нет — сердечко пустое)
  *
  * «В корзину»: один Вариант — POST-форма сразу с его variant_id;
  * несколько — ссылка на Карточку товара, где выбирается фасовка/вкус
@@ -18,8 +19,8 @@ $hasDiscount = $product['discount_price'] !== null;
 $effectivePrice = catalogEffectivePrice((float) $product['price'], $hasDiscount ? (float) $product['discount_price'] : null);
 $status = catalogAvailabilityStatus((int) $product['stock_quantity'], (int) $product['reserved_quantity']);
 $productUrl = '/product/' . $product['slug'] . '/';
-// Заглушка до появления реальных фото товаров в /uploads — временно одна картинка на все карточки
-$imageUrl = '/assets/img/food-1.png';
+$isFavorite = in_array((int) $product['variant_id'], $favoriteVariantIds ?? [], true);
+$imageUrl = catalogImageUrl($product['image_path'] ?? null);
 ?>
 <div class="col-md-4 col-sm-6">
     <div class="healthy-product">
@@ -36,9 +37,16 @@ $imageUrl = '/assets/img/food-1.png';
                         <button type="submit" class="cart-add-form__button">В корзину</button>
                     </form>
                 <?php endif; ?>
-                <a href="#" class="heart-wishlist" aria-label="Добавить в избранное">
-                    <i class="fa-regular fa-heart"></i>
-                </a>
+                <form method="post" action="/favorites/toggle" class="favorite-toggle-form">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="slug" value="<?= e((string) $product['slug']) ?>">
+                    <input type="hidden" name="variant_id" value="<?= (int) $product['variant_id'] ?>">
+                    <input type="hidden" name="return" value="<?= e((string) ($_SERVER['REQUEST_URI'] ?? '/')) ?>">
+                    <button type="submit" class="heart-wishlist"
+                            aria-label="<?= $isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' ?>">
+                        <i class="fa-<?= $isFavorite ? 'solid' : 'regular' ?> fa-heart" aria-hidden="true"></i>
+                    </button>
+                </form>
             </div>
         </div>
         <span><?= e((string) $product['category_name']) ?></span>

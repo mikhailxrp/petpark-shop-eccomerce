@@ -191,4 +191,116 @@ final class BookingTest extends TestCase
 
         bookingWeekBounds('2026-02-30');
     }
+
+    public function testStatusAndDepositLabels(): void
+    {
+        $this->assertSame('Состоялась', bookingStatusLabel('completed'));
+        $this->assertSame('unknown', bookingStatusLabel('unknown'));
+        $this->assertSame('Возвращён', bookingDepositLabel('returned'));
+        $this->assertNull(bookingDepositLabel('none'));
+    }
+
+    public function testGroupByPetKeepsEmptyPetAndDropsForeignPet(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+        $pets = [['id' => 1, 'name' => 'Барсик'], ['id' => 2, 'name' => 'Шарик']];
+        $bookings = [
+            ['id' => 10, 'pet_id' => 1, 'status' => 'completed', 'scheduled_at' => '2026-09-01 10:00:00'],
+            ['id' => 11, 'pet_id' => 99, 'status' => 'confirmed', 'scheduled_at' => '2026-10-07 10:00:00'],
+        ];
+
+        $groups = bookingsGroupByPet($pets, $bookings, $now);
+
+        $this->assertCount(2, $groups);
+        $this->assertSame([10], array_column($groups[0]['bookings'], 'id'));
+        $this->assertSame([], $groups[1]['bookings']);
+    }
+
+    public function testGroupByPetOrdersUpcomingFirstThenPastNewestFirst(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+        $bookings = [
+            ['id' => 1, 'pet_id' => 1, 'status' => 'completed', 'scheduled_at' => '2026-09-01 10:00:00'],
+            ['id' => 2, 'pet_id' => 1, 'status' => 'confirmed', 'scheduled_at' => '2026-10-20 10:00:00'],
+            ['id' => 3, 'pet_id' => 1, 'status' => 'cancelled', 'scheduled_at' => '2026-10-08 10:00:00'],
+            ['id' => 4, 'pet_id' => 1, 'status' => 'confirmed', 'scheduled_at' => '2026-10-07 10:00:00'],
+            ['id' => 5, 'pet_id' => 1, 'status' => 'no_show', 'scheduled_at' => '2026-09-15 10:00:00'],
+        ];
+
+        $groups = bookingsGroupByPet([['id' => 1]], $bookings, $now);
+
+        $this->assertSame([4, 2, 3, 5, 1], array_column($groups[0]['bookings'], 'id'));
+    }
+
+    public function testPastConfirmedBookingIsNotUpcoming(): void
+    {
+        $now = new DateTimeImmutable('2026-10-05 12:00:00');
+
+        $this->assertFalse(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 11:00:00'], $now));
+        $this->assertTrue(bookingIsUpcoming(['status' => 'confirmed', 'scheduled_at' => '2026-10-05 12:00:00'], $now));
+    }
+
+    public function testScheduleValidAcceptsDefaultsAndNoDayOff(): void
+    {
+        $this->assertSame([], \specialistScheduleErrors('10:00', '20:00', ''));
+        $this->assertSame([], \specialistScheduleErrors('00:00', '23:59', '0'));
+        $this->assertSame([], \specialistScheduleErrors('09:30', '18:00', '6'));
+    }
+
+    public function testScheduleEndNotAfterStartIsError(): void
+    {
+        $this->assertSame(['work_end'], array_keys(\specialistScheduleErrors('20:00', '10:00', '')));
+        $this->assertSame(['work_end'], array_keys(\specialistScheduleErrors('10:00', '10:00', '')));
+    }
+
+    public function testScheduleRejectsMalformedTimeAndDayOff(): void
+    {
+        $errors = \specialistScheduleErrors('25:00', '', '7');
+
+        $this->assertSame(['work_start', 'work_end', 'day_off'], array_keys($errors));
+        $this->assertSame(['day_off'], array_keys(\specialistScheduleErrors('10:00', '20:00', '-1')));
+        $this->assertSame(['day_off'], array_keys(\specialistScheduleErrors('10:00', '20:00', 'x')));
+    }
+
+    /** @return array{scheduled_at: string, block_minutes: int, service_ids: list<int>} */
+    private function booking(string $scheduledAt, int $blockMinutes = 60, array $serviceIds = [1]): array
+    {
+        return ['scheduled_at' => $scheduledAt, 'block_minutes' => $blockMinutes, 'service_ids' => $serviceIds];
+    }
+
+    public function testConflictsEmptyWhenBookingFitsSchedule(): void
+    {
+        $this->assertSame([], \bookingScheduleConflicts(self::GROOMER, [1, 2], $this->booking('2026-10-05 10:00:00')));
+        // Блок заканчивается ровно в конец рабочего дня — ещё помещается.
+        $this->assertSame([], \bookingScheduleConflicts(self::GROOMER, [1], $this->booking('2026-10-05 19:00:00')));
+    }
+
+    public function testConflictDayOff(): void
+    {
+        // 2026-10-11 — воскресенье, у VET выходной 0.
+        $this->assertSame(['day_off'], \bookingScheduleConflicts(self::VET, [1], $this->booking('2026-10-11 12:00:00')));
+        $this->assertSame([], \bookingScheduleConflicts(self::VET, [1], $this->booking('2026-10-05 12:00:00')));
+    }
+
+    public function testConflictOutsideHoursBeforeStartAndAfterEnd(): void
+    {
+        $this->assertSame(['outside_hours'], \bookingScheduleConflicts(self::GROOMER, [1], $this->booking('2026-10-05 09:30:00')));
+        $this->assertSame(['outside_hours'], \bookingScheduleConflicts(self::GROOMER, [1], $this->booking('2026-10-05 19:30:00')));
+    }
+
+    public function testConflictServiceRemoved(): void
+    {
+        $this->assertSame(
+            ['service_removed'],
+            \bookingScheduleConflicts(self::GROOMER, [1], $this->booking('2026-10-05 12:00:00', 60, [1, 2]))
+        );
+    }
+
+    public function testConflictsCombine(): void
+    {
+        $this->assertSame(
+            ['day_off', 'outside_hours', 'service_removed'],
+            \bookingScheduleConflicts(self::VET, [], $this->booking('2026-10-11 21:00:00'))
+        );
+    }
 }

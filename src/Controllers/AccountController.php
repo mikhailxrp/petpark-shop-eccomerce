@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Services\BookingCancellation;
+use App\Services\OrderCancellation;
 use App\Services\Payment\YooMoneyStubGateway;
 
 /**
@@ -19,6 +20,16 @@ final class AccountController
     private const PET_BREED_MAX = 80;
     private const PET_WEIGHT_PATTERN = '/^\d{1,3}(\.\d{1,2})?$/';
     private const PET_FORM_FLASH = 'pet_form';
+    private const PROFILE_FORM_FLASH = 'profile_form';
+    private const PROFILE_NAME_MAX = 100;
+    private const PROFILE_EMAIL_MAX = 150;
+    private const PROFILE_RATE_LIMIT_ATTEMPTS = 5;
+    private const PROFILE_RATE_LIMIT_SECONDS = 60;
+    private const PROFILE_RATE_LIMITED_ERROR = 'Слишком много попыток. Попробуйте через минуту.';
+    // Одна формулировка для занятого email и сбоя записи: иначе по тексту видно, что аккаунт существует.
+    private const PROFILE_SAVE_FAILED_ERROR = 'Не удалось сохранить данные. Проверьте введённое и попробуйте ещё раз.';
+    private const ORDERS_PER_PAGE = 10;
+    private const BOOKINGS_PER_PAGE = 10;
     private const RETURN_REASON_MAX = 1000;
     private const RETURN_REVIEW_HOURS = 24;
     private const RETURN_RATE_LIMIT_ATTEMPTS = 5;
@@ -28,6 +39,9 @@ final class AccountController
     private const CANCEL_TOO_LATE_ERROR = 'Отменить запись можно не позже чем за %d ч до визита. Обратитесь к администратору.';
     private const CANCEL_NOT_ALLOWED_ERROR = 'Эту запись уже нельзя отменить.';
     private const CANCEL_REFUND_FAILED_ERROR = 'Запись отменена, но вернуть депозит автоматически не удалось. Администратор свяжется с вами.';
+
+    private const ORDER_CANCEL_NOT_ALLOWED_ERROR = 'Этот заказ уже нельзя отменить. Обратитесь к администратору.';
+    private const ORDER_CANCEL_REFUND_FAILED_ERROR = 'Заказ отменён, но вернуть деньги автоматически не удалось. Администратор свяжется с вами.';
 
     public function index(): void
     {
@@ -136,20 +150,42 @@ final class AccountController
     {
         requireRole('customer');
 
+        $userId = (int) $_SESSION['user_id'];
         $now = new \DateTimeImmutable('now');
+
+        $countsByPet = bookingsHistoryCountByPet($userId);
+        $totalPages = max(1, (int) ceil(array_sum($countsByPet) / self::BOOKINGS_PER_PAGE));
+        $page = min(catalogNormalizePage($_GET['page'] ?? null), $totalPages);
+
         $bookings = array_map(
-            static fn (array $booking): array => $booking + [
-                'can_cancel' => bookingCanCancelByCustomer(
-                    new \DateTimeImmutable((string) $booking['scheduled_at']),
-                    $now,
-                    BOOKING_CANCEL_THRESHOLD_HOURS
-                ),
-            ],
-            bookingsUpcomingByUser((int) $_SESSION['user_id'])
+            static function (array $booking) use ($now): array {
+                $isUpcoming = bookingIsUpcoming($booking, $now);
+
+                return $booking + [
+                    'is_upcoming' => $isUpcoming,
+                    'can_cancel'  => $isUpcoming && bookingCanCancelByCustomer(
+                        new \DateTimeImmutable((string) $booking['scheduled_at']),
+                        $now,
+                        BOOKING_CANCEL_THRESHOLD_HOURS
+                    ),
+                ];
+            },
+            bookingsHistoryPageByUser($userId, self::BOOKINGS_PER_PAGE, ($page - 1) * self::BOOKINGS_PER_PAGE)
         );
 
+        // Питомец без Записей вообще показывается пустым на первой странице;
+        // на следующих — только те, у кого есть Записи на этой странице
+        $pageBookingPetIds = array_map(static fn (array $booking): int => (int) $booking['pet_id'], $bookings);
+        $pets = array_values(array_filter(
+            petsByUser($userId),
+            static fn (array $pet): bool => in_array((int) $pet['id'], $pageBookingPetIds, true)
+                || ($page === 1 && !isset($countsByPet[(int) $pet['id']]))
+        ));
+
         render('account/bookings', [
-            'bookings'       => $bookings,
+            'groups'         => bookingsGroupByPet($pets, $bookings, $now),
+            'page'           => $page,
+            'totalPages'     => $totalPages,
             'thresholdHours' => BOOKING_CANCEL_THRESHOLD_HOURS,
             'success'        => getFlash('success'),
             'error'          => getFlash('error'),
@@ -188,6 +224,66 @@ final class AccountController
         };
 
         redirect('/account/bookings');
+    }
+
+    public function orders(): void
+    {
+        requireRole('customer');
+
+        $userId = (int) $_SESSION['user_id'];
+        $total = orderCountByUser($userId);
+        $totalPages = max(1, (int) ceil($total / self::ORDERS_PER_PAGE));
+        $page = min(catalogNormalizePage($_GET['page'] ?? null), $totalPages);
+
+        render('account/orders', [
+            'orders'     => ordersPageByUser($userId, self::ORDERS_PER_PAGE, ($page - 1) * self::ORDERS_PER_PAGE),
+            'page'       => $page,
+            'totalPages' => $totalPages,
+        ]);
+    }
+
+    public function order(string $id): void
+    {
+        requireRole('customer');
+
+        $order = $this->findOwnOrder($id);
+        if ($order === null) {
+            $this->notFound();
+            return;
+        }
+
+        render('account/order', [
+            'order'     => $order,
+            'items'     => orderItemsForOrder((int) $order['id']),
+            'canReturn' => $this->orderIsReturnable($order),
+            'hasReturn' => returnFindByOrderId((int) $order['id']) !== null,
+            'canCancel' => orderCanBeCancelledByCustomer((string) $order['status']),
+            'success'   => getFlash('success'),
+            'error'     => getFlash('error'),
+        ]);
+    }
+
+    public function orderCancel(string $id): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $order = $this->findOwnOrder($id);
+        if ($order === null) {
+            $this->notFound();
+            return;
+        }
+
+        $cancellation = new OrderCancellation(new YooMoneyStubGateway(env('PAYMENT_STUB_SECRET')));
+
+        match ($cancellation->cancel((int) $order['id'], ORDER_CUSTOMER_CANCELLABLE_STATUSES)) {
+            OrderCancellation::RESULT_NOT_ALLOWED   => setFlash('error', self::ORDER_CANCEL_NOT_ALLOWED_ERROR),
+            OrderCancellation::RESULT_REFUND_FAILED => setFlash('error', self::ORDER_CANCEL_REFUND_FAILED_ERROR),
+            OrderCancellation::RESULT_REFUNDED      => setFlash('success', 'Заказ отменён, деньги возвращены.'),
+            OrderCancellation::RESULT_CANCELLED     => setFlash('success', 'Заказ отменён.'),
+        };
+
+        redirect('/account/orders/' . (int) $order['id']);
     }
 
     public function returns(): void
@@ -413,6 +509,99 @@ final class AccountController
             : null;
     }
 
+    public function favorites(): void
+    {
+        requireRole('customer');
+
+        $favorites = favoritesByUser((int) $_SESSION['user_id']);
+        foreach ($favorites as &$favorite) {
+            $favorite['status'] = catalogAvailabilityStatus(
+                (int) $favorite['stock_quantity'],
+                (int) $favorite['reserved_quantity']
+            );
+        }
+        unset($favorite);
+
+        render('account/favorites', [
+            'favorites' => $favorites,
+            'success'   => getFlash('success'),
+            'error'     => getFlash('error'),
+        ]);
+    }
+
+    public function favoriteRemove(string $variantId): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        $id = ctype_digit($variantId) ? (int) $variantId : 0;
+
+        if ($id > 0 && favoriteRemove((int) $_SESSION['user_id'], $id)) {
+            setFlash('success', 'Убрано из избранного.');
+        } else {
+            setFlash('error', 'Этого товара уже нет в избранном.');
+        }
+
+        redirect('/account/favorites');
+    }
+
+    public function profile(): void
+    {
+        requireRole('customer');
+
+        $form = $this->takeForm(self::PROFILE_FORM_FLASH);
+
+        if ($form !== null) {
+            $values = $form['values'];
+            $errors = $form['errors'];
+        } else {
+            $user = userFindById((int) $_SESSION['user_id']);
+            $values = [
+                'name'  => (string) ($user['name'] ?? ''),
+                'phone' => (string) ($user['phone'] ?? ''),
+                'email' => (string) ($user['email'] ?? ''),
+            ];
+            $errors = [];
+        }
+
+        render('account/profile', [
+            'values'  => $values,
+            'errors'  => $errors,
+            'success' => getFlash('success'),
+            'error'   => getFlash('error'),
+        ]);
+    }
+
+    public function profileUpdate(): void
+    {
+        requireRole('customer');
+        requireCsrf();
+
+        if (tooManyAttempts('profile', self::PROFILE_RATE_LIMIT_ATTEMPTS, self::PROFILE_RATE_LIMIT_SECONDS)) {
+            logWarning('Профиль: превышен лимит попыток', ['user_id' => (int) $_SESSION['user_id']]);
+            setFlash('error', self::PROFILE_RATE_LIMITED_ERROR);
+            redirect('/account/profile');
+        }
+        hitRateLimit('profile');
+
+        [$values, $errors] = $this->validateProfile();
+
+        if ($errors !== []) {
+            $this->rememberForm($values, $errors, self::PROFILE_FORM_FLASH);
+            redirect('/account/profile');
+        }
+
+        if (!userUpdateProfile((int) $_SESSION['user_id'], $values['name'], $values['email'], $values['phone'])) {
+            logWarning('Профиль: email занят другим аккаунтом', ['user_id' => (int) $_SESSION['user_id']]);
+            setFlash('error', self::PROFILE_SAVE_FAILED_ERROR);
+            $this->rememberForm($values, [], self::PROFILE_FORM_FLASH);
+            redirect('/account/profile');
+        }
+
+        setFlash('success', 'Данные сохранены.');
+        redirect('/account/profile');
+    }
+
     private function notFound(): void
     {
         http_response_code(404);
@@ -462,17 +651,17 @@ final class AccountController
      * @param array<string, string> $values
      * @param array<string, string> $errors
      */
-    private function rememberForm(array $values, array $errors): void
+    private function rememberForm(array $values, array $errors, string $flashKey = self::PET_FORM_FLASH): void
     {
-        setFlash(self::PET_FORM_FLASH, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
+        setFlash($flashKey, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
     }
 
     /**
      * @return array{values: array<string, string>, errors: array<string, string>}|null
      */
-    private function takeForm(): ?array
+    private function takeForm(string $flashKey = self::PET_FORM_FLASH): ?array
     {
-        $raw = getFlash(self::PET_FORM_FLASH);
+        $raw = getFlash($flashKey);
         if ($raw === null) {
             return null;
         }
@@ -482,5 +671,42 @@ final class AccountController
         return is_array($form) && is_array($form['values'] ?? null) && is_array($form['errors'] ?? null)
             ? $form
             : null;
+    }
+
+    /**
+     * Телефон приводится к `+7XXXXXXXXXX` (`normalizePhone()`) — в таком виде
+     * его хранит и сопоставляет Обращения (phase-5.md, Таск 7).
+     *
+     * @return array{0: array<string, string>, 1: array<string, string>} [значения, ошибки по полям]
+     */
+    private function validateProfile(): array
+    {
+        $values = [
+            'name'  => trim(mb_scrub((string) input('name'))),
+            'phone' => trim(mb_scrub((string) input('phone'))),
+            'email' => mb_strtolower(trim(mb_scrub((string) input('email')))),
+        ];
+        $errors = [];
+
+        if ($values['name'] === '') {
+            $errors['name'] = 'Укажите имя.';
+        } elseif (mb_strlen($values['name']) > self::PROFILE_NAME_MAX) {
+            $errors['name'] = 'Имя — не длиннее ' . self::PROFILE_NAME_MAX . ' символов.';
+        }
+
+        $phone = normalizePhone($values['phone']);
+        if ($phone === null) {
+            $errors['phone'] = 'Укажите телефон в формате +7 900 000-00-00.';
+        } else {
+            $values['phone'] = $phone;
+        }
+
+        if ($values['email'] === '' || mb_strlen($values['email']) > self::PROFILE_EMAIL_MAX
+            || filter_var($values['email'], FILTER_VALIDATE_EMAIL) === false
+        ) {
+            $errors['email'] = 'Укажите корректный email.';
+        }
+
+        return [$values, $errors];
     }
 }

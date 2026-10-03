@@ -98,7 +98,8 @@ function homePathForRole(string $role): string
     return match ($role) {
         'customer' => '/account',
         'specialist' => '/specialist',
-        'shift_admin', 'content_editor', 'owner' => '/admin',
+        'shift_admin', 'owner' => '/admin',
+        'content_editor' => '/admin/products',
         default => '/',
     };
 }
@@ -127,9 +128,45 @@ function requireRole(string ...$roles): void
 
     $role = $_SESSION['user_role'] ?? null;
 
+    // Отключённый сотрудник (users.is_active = 0, ADR-033) теряет открытую
+    // сессию на ближайшем запросе, а не только при следующем входе.
+    if (!userIsActive((int) $_SESSION['user_id'])) {
+        $_SESSION = [];
+        session_destroy();
+        redirect(in_array('customer', $roles, true) ? '/login' : '/admin/login');
+    }
+
     if (!is_string($role) || !in_array($role, $roles, true)) {
         redirect(homePathForRole(is_string($role) ? $role : 'customer'));
     }
+}
+
+/**
+ * Роли, которые `$actorRole` вправе назначить при создании сотрудника
+ * (FR-ADM-003 п. 1, 3): Владелец — любые роли персонала кроме `owner`,
+ * Администратор смены — только Специалиста и Администратора смены.
+ *
+ * @return list<string>
+ */
+function staffRolesCreatableBy(string $actorRole): array
+{
+    return match ($actorRole) {
+        'owner'       => ['specialist', 'shift_admin', 'content_editor'],
+        'shift_admin' => ['specialist', 'shift_admin'],
+        default       => [],
+    };
+}
+
+/**
+ * Можно ли менять роль или отключать уже существующего сотрудника
+ * (FR-ADM-003 п. 2): только Владельцу, не себе (иначе можно остаться без
+ * Владельца) и не другому Владельцу.
+ */
+function canManageStaff(string $actorRole, int $actorId, int $targetId, string $targetRole): bool
+{
+    return $actorRole === 'owner'
+        && $actorId !== $targetId
+        && in_array($targetRole, ['specialist', 'shift_admin', 'content_editor'], true);
 }
 
 function setFlash(string $key, string $message): void

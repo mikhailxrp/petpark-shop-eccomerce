@@ -61,6 +61,7 @@ final class SearchController
                 'totalPages' => $totalPages,
                 'actionPath' => '/search',
                 'queryState' => $queryState,
+                'favoriteVariantIds' => favoriteVariantIdsForCurrentCustomer(),
             ]);
             return;
         }
@@ -75,6 +76,7 @@ final class SearchController
             'priceMin'        => $priceMin,
             'priceMax'        => $priceMax,
             'priceBounds'     => productPriceRange(),
+            'favoriteVariantIds' => favoriteVariantIdsForCurrentCustomer(),
             'sort'            => $sort,
             'products'        => $products,
             'total'           => $total,

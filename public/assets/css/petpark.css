@@ -967,6 +967,14 @@ select.nice-select::-ms-expand {
     cursor: pointer;
 }
 
+/* Сердечко в карточке листинга: форма не создаёт своего блока внутри .add-to-cart */
+.add-to-cart form.favorite-toggle-form {
+    display: contents;
+}
+.add-to-cart button.heart-wishlist:hover {
+    color: #fff;
+}
+
 /*
  * .star-rating (форма «Оставить отзыв», product.php) — в макете звёзды
  * выбора оценки чисто декоративные (`.start i`, без обработчика клика,
@@ -2229,6 +2237,21 @@ table.shop_table td.product-quantity input.cart-item__quantity {
 }
 
 @media (max-width: 575.98px) {
+    .chat-widget {
+        /*
+         * Колонка кнопок мессенджеров слева (3 кнопки 3.5rem + 2 зазора 0.75rem
+         * + отступ 20px) перекрывает панель на всю ширину экрана — поднимаем
+         * панель выше неё.
+         */
+        --chat-messenger-stack: calc(20px + 3 * 3.5rem + 2 * 0.75rem);
+        --chat-panel-bottom: calc(var(--chat-messenger-stack) + var(--chat-gap) - var(--chat-bottom-offset));
+    }
+
+    .chat-widget__panel {
+        bottom: var(--chat-panel-bottom);
+        max-height: calc(100vh - var(--chat-bottom-offset) - var(--chat-panel-bottom) - var(--chat-gap));
+    }
+
     .chat-widget__toggle-text {
         display: none;
     }
@@ -2287,4 +2310,147 @@ table.shop_table td.product-quantity input.cart-item__quantity {
     width: 1.75rem;
     height: 1.75rem;
     fill: currentColor;
+}
+
+/*
+ * Мои заказы (account/orders.php, account/order.php): статус Заказа
+ * и строки состава.
+ */
+:root {
+    --order-status-active: #0d6efd;
+    --order-status-done: #198754;
+    --order-status-cancelled: #6c757d;
+}
+
+.order-card {
+    margin-bottom: var(--account-gap);
+}
+
+.order-status {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 12px;
+    border-radius: 45px;
+    background-color: var(--order-status-active);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.order-status--delivered,
+.order-status--picked_up {
+    background-color: var(--order-status-done);
+}
+
+.order-status--cancelled {
+    background-color: var(--order-status-cancelled);
+}
+
+.booking-pet {
+    margin-bottom: var(--account-gap);
+}
+
+.booking-status {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 12px;
+    border-radius: 45px;
+    background-color: var(--order-status-active);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.booking-status--completed {
+    background-color: var(--order-status-done);
+}
+
+.booking-status--cancelled,
+.booking-status--no_show {
+    background-color: var(--order-status-cancelled);
+}
+
+.order-items {
+    margin: 0 0 var(--account-gap);
+    padding: 0;
+    list-style: none;
+}
+
+.order-items__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 16px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--account-border, rgba(0, 0, 0, 0.1));
+}
+
+.order-items__name {
+    flex: 1 1 100%;
+    font-weight: 600;
+}
+
+.order-items__sum {
+    font-weight: 600;
+}
+
+@media (min-width: 768px) {
+    .order-items__name {
+        flex: 1 1 50%;
+    }
+}
+
+.order-cancel-modal__title {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.2;
+}
+
+/* Фото товаров разного размера вписываются в рамку с сохранением пропорций */
+:root {
+    --product-img-ratio: 1 / 1;
+    --product-thumb-size: 96px;
+}
+.healthy-product-img img {
+    display: block;
+    width: 100%;
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+.pd-main-img img {
+    display: block;
+    width: 100%;
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+ul.pd-imgs li a img {
+    width: var(--product-thumb-size);
+    height: var(--product-thumb-size);
+    object-fit: contain;
+}
+table.shop_table td.product-name img {
+    aspect-ratio: var(--product-img-ratio);
+    object-fit: contain;
+}
+.cart-popup__item-img {
+    object-fit: contain;
+}
+
+/*
+ * Длинное название Товара в <h1> баннера (product.php): шрифт уменьшается
+ * по длине названия, чтобы баннер не растягивался. clamp() не даёт
+ * увеличить шрифт на мобильных, где h1 и так меньше (responsive.css).
+ */
+.banner-text .banner-title {
+    overflow-wrap: anywhere;
+}
+.banner-text .banner-title--long {
+    font-size: clamp(28px, 3.4vw, 44px);
+    line-height: 1.2;
+}
+.banner-text .banner-title--xlong {
+    font-size: clamp(22px, 2.6vw, 32px);
+    line-height: 1.2;
 }

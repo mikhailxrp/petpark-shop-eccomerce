@@ -21,10 +21,17 @@ final class FavoriteController
         $variantId = (int) input('variant_id');
         $userId = (int) $_SESSION['user_id'];
 
+        $result = $variantId > 0 ? favoriteToggle($userId, $variantId) : null;
+
+        // Из листинга (карточка каталога/главной) возвращаем туда же, где нажали, — с фильтрами и страницей;
+        // flash-сообщение показывает только Карточка товара, в листинге о результате говорит сердечко.
+        $returnUrl = $this->localReturnUrl((string) input('return'));
+        if ($returnUrl !== null) {
+            redirect($returnUrl);
+        }
+
         $product = $slug !== '' ? productFindBySlug($slug) : null;
         $redirectUrl = $product !== null ? '/product/' . $slug . '/?variant=' . $variantId : '/catalog';
-
-        $result = $variantId > 0 ? favoriteToggle($userId, $variantId) : null;
 
         setFlash(
             'favorite_notice',
@@ -36,5 +43,19 @@ final class FavoriteController
         );
 
         redirect($redirectUrl);
+    }
+
+    /**
+     * Только путь своего сайта: начинается с одного `/`, без `//`, `\` и
+     * управляющих символов — иначе `return` стал бы open redirect.
+     */
+    private function localReturnUrl(string $raw): ?string
+    {
+        $isLocalPath = $raw !== '' && $raw[0] === '/'
+            && !str_starts_with($raw, '//')
+            && !str_contains($raw, '\\')
+            && preg_match('/[\x00-\x1F\x7F]/', $raw) !== 1;
+
+        return $isLocalPath ? $raw : null;
     }
 }

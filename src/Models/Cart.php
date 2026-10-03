@@ -45,7 +45,13 @@ function cartItemsForOwner(array $owner): array
         SELECT
             ci.id, ci.variant_id, ci.quantity, ci.price_seen,
             v.sku, v.price, v.discount_price, v.stock_quantity, v.reserved_quantity,
-            p.name, p.slug
+            p.name, p.slug,
+            (
+                SELECT img.path FROM product_images img
+                WHERE img.product_id = p.id
+                ORDER BY img.is_main DESC, img.sort_order ASC, img.id ASC
+                LIMIT 1
+            ) AS image_path
         FROM cart_items ci
         JOIN product_variants v ON v.id = ci.variant_id AND v.is_active = 1
         JOIN products p ON p.id = v.product_id AND p.is_active = 1

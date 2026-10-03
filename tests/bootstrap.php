@@ -16,4 +16,15 @@ require_once ROOT_PATH . '/src/Core/Booking.php';
 require_once ROOT_PATH . '/src/Core/Ai.php';
 require_once ROOT_PATH . '/src/Core/Notification.php';
 require_once ROOT_PATH . '/src/Core/OrderReturn.php';
+require_once ROOT_PATH . '/src/Core/Product.php';
+require_once ROOT_PATH . '/src/Core/ProductVariant.php';
+require_once ROOT_PATH . '/src/Core/Report.php';
+require_once ROOT_PATH . '/src/Core/Client.php';
 require_once ROOT_PATH . '/src/Services/FileUpload.php';
+
+// requireRole() сверяется с БД через Models/User.php, которую unit-тесты не
+// подключают (нет БД) — заглушка: любая учётная запись активна.
+function userIsActive(int $userId): bool
+{
+    return true;
+}
