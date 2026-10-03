@@ -3,7 +3,8 @@ Options -Indexes
 RewriteEngine On
 
 # Блокировать прямой доступ к служебным папкам и файлам
-RewriteRule ^(src|config|database|storage|\.docs|\.git|\.env)(/|$) - [F,L]
+RewriteRule ^(src|config|database|storage|bin|vendor|tests|\.docs|\.git|\.env)(/|$) - [F,L]
+RewriteRule ^(composer\.(json|lock)|phpunit\.xml)$ - [F,L]
 
 # /admin — маршрут PHP-роутера (Controllers/Admin/*, phase-1.md Таск 7),
 # хотя public/admin/ существует и как физическая папка (Valex-ассеты/
