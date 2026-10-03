@@ -8,6 +8,53 @@ declare(strict_types=1);
  */
 
 /**
+ * Число Вариантов для таблицы /admin/marketplaces (все, включая неактивные).
+ */
+function marketplaceListingCountForAdmin(): int
+{
+    return (int) getPdo()->query('SELECT COUNT(*) FROM product_variants')->fetchColumn();
+}
+
+/**
+ * Страница Вариантов с ценой и временем синхронизации по каждой площадке
+ * (NULL, если строки в `marketplace_listings` нет). Ключи — `<площадка>_price`
+ * и `<площадка>_synced_at` для каждой из MARKETPLACES.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function marketplaceListingListForAdmin(int $limit, int $offset): array
+{
+    $columns = '';
+    $joins = '';
+    $params = [];
+
+    foreach (MARKETPLACES as $index => $marketplace) {
+        $alias = "ml{$index}";
+        $columns .= ", {$alias}.marketplace_price AS {$marketplace}_price, {$alias}.synced_at AS {$marketplace}_synced_at";
+        $joins .= " LEFT JOIN marketplace_listings {$alias} ON {$alias}.variant_id = v.id AND {$alias}.marketplace = :mp{$index}";
+        $params["mp{$index}"] = $marketplace;
+    }
+
+    $stmt = getPdo()->prepare("
+        SELECT v.id AS variant_id, v.sku, v.price, v.discount_price, v.stock_quantity,
+               v.reserved_quantity, v.is_active AS variant_active,
+               p.name, p.is_active AS product_active{$columns}
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id{$joins}
+        ORDER BY p.name ASC, v.id ASC
+        LIMIT :row_limit OFFSET :row_offset
+    ");
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue('row_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
  * Привести `marketplace_listings` одной площадки к текущему каталогу:
  * выгружаемым Вариантам — upsert цены и `synced_at`, остальным — удалить
  * строку («снят с публикации»). Всё в одной транзакции; при сбое
