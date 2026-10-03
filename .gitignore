@@ -22,3 +22,6 @@ current-pipeline.md
 TASK-example.md
 TASK.md
 
+
+# Локальные настройки редактора (sftp.json содержит пароль FTP)
+.vscode/
