@@ -109,6 +109,12 @@ ob_start();
         </section>
     <?php endforeach; ?>
 </div>
+<?php if (isset($recentClients)): ?>
+    <div class="mt-4">
+        <?php $clientsTitle = 'Мои клиенты'; ?>
+        <?php include __DIR__ . '/../components/admin/dashboard-clients.php'; ?>
+    </div>
+<?php endif; ?>
 <?php
 $content = (string) ob_get_clean();
 

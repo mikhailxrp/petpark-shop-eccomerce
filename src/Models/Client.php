@@ -91,6 +91,43 @@ function clientList(?array $terms, ?int $specialistId, int $limit, int $offset):
 }
 
 /**
+ * Последние клиенты для сводки (FR-MGR-001, FR-MGR-003). Без Специалиста — по
+ * дате регистрации; для Специалиста — по дате его последней Записи
+ * (`last_visit_at`), клиенты только из его календаря.
+ *
+ * @return list<array<string, mixed>>
+ */
+function clientRecent(?int $specialistId, int $limit): array
+{
+    [$where, $params] = clientWhere(null, $specialistId);
+
+    $orderSql = $specialistId !== null ? 'last_visit_at DESC, u.id DESC' : 'u.created_at DESC, u.id DESC';
+
+    $stmt = getPdo()->prepare("
+        SELECT u.id, u.name, u.phone,
+               (SELECT GROUP_CONCAT(p.name ORDER BY p.name SEPARATOR ', ')
+                FROM pets p WHERE p.user_id = u.id) AS pet_names,
+               " . ($specialistId !== null
+                   ? '(SELECT MAX(b.scheduled_at) FROM bookings b WHERE b.user_id = u.id AND b.specialist_id = :last_specialist AND b.status IN (\'' . implode("','", BOOKING_CALENDAR_STATUSES) . '\'))'
+                   : 'NULL') . " AS last_visit_at
+        FROM users u
+        WHERE {$where}
+        ORDER BY {$orderSql}
+        LIMIT :limit
+    ");
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    if ($specialistId !== null) {
+        $stmt->bindValue(':last_specialist', $specialistId, PDO::PARAM_INT);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+}
+
+/**
  * Клиент по id; null — нет такого или это сотрудник.
  *
  * @return array<string, mixed>|null
