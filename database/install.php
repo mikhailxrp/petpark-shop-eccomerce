@@ -569,6 +569,26 @@ if ($servicesKindExists === 0) {
     $pdo->exec("ALTER TABLE services ADD COLUMN kind ENUM('grooming', 'vet') NOT NULL DEFAULT 'grooming' AFTER name");
 }
 
+// Публичные страницы Услуг (phase-8.md, Таск 4): slug для URL и описание.
+// slug NULL-able — строки заводятся сидом (ADR-013), UNIQUE допускает несколько NULL.
+$servicesSlugExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'slug'
+")->fetchColumn();
+
+if ($servicesSlugExists === 0) {
+    $pdo->exec("ALTER TABLE services ADD COLUMN slug VARCHAR(120) NULL AFTER name, ADD UNIQUE KEY uq_services_slug (slug)");
+}
+
+$servicesDescriptionExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'description'
+")->fetchColumn();
+
+if ($servicesDescriptionExists === 0) {
+    $pdo->exec("ALTER TABLE services ADD COLUMN description TEXT NULL AFTER deposit_amount");
+}
+
 $paymentLogsBookingExists = (int) $pdo->query("
     SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_logs' AND COLUMN_NAME = 'booking_id'

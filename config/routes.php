@@ -76,6 +76,8 @@ return [
         '/sitemap.xml'         => ['SitemapController', 'index'],
         '/about'               => ['ContentController', 'about'],
         '/contacts'            => ['ContentController', 'contacts'],
+        '/services'            => ['ServicesController', 'index'],
+        '/services/{slug}'     => ['ServicesController', 'show'],
         '/privacy'             => ['ContentController', 'privacy'],
         '/offer'               => ['ContentController', 'offer'],
     ],

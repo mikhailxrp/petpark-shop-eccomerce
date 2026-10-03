@@ -37,6 +37,8 @@ function seoTitle(string $type, array $entity = []): string
         ),
         'category' => sprintf('%s — купить в %s, %s', (string) $entity['name'], SHOP_NAME, SHOP_CITY),
         'content_page' => (string) ($entity['title'] ?? SHOP_NAME),
+        'service' => sprintf('%s в %s, %s', (string) ($entity['name'] ?? 'Услуги'), SHOP_NAME, SHOP_CITY),
+        'services' => sprintf('Услуги: груминг и ветконсультации — %s, %s', SHOP_NAME, SHOP_CITY),
         'search' => ((string) ($entity['query'] ?? '')) !== ''
             ? sprintf('Поиск: «%s» — %s', (string) $entity['query'], SHOP_NAME)
             : sprintf('Поиск товаров — %s', SHOP_NAME),
@@ -81,6 +83,10 @@ function seoDescription(string $type, array $entity = []): string
             SHOP_CITY
         ),
         'content_page' => seoFirstWords((string) ($entity['body'] ?? ''), 25),
+        'service' => seoFirstWords((string) ($entity['description'] ?? ''), 25) !== ''
+            ? seoFirstWords((string) $entity['description'], 25)
+            : sprintf('%s — запись онлайн в %s, %s.', (string) ($entity['name'] ?? 'Услуга'), SHOP_NAME, SHOP_CITY),
+        'services' => sprintf('Услуги %s, %s: груминг и ветеринарные консультации, цены и онлайн-запись.', SHOP_NAME, SHOP_CITY),
         'search' => ((string) ($entity['query'] ?? '')) !== ''
             ? sprintf('Результаты поиска «%s» в каталоге %s, %s.', (string) $entity['query'], SHOP_NAME, SHOP_CITY)
             : sprintf('Поиск товаров в каталоге %s, %s.', SHOP_NAME, SHOP_CITY),

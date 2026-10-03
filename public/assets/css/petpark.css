@@ -2683,3 +2683,52 @@ table.shop_table td.product-name img {
     font-size: 0.875rem;
     color: #dc3545;
 }
+
+/* Услуги (phase-8.md, Таск 4): заголовки карточек — h2/h3 по смыслу, вид как у h4/h3 макета. */
+.service-card__title {
+    padding-top: 16px;
+    padding-bottom: 10px;
+    font-size: 26px;
+    font-weight: 800;
+}
+
+.service-card__meta {
+    font-weight: 700;
+}
+
+.service-card__link {
+    margin-top: 16px;
+}
+
+.service-details__title {
+    padding-top: 30px;
+    padding-bottom: 14px;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.service-details__facts {
+    margin-bottom: 24px;
+}
+
+.service-details__facts dt {
+    font-weight: 700;
+}
+
+.service-details__facts dd {
+    margin-bottom: 8px;
+}
+
+@media (max-width: 991px) {
+    .service-details__title {
+        font-size: 30px;
+    }
+}
+
+@media (max-width: 767px) {
+    .service-card__title {
+        padding-top: 24px;
+        padding-bottom: 6px;
+        font-size: 20px;
+    }
+}
