@@ -93,6 +93,7 @@ require_once ROOT_PATH . '/src/Core/ProductVariant.php';
 require_once ROOT_PATH . '/src/Core/Report.php';
 require_once ROOT_PATH . '/src/Core/Client.php';
 require_once ROOT_PATH . '/src/Core/ContactForm.php';
+require_once ROOT_PATH . '/src/Core/ContentPageForm.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Brand.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
