@@ -27,9 +27,9 @@ function specialistCreate(int $userId, string $workStart, string $workEnd, ?int 
     $pdo = getPdo();
 
     $stmt = $pdo->prepare(
-        'INSERT INTO specialists (user_id, work_start, work_end, day_off) VALUES (?, ?, ?, ?)'
+        'INSERT INTO specialists (user_id, slug, work_start, work_end, day_off) VALUES (?, ?, ?, ?, ?)'
     );
-    $stmt->execute([$userId, $workStart, $workEnd, $dayOff]);
+    $stmt->execute([$userId, specialistUniqueSlug($userId), $workStart, $workEnd, $dayOff]);
     $specialistId = (int) $pdo->lastInsertId();
 
     $link = $pdo->prepare('INSERT INTO specialist_services (specialist_id, service_id) VALUES (?, ?)');
@@ -74,7 +74,34 @@ function specialistFindByUserId(int $userId): ?array
  */
 function specialistEnsureForUser(int $userId): void
 {
-    getPdo()->prepare('INSERT IGNORE INTO specialists (user_id) VALUES (?)')->execute([$userId]);
+    getPdo()->prepare('INSERT IGNORE INTO specialists (user_id, slug) VALUES (?, ?)')
+        ->execute([$userId, specialistUniqueSlug($userId)]);
+}
+
+/**
+ * Свободный slug для профиля из имени сотрудника: `productSlugify()`, при
+ * коллизии суффикс `-2`, `-3`… Имя без латиницы/цифр — основа `specialist`.
+ */
+function specialistUniqueSlug(int $userId): string
+{
+    $pdo = getPdo();
+
+    $nameStmt = $pdo->prepare('SELECT name FROM users WHERE id = ?');
+    $nameStmt->execute([$userId]);
+    $base = productSlugify((string) $nameStmt->fetchColumn());
+    if ($base === '') {
+        $base = 'specialist';
+    }
+
+    $taken = $pdo->prepare('SELECT 1 FROM specialists WHERE slug = ? LIMIT 1');
+    $slug = $base;
+    for ($suffix = 2; ; $suffix++) {
+        $taken->execute([$slug]);
+        if ($taken->fetchColumn() === false) {
+            return $slug;
+        }
+        $slug = $base . '-' . $suffix;
+    }
 }
 
 /**
@@ -254,12 +281,12 @@ function specialistTimeOffDelete(int $id, ?int $specialistId): bool
 }
 
 /**
- * Активные Специалисты для публичной страницы «О компании»: имя и вид
- * Услуг (`grooming`/`vet`) — должности и фото в БД пока нет (Таск 6/7
- * фазы 8). Вид — `vet`, если у Специалиста есть хоть одна ветеринарная
- * Услуга, иначе `grooming`.
+ * Активные Специалисты со slug для публичной страницы «О компании»: имя,
+ * slug, должность (NULL — не заполнена) и вид Услуг (`grooming`/`vet`) для
+ * запасной должности. Вид — `vet`, если у Специалиста есть хоть одна
+ * ветеринарная Услуга, иначе `grooming`. Без slug профиль не показывается.
  *
- * @return array<int, array{id: int, name: string, kind: string}>
+ * @return array<int, array{id: int, name: string, slug: string, position: ?string, kind: string}>
  */
 function specialistListForPublic(): array
 {
@@ -267,15 +294,65 @@ function specialistListForPublic(): array
         SELECT
             s.id,
             u.name,
+            s.slug,
+            s.position,
             CASE WHEN SUM(sv.kind = 'vet') > 0 THEN 'vet' ELSE 'grooming' END AS kind
         FROM specialists s
         JOIN users u ON u.id = s.user_id
         LEFT JOIN specialist_services ss ON ss.specialist_id = s.id
         LEFT JOIN services sv ON sv.id = ss.service_id
-        WHERE u.is_active = 1
-        GROUP BY s.id, u.name
+        WHERE u.is_active = 1 AND s.slug IS NOT NULL
+        GROUP BY s.id, u.name, s.slug, s.position
         ORDER BY s.id
     ");
 
     return $stmt->fetchAll();
+}
+
+/**
+ * Профиль активного Специалиста для `/team/{slug}` с активными Услугами;
+ * null — нет такого slug или сотрудник отключён. Телефон, email и график
+ * не выбираются — на сайте не показываются.
+ *
+ * @return array{id: int, name: string, slug: string, position: ?string, bio: ?string, photo_path: ?string, kind: string, services: list<array{name: string, slug: string}>}|null
+ */
+function specialistFindPublicBySlug(string $slug): ?array
+{
+    $pdo = getPdo();
+
+    $stmt = $pdo->prepare(
+        'SELECT s.id, u.name, s.slug, s.position, s.bio, s.photo_path
+         FROM specialists s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.slug = ? AND u.is_active = 1'
+    );
+    $stmt->execute([$slug]);
+    $row = $stmt->fetch();
+    if ($row === false) {
+        return null;
+    }
+
+    $services = $pdo->prepare(
+        'SELECT sv.name, sv.slug, sv.kind
+         FROM specialist_services ss
+         JOIN services sv ON sv.id = ss.service_id
+         WHERE ss.specialist_id = ? AND sv.is_active = 1 AND sv.slug IS NOT NULL
+         ORDER BY sv.kind, sv.id'
+    );
+    $services->execute([(int) $row['id']]);
+    $serviceRows = $services->fetchAll();
+
+    return [
+        'id'         => (int) $row['id'],
+        'name'       => (string) $row['name'],
+        'slug'       => (string) $row['slug'],
+        'position'   => $row['position'] === null ? null : (string) $row['position'],
+        'bio'        => $row['bio'] === null ? null : (string) $row['bio'],
+        'photo_path' => $row['photo_path'] === null ? null : (string) $row['photo_path'],
+        'kind'       => in_array('vet', array_column($serviceRows, 'kind'), true) ? 'vet' : 'grooming',
+        'services'   => array_map(
+            static fn (array $sv): array => ['name' => (string) $sv['name'], 'slug' => (string) $sv['slug']],
+            $serviceRows
+        ),
+    ];
 }

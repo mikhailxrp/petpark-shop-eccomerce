@@ -79,6 +79,7 @@ return [
         '/services'            => ['ServicesController', 'index'],
         '/services/{slug}'     => ['ServicesController', 'show'],
         '/pricing'             => ['ServicesController', 'pricing'],
+        '/team/{slug}'         => ['TeamController', 'show'],
         '/privacy'             => ['ContentController', 'privacy'],
         '/offer'               => ['ContentController', 'offer'],
     ],

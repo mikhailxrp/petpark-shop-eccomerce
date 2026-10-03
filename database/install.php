@@ -589,6 +589,27 @@ if ($servicesDescriptionExists === 0) {
     $pdo->exec("ALTER TABLE services ADD COLUMN description TEXT NULL AFTER deposit_amount");
 }
 
+// Публичные профили Специалистов (phase-8.md, Таск 6): slug для /team/{slug},
+// должность, биография, фото. Всё NULL-able — строки заводятся сидом и формой
+// сотрудника; UNIQUE по slug допускает несколько NULL (по паттерну services.slug).
+$specialistsNewColumns = [
+    'slug'       => "ADD COLUMN slug VARCHAR(120) NULL AFTER user_id, ADD UNIQUE KEY uq_specialists_slug (slug)",
+    'position'   => "ADD COLUMN position VARCHAR(120) NULL AFTER slug",
+    'bio'        => "ADD COLUMN bio TEXT NULL AFTER position",
+    'photo_path' => "ADD COLUMN photo_path VARCHAR(255) NULL AFTER bio",
+];
+
+foreach ($specialistsNewColumns as $column => $alter) {
+    $columnExists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'specialists' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($columnExists === 0) {
+        $pdo->exec("ALTER TABLE specialists {$alter}");
+    }
+}
+
 $paymentLogsBookingExists = (int) $pdo->query("
     SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_logs' AND COLUMN_NAME = 'booking_id'

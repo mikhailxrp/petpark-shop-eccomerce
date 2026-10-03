@@ -44,7 +44,8 @@ final class ContentController
         $team = array_map(
             static fn (array $specialist): array => [
                 'name' => (string) $specialist['name'],
-                'position' => $specialist['kind'] === 'vet' ? 'Ветеринарный врач' : 'Грумер',
+                'slug' => (string) $specialist['slug'],
+                'position' => TeamController::positionLabel($specialist['position'], (string) $specialist['kind']),
                 'photo' => self::TEAM_PLACEHOLDER_PHOTO,
             ],
             specialistListForPublic()

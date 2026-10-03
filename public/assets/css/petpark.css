@@ -2737,7 +2737,55 @@ table.shop_table td.product-name img {
     margin-bottom: 8px;
 }
 
+/* Профиль Специалиста: h2 вместо h4 макета (один h1 — в баннере) */
+.team-details__name {
+    padding-top: 2px;
+    padding-bottom: 20px;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.page-back {
+    /* footer.two заезжает на -70…-80px вверх и перекрывал бы ссылку */
+    padding-bottom: 140px;
+}
+
+.team-details__button {
+    margin-top: 24px;
+}
+
+.team-details__services-title {
+    padding-bottom: 14px;
+}
+
+.team-details__services {
+    padding-left: 20px;
+    list-style: disc;
+}
+
+.team-video .video > svg {
+    position: absolute;
+    top: -5%;
+    left: -5%;
+}
+
+.team-video .video > img {
+    position: relative;
+    max-width: 100%;
+    height: auto;
+}
+
+@media (max-width: 767px) {
+    .team-video .video > svg {
+        display: none;
+    }
+}
+
 @media (max-width: 991px) {
+    .team-details__name {
+        font-size: 30px;
+    }
+
     .service-details__title {
         font-size: 30px;
     }

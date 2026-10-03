@@ -86,10 +86,26 @@ $seedServices = [
 ];
 
 // Специалисты: day_off 0 = воскресенье (у ветврача, tz.md §6.1), null = без выходного.
+// slug/position/bio — публичный профиль /team/{slug} (Таск 6); био — черновики исполнителя (Q-046), фото нет.
 $seedSpecialists = [
-    ['email' => 'specialist@petpark.test', 'day_off' => null, 'kind' => 'grooming'],
-    ['email' => 'groomer2@petpark.test',   'day_off' => null, 'kind' => 'grooming'],
-    ['email' => 'vet@petpark.test',        'day_off' => 0,    'kind' => 'vet'],
+    [
+        'email' => 'specialist@petpark.test', 'day_off' => null, 'kind' => 'grooming',
+        'slug' => 'specialist-gruming', 'position' => 'Грумер',
+        'bio' => 'Работает с кошками и собаками любых пород. Подбирает стрижку под тип шерсти и характер питомца, '
+            . 'спокойно приучает к процедурам тех, кто боится воды и машинки.',
+    ],
+    [
+        'email' => 'groomer2@petpark.test', 'day_off' => null, 'kind' => 'grooming',
+        'slug' => 'specialist-gruming-2', 'position' => 'Грумер',
+        'bio' => 'Специализируется на тримминге и уходе за жёсткошёрстными породами. '
+            . 'Подскажет, как ухаживать за шерстью дома между визитами.',
+    ],
+    [
+        'email' => 'vet@petpark.test', 'day_off' => 0, 'kind' => 'vet',
+        'slug' => 'veterinarnyy-vrach', 'position' => 'Ветеринарный врач',
+        'bio' => 'Проводит консультации и плановую вакцинацию кошек, собак и декоративных птиц. '
+            . 'Объясняет схему прививок и помогает подобрать питание.',
+    ],
 ];
 
 $pdo = getPdo();
@@ -155,9 +171,13 @@ foreach ($seedServices as $service) {
 
 $findUser = $pdo->prepare('SELECT id FROM users WHERE email = :email');
 $upsertSpecialist = $pdo->prepare('
-    INSERT INTO specialists (user_id, day_off)
-    VALUES (:user_id, :day_off)
-    ON DUPLICATE KEY UPDATE day_off = VALUES(day_off)
+    INSERT INTO specialists (user_id, day_off, slug, position, bio)
+    VALUES (:user_id, :day_off, :slug, :position, :bio)
+    ON DUPLICATE KEY UPDATE
+        day_off  = VALUES(day_off),
+        slug     = VALUES(slug),
+        position = VALUES(position),
+        bio      = VALUES(bio)
 ');
 $findSpecialist = $pdo->prepare('SELECT id FROM specialists WHERE user_id = :user_id');
 $linkService = $pdo->prepare('
@@ -169,7 +189,13 @@ foreach ($seedSpecialists as $specialist) {
     $findUser->execute(['email' => $specialist['email']]);
     $userId = (int) $findUser->fetchColumn();
 
-    $upsertSpecialist->execute(['user_id' => $userId, 'day_off' => $specialist['day_off']]);
+    $upsertSpecialist->execute([
+        'user_id'  => $userId,
+        'day_off'  => $specialist['day_off'],
+        'slug'     => $specialist['slug'],
+        'position' => $specialist['position'],
+        'bio'      => $specialist['bio'],
+    ]);
     $findSpecialist->execute(['user_id' => $userId]);
     $specialistId = (int) $findSpecialist->fetchColumn();
 

@@ -60,7 +60,7 @@ ob_start();
     </div>
 </section>
 
-<section class="gap">
+<section class="gap page-back">
     <div class="container">
         <p><a href="/services">← Все услуги</a></p>
     </div>

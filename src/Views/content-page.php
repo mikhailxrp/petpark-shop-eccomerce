@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @var string                              $bodyHtml        очищенный `body`
  * @var array<int, array<string, mixed>>    $reviews         reviewPublishedForHome()
  * @var array{average: float, count: int}   $reviewsAggregate reviewPublishedAggregate()
- * @var array<int, array{name: string, position: string, photo: string}> $team
+ * @var array<int, array{name: string, slug: string, position: string, photo: string}> $team
  * @var array<int, array{id: int, path: string, sort_order: int}> $galleryImages
  * @var array<int, array{number: int, suffix: string, label: string, icon: string}> $stats
  * @var array<int, array{year: string, title: string, text: string, modifier: string}> $timeline
@@ -130,7 +130,7 @@ ob_start();
 </section>
 
 <?php if ($team !== []): ?>
-<section class="gap no-bottom">
+<section class="gap no-bottom" id="team">
     <div class="container">
         <div class="heading">
             <img src="/assets/img/heading-img.png" alt="">
