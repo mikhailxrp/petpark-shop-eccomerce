@@ -86,6 +86,38 @@ final class MarketplaceController
         redirect($backUrl);
     }
 
+    public function simulateOrder(string $marketplace): void
+    {
+        requireRole('owner');
+        requireCsrf();
+
+        if (!isset(self::MARKETPLACE_LABELS[$marketplace])) {
+            http_response_code(404);
+            render('errors/404');
+            return;
+        }
+
+        $label = self::MARKETPLACE_LABELS[$marketplace];
+        $result = (new MarketplaceSync())->receiveOrder($marketplace);
+
+        match ($result['status']) {
+            'created' => setFlash('success', sprintf('%s: принят Заказ №%d.', $label, $result['order_id'])),
+            'exists' => setFlash('error', sprintf('%s: Заказ уже принят (№%d).', $label, $result['order_id'])),
+            'unavailable' => setFlash('error', sprintf(
+                '%s: Заказ не создан — не хватает остатка («%s»).',
+                $label,
+                $result['product_name']
+            )),
+            'not_listed' => setFlash('error', sprintf('%s: Заказ не создан — Вариант снят с выгрузки.', $label)),
+            'no_listed' => setFlash('error', sprintf(
+                '%s: нет выгруженных Вариантов — сначала синхронизируйте каталог.',
+                $label
+            )),
+        };
+
+        redirect('/admin/marketplaces');
+    }
+
     /**
      * Статус Варианта по каждой площадке: строка есть — выгружен; строки
      * нет и Вариант выгружаемый — не синхронизирован; иначе — снят.

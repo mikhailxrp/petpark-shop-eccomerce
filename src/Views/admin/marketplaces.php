@@ -79,6 +79,14 @@ ob_start();
                         </form>
                     </div>
                 <?php endforeach; ?>
+                <?php foreach ($marketplaces as $code => $label): ?>
+                    <div class="col-12 col-md-auto">
+                        <form method="post" action="/admin/marketplaces/<?= e($code) ?>/simulate-order">
+                            <?= csrfField() ?>
+                            <button type="submit" class="btn btn-outline-primary w-100">Имитировать заказ с <?= e($label) ?></button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
     <?php endif; ?>

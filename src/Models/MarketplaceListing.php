@@ -55,6 +55,32 @@ function marketplaceListingListForAdmin(int $limit, int $offset): array
 }
 
 /**
+ * Случайные выгруженные на площадку Варианты (для демо-генератора Заказа с
+ * площадки, MarketplaceSync::fetchNewOrders()): variant_id, цена площадки и
+ * текущий остаток.
+ *
+ * @return array<int, array{variant_id: int, marketplace_price: string, stock_quantity: int}>
+ */
+function marketplaceListingRandomListed(string $marketplace, int $limit): array
+{
+    marketplaceAssertKnown($marketplace);
+
+    $stmt = getPdo()->prepare('
+        SELECT ml.variant_id, ml.marketplace_price, v.stock_quantity
+        FROM marketplace_listings ml
+        JOIN product_variants v ON v.id = ml.variant_id
+        WHERE ml.marketplace = :marketplace
+        ORDER BY RAND()
+        LIMIT :row_limit
+    ');
+    $stmt->bindValue('marketplace', $marketplace);
+    $stmt->bindValue('row_limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
  * Привести `marketplace_listings` одной площадки к текущему каталогу:
  * выгружаемым Вариантам — upsert цены и `synced_at`, остальным — удалить
  * строку («снят с публикации»). Всё в одной транзакции; при сбое

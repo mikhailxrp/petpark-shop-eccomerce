@@ -331,6 +331,50 @@ if ($statusChangedIndexExists === 0) {
     $pdo->exec("ALTER TABLE orders ADD KEY idx_orders_status_changed (status, status_changed_at)");
 }
 
+// Колонки Фазы 9 (phase-9.md, Таск 3): источник Заказа и id на стороне
+// площадки; `marketplace` в способах доставки/оплаты — фиктивные «самовывоз/
+// наличные» для Заказов с площадок не подставляются.
+$phase9Columns = [
+    ['orders', 'source',            "ENUM('site', 'wildberries', 'ozon') NOT NULL DEFAULT 'site' AFTER created_by_user_id"],
+    ['orders', 'external_order_id', "VARCHAR(64) NULL AFTER source"],
+];
+
+foreach ($phase9Columns as [$table, $column, $definition]) {
+    $exists = (int) $pdo->query("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$table}' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if ($exists === 0) {
+        $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+    }
+}
+
+$sourceIndexExists = (int) $pdo->query("
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND INDEX_NAME = 'uq_orders_source_external'
+")->fetchColumn();
+
+if ($sourceIndexExists === 0) {
+    $pdo->exec("ALTER TABLE orders ADD UNIQUE KEY uq_orders_source_external (source, external_order_id)");
+}
+
+$phase9Enums = [
+    'delivery_method' => "ENUM('pickup', 'courier', 'marketplace') NOT NULL",
+    'payment_method'  => "ENUM('card_online', 'cash_or_card_on_delivery', 'marketplace') NOT NULL",
+];
+
+foreach ($phase9Enums as $column => $definition) {
+    $columnType = (string) $pdo->query("
+        SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = '{$column}'
+    ")->fetchColumn();
+
+    if (!str_contains($columnType, "'marketplace'")) {
+        $pdo->exec("ALTER TABLE orders MODIFY COLUMN {$column} {$definition}");
+    }
+}
+
 // ─── order_items ────────────────────────────────────────────────────────
 // product_name/variant_label/price — снэпшот на момент заказа, дублируются намеренно.
 

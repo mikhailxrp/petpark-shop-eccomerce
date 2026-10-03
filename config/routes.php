@@ -130,6 +130,7 @@ return [
         '/admin/inbox/{id}/draft'      => ['Admin\InboxController', 'draft'],
         '/admin/stock/{id}/sync'       => ['Admin\StockController', 'sync'],
         '/admin/marketplaces/{marketplace}/sync' => ['Admin\MarketplaceController', 'sync'],
+        '/admin/marketplaces/{marketplace}/simulate-order' => ['Admin\MarketplaceController', 'simulateOrder'],
         '/admin/settings/messengers'   => ['Admin\MessengerSettingsController', 'update'],
         '/admin/bookings'              => ['Admin\BookingController', 'store'],
         '/admin/bookings/{id}/reschedule' => ['Admin\BookingController', 'reschedule'],
