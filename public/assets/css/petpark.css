@@ -2684,6 +2684,11 @@ table.shop_table td.product-name img {
     color: #dc3545;
 }
 
+:root {
+    --service-card-gap: 24px;
+    --pricing-anchor-offset: 100px;
+}
+
 /* Услуги (phase-8.md, Таск 4): заголовки карточек — h2/h3 по смыслу, вид как у h4/h3 макета. */
 .service-card__title {
     padding-top: 16px;
@@ -2692,11 +2697,24 @@ table.shop_table td.product-name img {
     font-weight: 800;
 }
 
+/* Колонка даёт отступ между рядами, карточка тянется на всю высоту ряда. */
+.service-card-col {
+    margin-bottom: var(--service-card-gap);
+}
+
+.service-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
 .service-card__meta {
+    margin-top: auto;
     font-weight: 700;
 }
 
 .service-card__link {
+    align-self: flex-start;
     margin-top: 16px;
 }
 
@@ -2731,4 +2749,17 @@ table.shop_table td.product-name img {
         padding-bottom: 6px;
         font-size: 20px;
     }
+}
+
+/* Тарифы (phase-8.md, Таск 5): секции груминг/ветеринария, якоря из меню Услуг. */
+.pricing-section {
+    scroll-margin-top: var(--pricing-anchor-offset);
+}
+
+.pricing-section__title {
+    margin-bottom: 24px;
+}
+
+.pricing-section__meta {
+    font-weight: 700;
 }

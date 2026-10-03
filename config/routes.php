@@ -78,6 +78,7 @@ return [
         '/contacts'            => ['ContentController', 'contacts'],
         '/services'            => ['ServicesController', 'index'],
         '/services/{slug}'     => ['ServicesController', 'show'],
+        '/pricing'             => ['ServicesController', 'pricing'],
         '/privacy'             => ['ContentController', 'privacy'],
         '/offer'               => ['ContentController', 'offer'],
     ],

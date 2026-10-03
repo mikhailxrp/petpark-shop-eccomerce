@@ -20,6 +20,21 @@ final class ServicesController
         ]);
     }
 
+    public function pricing(): void
+    {
+        $groups = ['grooming' => [], 'vet' => []];
+        foreach (servicesPublicList() as $service) {
+            $groups[(string) $service['kind']][] = $service;
+        }
+
+        render('pricing', [
+            'pageTitle' => seoTitle('pricing'),
+            'pageDescription' => seoDescription('pricing'),
+            'groomingServices' => $groups['grooming'],
+            'vetServices' => $groups['vet'],
+        ]);
+    }
+
     public function show(string $slug): void
     {
         $service = serviceFindActiveBySlug($slug);

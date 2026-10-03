@@ -33,7 +33,7 @@ ob_start();
             <div class="row">
                 <?php foreach ($services as $service): ?>
                     <?php $icon = $kindIcons[(string) $service['kind']] ?? $kindIcons['grooming']; ?>
-                    <div class="col-lg-4 col-md-6">
+                    <div class="col-lg-4 col-md-6 service-card-col">
                         <div class="pet-grooming service-card">
                             <i><img src="<?= e($icon) ?>" alt=""></i>
                             <?php $ringSize = 138; $ringFill = '#000'; include __DIR__ . '/components/ring-svg.php'; ?>
