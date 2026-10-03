@@ -413,11 +413,6 @@ select.nice-select::-ms-expand {
     width: 240px;
     font-weight: bold;
 }
-.pd-tab-subheading {
-    font-weight: bold;
-    margin-top: 30px;
-    margin-bottom: 10px;
-}
 .pd-tab-content .pd-description {
     margin-bottom: 0;
 }

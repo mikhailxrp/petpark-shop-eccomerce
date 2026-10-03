@@ -8,7 +8,8 @@ declare(strict_types=1);
  * посчитанным здесь теми же функциями Core/Catalog.php, что и SSR —
  * никакой бизнес-логики цены/наличия во фронтенде. Отзывы (FR-CARD-005)
  * и «В избранное» (FR-CARD-006) — Таск 8, здесь не выводятся.
- * @var array<string, mixed>              $product         productFindBySlug() — id, category_id, name, slug, description, seo_title, seo_description
+ * @var array<string, mixed>              $product         productFindBySlug() — id, category_id, name, slug, description, seo_title, seo_description, brand_name
+ * @var array<string, string>             $specs           catalogProductSpecs() — подпись => значение, реальные Характеристики (пусто — вкладки нет)
  * @var array<int, string>                $imagePaths      productImagePaths() — главное фото первым (пусто — заглушка)
  * @var array<int, array<string, mixed>>  $variants        productVariantsForProduct() + attributes (список attr_value по Варианту)
  * @var array<string, mixed>              $selectedVariant catalogSelectVariant()
@@ -289,105 +290,80 @@ ob_start();
     </div>
 </section>
 <!-- Вкладки Характеристики/Описание — по просьбе пользователя вместо
-     статичных таблиц-заглушек «Пищевая ценность»/«Нормы кормления»,
+     статичных таблиц-заглушек «Пищевая ценность»/«Нормы кормления» (удалены:
+     одинаковые у всех Товаров, выдуманные),
      которые раньше стояли отдельным блоком ниже (макет product-details.html
      их не содержал — своей вёрстки/стилей под вкладки в style.css нет,
      оформление в petpark.css). Bootstrap 5 Tab component — уже
      самохостящийся bootstrap.min.js (id/data-bs-* ниже), новый JS не
      писал (general.md — родные компоненты Bootstrap через их API, не
-     свой велосипед). «Состав» — фейковые данные (реального состава по
-     Товару в БД нет, ADR-005/product_attributes хранит вид/породу, не
-     ингредиенты); нормы кормления перенесены сюда как есть из старого
-     блока. Замена на настоящие данные по каждому Товару — отдельная
-     задача (ИИ-разбор карточки поставщика), не в этом Таске. -->
+     свой велосипед). «Характеристики» — реальные данные из БД
+     (бренд, product_attributes, измерения Вариантов), собраны
+     catalogProductSpecs(); «Описание» — products.description. Нет данных
+     у вкладки — вкладки нет, нет обеих — секции нет. -->
+<?php
+$hasSpecs = $specs !== [];
+$hasDescription = ($product['description'] ?? '') !== '';
+?>
+<?php if ($hasSpecs || $hasDescription): ?>
 <section class="gap no-top">
     <div class="container">
         <ul class="nav pd-tabs" id="pd-tabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button
-                    class="nav-link active"
-                    id="pd-tab-specs-btn"
-                    data-bs-toggle="tab"
-                    data-bs-target="#pd-tab-specs"
-                    type="button"
-                    role="tab"
-                    aria-controls="pd-tab-specs"
-                    aria-selected="true"
-                >Характеристики</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button
-                    class="nav-link"
-                    id="pd-tab-description-btn"
-                    data-bs-toggle="tab"
-                    data-bs-target="#pd-tab-description"
-                    type="button"
-                    role="tab"
-                    aria-controls="pd-tab-description"
-                    aria-selected="false"
-                >Описание</button>
-            </li>
+            <?php if ($hasSpecs): ?>
+                <li class="nav-item" role="presentation">
+                    <button
+                        class="nav-link active"
+                        id="pd-tab-specs-btn"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pd-tab-specs"
+                        type="button"
+                        role="tab"
+                        aria-controls="pd-tab-specs"
+                        aria-selected="true"
+                    >Характеристики</button>
+                </li>
+            <?php endif; ?>
+            <?php if ($hasDescription): ?>
+                <li class="nav-item" role="presentation">
+                    <button
+                        class="nav-link<?= $hasSpecs ? '' : ' active' ?>"
+                        id="pd-tab-description-btn"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pd-tab-description"
+                        type="button"
+                        role="tab"
+                        aria-controls="pd-tab-description"
+                        aria-selected="<?= $hasSpecs ? 'false' : 'true' ?>"
+                    >Описание</button>
+                </li>
+            <?php endif; ?>
         </ul>
         <div class="tab-content pd-tab-content" id="pd-tabs-content">
-            <div class="tab-pane fade show active" id="pd-tab-specs" role="tabpanel" aria-labelledby="pd-tab-specs-btn">
-                <!-- Фейковые данные — состава по Товару в БД нет, см.
-                     комментарий у секции выше. -->
-                <div class="table-responsive">
-                    <table class="table pd-specs-table">
-                        <tbody>
-                            <tr>
-                                <th scope="row">Состав</th>
-                                <td>Мясо и субпродукты птицы (26%), рис, кукуруза, рыбий жир, свекольный жом, витаминно-минеральный комплекс, консервант (токоферолы)</td>
-                            </tr>
-                            <tr>
-                                <th scope="row">Гарантированный анализ</th>
-                                <td>Протеин 21%, жир 12%, клетчатка 3%, зола 7%, влажность 10%</td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <?php if ($hasSpecs): ?>
+                <div class="tab-pane fade show active" id="pd-tab-specs" role="tabpanel" aria-labelledby="pd-tab-specs-btn">
+                    <div class="table-responsive">
+                        <table class="table pd-specs-table">
+                            <tbody>
+                                <?php foreach ($specs as $label => $value): ?>
+                                    <tr>
+                                        <th scope="row"><?= e((string) $label) ?></th>
+                                        <td><?= e($value) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-            <div class="tab-pane fade" id="pd-tab-description" role="tabpanel" aria-labelledby="pd-tab-description-btn">
-                <?php if (($product['description'] ?? '') !== ''): ?>
+            <?php endif; ?>
+            <?php if ($hasDescription): ?>
+                <div class="tab-pane fade<?= $hasSpecs ? '' : ' show active' ?>" id="pd-tab-description" role="tabpanel" aria-labelledby="pd-tab-description-btn">
                     <p class="pd-description"><?= e((string) $product['description']) ?></p>
-                <?php endif; ?>
-                <h4 class="pd-tab-subheading">Нормы кормления</h4>
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Вес питомца</th>
-                                <th scope="col">Порций в день</th>
-                                <th scope="col">Смешивать с паучем</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td class="noBorder">До 5 кг</td>
-                                <td class="noBorder">1–2</td>
-                                <td class="noBorder">100 г паучa</td>
-                            </tr>
-                            <tr>
-                                <td class="noBorder">5–10 кг</td>
-                                <td class="noBorder">2–3</td>
-                                <td class="noBorder">100 г паучa</td>
-                            </tr>
-                            <tr>
-                                <td class="noBorder">10–25 кг</td>
-                                <td class="noBorder">1–2</td>
-                                <td class="noBorder"></td>
-                            </tr>
-                            <tr>
-                                <td class="noBorder">25 кг и более</td>
-                                <td class="noBorder">2–3</td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
 </section>
+<?php endif; ?>
 <!-- Блок услуг — статичная декоративная вёрстка по макету
      product-details.html, одинаковая на карточках всех Товаров:
      модели данных под бронирование услуг в БД нет, заведена по

@@ -460,3 +460,47 @@ function catalogFilterQueryParams(array $filter): array
 
     return $query;
 }
+
+/**
+ * Характеристики Карточки Товара для таблицы «пара свойство-значение»
+ * (seo.md, Content rendering): бренд, подтверждённые Характеристики
+ * Товара (product_attributes) и измерения Вариантов (размер, вкус...) —
+ * только реальные данные из БД, ничего не придумывается.
+ *
+ * @param array<string, string> $attributes attr_name => значение (productConfirmedAttributes())
+ * @param array<string, array<int, string>> $variantDimensions attr_name => значения Вариантов (productVariantDimensions())
+ * @return array<string, string> подпись => значение, в порядке вывода
+ */
+function catalogProductSpecs(?string $brandName, array $attributes, array $variantDimensions): array
+{
+    $specs = [];
+
+    if ($brandName !== null && trim($brandName) !== '') {
+        $specs['Бренд'] = trim($brandName);
+    }
+
+    foreach ($attributes as $name => $value) {
+        if (trim($value) !== '') {
+            $specs[catalogSpecLabel($name)] = trim($value);
+        }
+    }
+
+    foreach ($variantDimensions as $name => $values) {
+        $values = array_values(array_unique(array_filter(array_map('trim', $values), static fn (string $v): bool => $v !== '')));
+        if ($values !== []) {
+            $specs[catalogSpecLabel($name)] = implode(', ', $values);
+        }
+    }
+
+    return $specs;
+}
+
+/**
+ * attr_name из БД (`вид_животного`) → подпись («Вид животного»).
+ */
+function catalogSpecLabel(string $attrName): string
+{
+    $label = trim(str_replace('_', ' ', $attrName));
+
+    return mb_strtoupper(mb_substr($label, 0, 1)) . mb_substr($label, 1);
+}
