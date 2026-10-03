@@ -356,3 +356,70 @@ function specialistFindPublicBySlug(string $slug): ?array
         ),
     ];
 }
+
+/**
+ * Публичные поля профиля Специалиста для его же формы правки
+ * (`/specialist/profile`); null — у сотрудника нет строки `specialists`.
+ *
+ * @return array{name: string, slug: ?string, position: ?string, bio: ?string, photo_path: ?string}|null
+ */
+function specialistFindOwnProfile(int $userId): ?array
+{
+    $stmt = getPdo()->prepare(
+        'SELECT u.name, s.slug, s.position, s.bio, s.photo_path
+         FROM specialists s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.user_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    if ($row === false) {
+        return null;
+    }
+
+    return [
+        'name'       => (string) $row['name'],
+        'slug'       => $row['slug'] === null ? null : (string) $row['slug'],
+        'position'   => $row['position'] === null ? null : (string) $row['position'],
+        'bio'        => $row['bio'] === null ? null : (string) $row['bio'],
+        'photo_path' => $row['photo_path'] === null ? null : (string) $row['photo_path'],
+    ];
+}
+
+/**
+ * Обновить публичные поля профиля и имя сотрудника одной транзакцией
+ * (`users.name` + `specialists.*`). Строка выбирается по `users.id` — id из
+ * запроса сюда не попадает. `slug` не меняется: URL профиля стабилен.
+ *
+ * @param string|null $photoPath новый путь относительно public/uploads/; null — фото не менять
+ * @return bool false — у сотрудника нет строки `specialists`
+ */
+function specialistUpdateProfile(int $userId, string $name, ?string $position, ?string $bio, ?string $photoPath): bool
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        $exists = $pdo->prepare('SELECT id FROM specialists WHERE user_id = ? LIMIT 1 FOR UPDATE');
+        $exists->execute([$userId]);
+        if ($exists->fetchColumn() === false) {
+            $pdo->rollBack();
+            return false;
+        }
+
+        $pdo->prepare(
+            'UPDATE specialists
+             SET position = ?, bio = ?, photo_path = COALESCE(?, photo_path)
+             WHERE user_id = ?'
+        )->execute([$position, $bio, $photoPath, $userId]);
+        $pdo->prepare('UPDATE users SET name = ? WHERE id = ?')->execute([$name, $userId]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
+    return true;
+}

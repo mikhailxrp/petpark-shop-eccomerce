@@ -108,6 +108,14 @@ declare(strict_types=1);
                                 </a>
                             </li>
                         <?php endif; ?>
+                        <?php if ($userRole === 'specialist'): ?>
+                            <li class="slide<?= $currentPath === '/specialist/profile' ? ' active' : '' ?>">
+                                <a href="/specialist/profile" class="side-menu__item<?= $currentPath === '/specialist/profile' ? ' active' : '' ?>">
+                                    <i class="fe fe-user-check side-menu__icon"></i>
+                                    <span class="side-menu__label">Мой профиль</span>
+                                </a>
+                            </li>
+                        <?php endif; ?>
                         <?php if (in_array($userRole, ['shift_admin', 'owner'], true)): ?>
                             <?php $ordersActive = str_starts_with($currentPath, '/admin/orders'); ?>
                             <li class="slide<?= $ordersActive ? ' active' : '' ?>">
