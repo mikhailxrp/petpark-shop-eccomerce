@@ -2771,8 +2771,17 @@ table.shop_table td.product-name img {
 
 .team-video .video > img {
     position: relative;
-    max-width: 100%;
+    width: 100%;
+    max-width: 437px;
     height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+}
+
+/* Загруженное фото любых пропорций обрезается под круг, а не растягивает его */
+.team-working img {
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
 }
 
 @media (max-width: 767px) {

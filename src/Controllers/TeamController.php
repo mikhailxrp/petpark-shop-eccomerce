@@ -24,15 +24,23 @@ final class TeamController
         }
 
         $specialist['position'] = self::positionLabel($specialist['position'], $specialist['kind']);
-        $specialist['photo'] = $specialist['photo_path'] !== null && $specialist['photo_path'] !== ''
-            ? self::UPLOADS_URL_PREFIX . ltrim($specialist['photo_path'], '/')
-            : self::PLACEHOLDER_PHOTO;
+        $specialist['photo'] = self::photoUrl($specialist['photo_path']);
 
         render('team-details', [
             'pageTitle' => seoTitle('specialist', $specialist),
             'pageDescription' => seoDescription('specialist', $specialist),
             'specialist' => $specialist,
         ]);
+    }
+
+    /**
+     * URL фото из `photo_path` (относительно public/uploads/); нет фото — заглушка.
+     */
+    public static function photoUrl(?string $photoPath): string
+    {
+        return $photoPath !== null && $photoPath !== ''
+            ? self::UPLOADS_URL_PREFIX . ltrim($photoPath, '/')
+            : self::PLACEHOLDER_PHOTO;
     }
 
     /**

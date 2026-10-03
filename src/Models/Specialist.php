@@ -282,11 +282,12 @@ function specialistTimeOffDelete(int $id, ?int $specialistId): bool
 
 /**
  * Активные Специалисты со slug для публичной страницы «О компании»: имя,
- * slug, должность (NULL — не заполнена) и вид Услуг (`grooming`/`vet`) для
- * запасной должности. Вид — `vet`, если у Специалиста есть хоть одна
- * ветеринарная Услуга, иначе `grooming`. Без slug профиль не показывается.
+ * slug, должность (NULL — не заполнена), фото (NULL — не загружено) и вид
+ * Услуг (`grooming`/`vet`) для запасной должности. Вид — `vet`, если у
+ * Специалиста есть хоть одна ветеринарная Услуга, иначе `grooming`. Без slug
+ * профиль не показывается.
  *
- * @return array<int, array{id: int, name: string, slug: string, position: ?string, kind: string}>
+ * @return array<int, array{id: int, name: string, slug: string, position: ?string, photo_path: ?string, kind: string}>
  */
 function specialistListForPublic(): array
 {
@@ -296,13 +297,14 @@ function specialistListForPublic(): array
             u.name,
             s.slug,
             s.position,
+            s.photo_path,
             CASE WHEN SUM(sv.kind = 'vet') > 0 THEN 'vet' ELSE 'grooming' END AS kind
         FROM specialists s
         JOIN users u ON u.id = s.user_id
         LEFT JOIN specialist_services ss ON ss.specialist_id = s.id
         LEFT JOIN services sv ON sv.id = ss.service_id
         WHERE u.is_active = 1 AND s.slug IS NOT NULL
-        GROUP BY s.id, u.name, s.slug, s.position
+        GROUP BY s.id, u.name, s.slug, s.position, s.photo_path
         ORDER BY s.id
     ");
 

@@ -18,7 +18,6 @@ final class ContentController
     private const REVIEWS_LIMIT = 6;
     private const GALLERY_LIMIT = 7;
     private const MAP_SEARCH_URL = 'https://yandex.ru/maps/?text=';
-    private const TEAM_PLACEHOLDER_PHOTO = '/assets/img/team-placeholder.svg';
     private const CONTACT_FORM = 'contact';
     private const CONTACT_FORM_SESSION_KEY = 'contact_form';
     private const CONTACT_MIN_FILL_SECONDS = 3;
@@ -46,7 +45,7 @@ final class ContentController
                 'name' => (string) $specialist['name'],
                 'slug' => (string) $specialist['slug'],
                 'position' => TeamController::positionLabel($specialist['position'], (string) $specialist['kind']),
-                'photo' => self::TEAM_PLACEHOLDER_PHOTO,
+                'photo' => TeamController::photoUrl($specialist['photo_path']),
             ],
             specialistListForPublic()
         );
