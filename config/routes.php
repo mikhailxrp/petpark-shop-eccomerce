@@ -86,6 +86,8 @@ return [
         '/team/{slug}'         => ['TeamController', 'show'],
         '/privacy'             => ['ContentController', 'privacy'],
         '/offer'               => ['ContentController', 'offer'],
+        '/delivery'            => ['ContentController', 'delivery'],
+        '/payment'             => ['ContentController', 'payment'],
     ],
     'POST' => [
         '/login'           => ['AuthController', 'login'],

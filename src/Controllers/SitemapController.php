@@ -21,7 +21,7 @@ final class SitemapController
 
     // Страницы `content_pages`, у которых есть публичный маршрут
     // (config/routes.php) — строка с другим slug дала бы 404 в sitemap.
-    private const CONTENT_PAGE_SLUGS = ['about', 'contacts', 'privacy', 'offer'];
+    private const CONTENT_PAGE_SLUGS = ['about', 'contacts', 'privacy', 'offer', 'delivery', 'payment'];
 
     public function index(): void
     {

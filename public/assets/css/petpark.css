@@ -2820,3 +2820,123 @@ table.shop_table td.product-name img {
 .pricing-section__meta {
     font-weight: 700;
 }
+
+/* «Доставка» и «Оплата» (phase-9.md, Таск 5): карточки условий и акцентная полоса. */
+:root {
+    --info-radius: 24px;
+    --info-gap: 24px;
+    --info-icon-size: 72px;
+    --info-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    --info-badge-bg: #fff1ed;
+}
+
+.info-page__intro {
+    max-width: 720px;
+    margin: 0 auto 40px;
+    font-size: 1.125rem;
+    line-height: 1.7;
+    text-align: center;
+}
+
+.info-card-col {
+    margin-bottom: var(--info-gap);
+}
+
+.info-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 28px 24px;
+    border-radius: var(--info-radius);
+    background-color: #fff;
+    box-shadow: var(--info-shadow);
+}
+
+.info-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.info-card__icon,
+.info-banner__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--info-icon-size);
+    height: var(--info-icon-size);
+    border-radius: 50%;
+    font-size: 1.75rem;
+    color: #fff;
+    background-color: var(--color-primary);
+}
+
+.info-card__badge {
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--color-primary);
+    background-color: var(--info-badge-bg);
+}
+
+.info-card__title {
+    padding-bottom: 8px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.info-card__text {
+    margin-bottom: 12px;
+    line-height: 1.7;
+}
+
+.info-card__list {
+    margin: auto 0 0;
+    padding: 16px 0 0;
+    border-top: 1px dashed var(--color-bg-light);
+    list-style: none;
+}
+
+.info-card__list li {
+    padding: 4px 0;
+    font-weight: 500;
+}
+
+.info-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: var(--info-gap);
+    padding: 28px 24px;
+    border-radius: var(--info-radius);
+    text-align: center;
+    background-color: var(--color-bg-light);
+}
+
+.info-banner__title {
+    padding-bottom: 6px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.info-banner__text {
+    margin: 0;
+    line-height: 1.7;
+}
+
+@media (min-width: 768px) {
+    .info-card {
+        padding: 36px 32px;
+    }
+
+    .info-banner {
+        flex-direction: row;
+        padding: 32px 40px;
+        text-align: left;
+    }
+}
