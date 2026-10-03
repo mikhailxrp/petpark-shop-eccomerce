@@ -44,6 +44,7 @@ try {
     <link rel="stylesheet" href="/assets/css/owl.carousel.min.css">
     <link rel="stylesheet" href="/assets/css/owl.theme.default.min.css">
     <link rel="stylesheet" href="/assets/css/nice-select.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.min.css">
     <link rel="stylesheet" href="/assets/css/fontawesome.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/responsive.css">
@@ -83,6 +84,7 @@ try {
     <script src="/assets/js/bootstrap.min.js"></script>
     <script src="/assets/js/owl.carousel.min.js"></script>
     <script src="/assets/js/jquery.nice-select.min.js"></script>
+    <script src="/assets/js/jquery.fancybox.min.js"></script>
     <script src="/assets/js/custom.js"></script>
     <script src="/assets/js/catalog.js"></script>
     <script src="/assets/js/product-variants.js"></script>

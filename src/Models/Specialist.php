@@ -252,3 +252,30 @@ function specialistTimeOffDelete(int $id, ?int $specialistId): bool
 
     return $stmt->rowCount() === 1;
 }
+
+/**
+ * Активные Специалисты для публичной страницы «О компании»: имя и вид
+ * Услуг (`grooming`/`vet`) — должности и фото в БД пока нет (Таск 6/7
+ * фазы 8). Вид — `vet`, если у Специалиста есть хоть одна ветеринарная
+ * Услуга, иначе `grooming`.
+ *
+ * @return array<int, array{id: int, name: string, kind: string}>
+ */
+function specialistListForPublic(): array
+{
+    $stmt = getPdo()->query("
+        SELECT
+            s.id,
+            u.name,
+            CASE WHEN SUM(sv.kind = 'vet') > 0 THEN 'vet' ELSE 'grooming' END AS kind
+        FROM specialists s
+        JOIN users u ON u.id = s.user_id
+        LEFT JOIN specialist_services ss ON ss.specialist_id = s.id
+        LEFT JOIN services sv ON sv.id = ss.service_id
+        WHERE u.is_active = 1
+        GROUP BY s.id, u.name
+        ORDER BY s.id
+    ");
+
+    return $stmt->fetchAll();
+}

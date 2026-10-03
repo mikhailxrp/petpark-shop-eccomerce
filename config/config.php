@@ -21,6 +21,12 @@ define('APP_URL',  env('APP_URL', ''));
 define('SHOP_NAME', env('SHOP_NAME', 'PetPark'));
 define('SHOP_CITY', env('SHOP_CITY', 'Ростов-на-Дону'));
 
+// Контакты магазина (phase-8.md, Таск 2) — единый источник для шапки, подвала,
+// главной и /contacts. Значения по умолчанию — заглушки до данных Владельца.
+define('SHOP_PHONE', env('SHOP_PHONE', '+7 (800) 000-00-00'));
+define('SHOP_PHONE_TEL', (string) preg_replace('/[^\d+]/', '', SHOP_PHONE)); // для href="tel:"
+define('SHOP_EMAIL', env('SHOP_EMAIL', 'info@petpark.ru'));
+
 // Логгер
 define('LOG_DIR',       env('LOG_DIR',       ROOT_PATH . '/storage/logs'));
 define('LOG_FILE',      env('LOG_FILE',      'app.log'));
@@ -72,6 +78,7 @@ define('CHANNEL_REPLY_MAX_LENGTH',          2000);
 require_once ROOT_PATH . '/src/Core/Logger.php';
 require_once ROOT_PATH . '/src/Core/Database.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
+require_once ROOT_PATH . '/src/Core/ContentHtml.php';
 require_once ROOT_PATH . '/src/Core/Catalog.php';
 require_once ROOT_PATH . '/src/Core/Cache.php';
 require_once ROOT_PATH . '/src/Core/Order.php';
@@ -89,6 +96,7 @@ require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Brand.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
 require_once ROOT_PATH . '/src/Models/Review.php';
+require_once ROOT_PATH . '/src/Models/ContentPage.php';
 require_once ROOT_PATH . '/src/Models/Favorite.php';
 require_once ROOT_PATH . '/src/Models/Cart.php';
 require_once ROOT_PATH . '/src/Models/User.php';

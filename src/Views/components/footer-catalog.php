@@ -31,7 +31,7 @@ declare(strict_types=1);
                     M51.213,401l135.489-135.489L256,325.896l69.298-60.384L460.787,401H51.213z M482,379.788L347.969,245.756L482,128.967V379.788z"></path>
                             </svg>
                         </i>
-                        <a href="mailto:info@petpark.ru">info@petpark.ru</a>
+                        <a href="mailto:<?= e(SHOP_EMAIL) ?>"><?= e(SHOP_EMAIL) ?></a>
                     </div>
                     <div class="phone mb-0 d-flax align-items-center">
                         <i>
@@ -106,7 +106,7 @@ declare(strict_types=1);
                             <div class="call-us">
                                 <img src="/assets/img/hadphon.png" alt="">
                                 <div>
-                                    <a href="tel:+78000000000">+7 (800) 000-00-00</a>
+                                    <a href="tel:<?= e(SHOP_PHONE_TEL) ?>"><?= e(SHOP_PHONE) ?></a>
                                     <span>Есть вопросы? Звоните</span>
                                 </div>
                             </div>
@@ -118,6 +118,7 @@ declare(strict_types=1);
         </div>
         <div class="copyright">
             <p>PetPark — Copyright 2026</p>
+            <?php include __DIR__ . '/footer-legal.php'; ?>
         </div>
     </div>
     <img src="/assets/img/banners/hero-shaps-1.png" alt="" class="img-2">

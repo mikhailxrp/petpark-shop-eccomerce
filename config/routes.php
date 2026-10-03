@@ -74,6 +74,10 @@ return [
         '/payment/{id}'        => ['PaymentController', 'show'],
         '/payment/{id}/failed' => ['PaymentController', 'failed'],
         '/sitemap.xml'         => ['SitemapController', 'index'],
+        '/about'               => ['ContentController', 'about'],
+        '/contacts'            => ['ContentController', 'contacts'],
+        '/privacy'             => ['ContentController', 'privacy'],
+        '/offer'               => ['ContentController', 'offer'],
     ],
     'POST' => [
         '/login'           => ['AuthController', 'login'],

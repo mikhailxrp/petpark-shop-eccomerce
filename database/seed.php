@@ -258,3 +258,60 @@ foreach ($seedConversations as $conversation) {
 }
 
 echo "✅ Обращения инбокса созданы/обновлены (" . count($seedConversations) . ").\n";
+
+// ─── Статические страницы (phase-8.md, Таск 1) ──────────────────────────
+// slug UNIQUE: повторный запуск не дублирует строку и не перезаписывает
+// правки текста; фото страницы добавляются, только пока у неё нет ни одного.
+
+const CONTENT_PAGE_IMAGE_SOURCE_DIR = '/public/assets/img/home-page/';
+const CONTENT_PAGE_UPLOAD_DIR = 'content-pages';
+
+$seedContentPages = require __DIR__ . '/seed-data/content-pages.php';
+
+$insertContentPage = $pdo->prepare('
+    INSERT INTO content_pages (slug, title, body)
+    VALUES (:slug, :title, :body)
+    ON DUPLICATE KEY UPDATE slug = slug
+');
+$findContentPage = $pdo->prepare('SELECT id FROM content_pages WHERE slug = :slug');
+$countContentPageImages = $pdo->prepare('SELECT COUNT(*) FROM content_page_images WHERE content_page_id = :id');
+$insertContentPageImage = $pdo->prepare('
+    INSERT INTO content_page_images (content_page_id, path, sort_order)
+    VALUES (:id, :path, :sort_order)
+');
+
+foreach ($seedContentPages as $contentPage) {
+    $insertContentPage->execute([
+        'slug'  => $contentPage['slug'],
+        'title' => $contentPage['title'],
+        'body'  => $contentPage['body'],
+    ]);
+    $findContentPage->execute(['slug' => $contentPage['slug']]);
+    $contentPageId = (int) $findContentPage->fetchColumn();
+
+    $countContentPageImages->execute(['id' => $contentPageId]);
+    if ($contentPage['images'] === [] || (int) $countContentPageImages->fetchColumn() > 0) {
+        continue;
+    }
+
+    $relativeDir = CONTENT_PAGE_UPLOAD_DIR . '/' . $contentPage['slug'];
+    $targetDir = ROOT_PATH . '/public/uploads/' . $relativeDir;
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        fwrite(STDERR, "Не удалось создать {$targetDir}\n");
+        exit(1);
+    }
+
+    foreach ($contentPage['images'] as $sortOrder => $fileName) {
+        if (!copy(ROOT_PATH . CONTENT_PAGE_IMAGE_SOURCE_DIR . $fileName, $targetDir . '/' . $fileName)) {
+            fwrite(STDERR, "Не удалось скопировать {$fileName}\n");
+            exit(1);
+        }
+        $insertContentPageImage->execute([
+            'id'         => $contentPageId,
+            'path'       => $relativeDir . '/' . $fileName,
+            'sort_order' => $sortOrder,
+        ]);
+    }
+}
+
+echo "✅ Статические страницы созданы (" . count($seedContentPages) . ").\n";

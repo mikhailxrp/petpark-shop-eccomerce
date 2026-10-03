@@ -34,7 +34,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                     M51.213,401l135.489-135.489L256,325.896l69.298-60.384L460.787,401H51.213z M482,379.788L347.969,245.756L482,128.967V379.788z"></path>
                                 </svg>
                             </i>
-                            <a href="mailto:info@petpark.ru">info@petpark.ru</a>
+                            <a href="mailto:<?= e(SHOP_EMAIL) ?>"><?= e(SHOP_EMAIL) ?></a>
                         </div>
                         <div class="phone d-flax align-items-center">
                             <i>
@@ -46,7 +46,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                                     </g>
                                 </svg>
                             </i>
-                            <a class="me-3" href="tel:+78000000000">+7 (800) 000-00-00</a>
+                            <a class="me-3" href="tel:<?= e(SHOP_PHONE_TEL) ?>"><?= e(SHOP_PHONE) ?></a>
                         </div>
                     </div>
                 </div>
@@ -84,7 +84,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                         </a>
                     </li>
                     <li class="navbar-dropdown">
-                        <a href="#">О компании</a>
+                        <a href="/about">О компании</a>
                     </li>
                     <li class="navbar-dropdown menu-item-children">
                         <a href="/booking">
@@ -106,7 +106,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                         </div>
                     </li>
                     <li class="navbar-dropdown">
-                        <a href="#">Контакты</a>
+                        <a href="/contacts">Контакты</a>
                     </li>
                 </ul>
             </nav>
@@ -171,7 +171,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
         </div>
         <ul>
             <li><a href="/">Главная</a></li>
-            <li><a href="#">О компании</a></li>
+            <li><a href="/about">О компании</a></li>
             <li class="menu-item-has-children">
                 <a href="JavaScript:void(0)">Услуги</a>
                 <ul class="sub-menu">
@@ -188,7 +188,7 @@ foreach ($headerCartSummary['items'] as $headerCartItem) {
                     <?php endforeach; ?>
                 </ul>
             </li>
-            <li><a href="#">Контакты</a></li>
+            <li><a href="/contacts">Контакты</a></li>
         </ul>
         <?php include __DIR__ . '/social-icons.php'; ?>
         <a href="JavaScript:void(0)" id="res-cross"></a>
