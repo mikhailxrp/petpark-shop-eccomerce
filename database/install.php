@@ -733,6 +733,21 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// ─── contact_requests ───────────────────────────────────────────────────
+// Обращения с формы на /contacts (phase-8, Таск 3). Экрана просмотра нет —
+// письмо магазину уходит через notifications, таблица хранит копию.
+
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS contact_requests (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(100) NOT NULL,
+        phone      VARCHAR(20) NOT NULL,
+        email      VARCHAR(255) NOT NULL,
+        message    TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
 // ─── marketplace_listings ───────────────────────────────────────────────
 // Демо: MARKET — UI-заглушка (ADR-001).
 

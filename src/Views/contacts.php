@@ -3,14 +3,19 @@
 declare(strict_types=1);
 
 /**
- * Контакты — /contacts (phase-8.md, Таск 2), макет `contact.html` без формы
- * (форма — Таск 3) и без блока наград. Телефон и email — константы
+ * Контакты — /contacts (phase-8.md, Таск 2–3), макет `contact.html` с формой
+ * обратной связи и без блока наград. Телефон и email — константы
  * config.php (один источник с шапкой и подвалом), адрес и часы — те же, что
  * у самовывоза, ссылки мессенджеров — `$messengerLinks` из layouts/public.php.
  * @var array<string, mixed> $page
  * @var string               $bodyHtml очищенный `body` — вступление
  * @var string               $mapUrl   Ссылка «Проложить маршрут»
  * @var list<array{code: string, label: string, url: string}> $messengerLinks Из Controller (layout считает их позже)
+ * @var string               $formToken   generateFormToken('contact') — антибот, скрытое поле формы
+ * @var array<string, string> $formValues  Введённые значения (после ошибки валидации)
+ * @var array<string, string> $formErrors  Ошибки по полям
+ * @var string|null          $formSuccess flash 'contact_success'
+ * @var string|null          $formAlert   flash 'contact_error'
  */
 
 $breadcrumbs = [
@@ -97,6 +102,57 @@ ob_start();
                     </div>
                 </div>
             <?php endif; ?>
+        </div>
+    </div>
+</section>
+<section class="gap no-top">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <?php if ($formAlert !== null): ?>
+                    <div class="alert alert-danger" role="alert"><?= e($formAlert) ?></div>
+                <?php elseif ($formSuccess !== null): ?>
+                    <div class="alert alert-success" role="status"><?= e($formSuccess) ?></div>
+                <?php endif; ?>
+                <form class="add-review comment leave-comment contact-form" method="post" action="/contacts" novalidate>
+                    <?= csrfField() ?>
+                    <!-- Honeypot скрыт классом .form-honeypot (display:none), как в форме отзыва. -->
+                    <input type="text" name="website" class="form-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <input type="hidden" name="form_token" value="<?= e($formToken) ?>">
+                    <div class="information">
+                        <h3>Напишите нам</h3>
+                        <div class="boder-bar"></div>
+                    </div>
+                    <?php
+                    $fields = [
+                        'name'  => ['label' => 'Ваше имя', 'type' => 'text', 'maxlength' => CONTACT_NAME_MAX, 'autocomplete' => 'name'],
+                        'phone' => ['label' => 'Телефон', 'type' => 'tel', 'maxlength' => 30, 'autocomplete' => 'tel'],
+                        'email' => ['label' => 'Email', 'type' => 'email', 'maxlength' => CONTACT_EMAIL_MAX, 'autocomplete' => 'email'],
+                    ];
+                    ?>
+                    <?php foreach ($fields as $field => $meta): ?>
+                        <?php $error = $formErrors[$field] ?? null; ?>
+                        <label class="visually-hidden" for="contact-<?= e($field) ?>"><?= e($meta['label']) ?></label>
+                        <input type="<?= e($meta['type']) ?>" id="contact-<?= e($field) ?>" name="<?= e($field) ?>"
+                               placeholder="<?= e($meta['label']) ?>" value="<?= e($formValues[$field]) ?>"
+                               maxlength="<?= (int) $meta['maxlength'] ?>" autocomplete="<?= e($meta['autocomplete']) ?>"
+                               class="<?= $error !== null ? 'is-invalid' : '' ?>" required
+                               <?php if ($error !== null): ?>aria-invalid="true" aria-describedby="contact-<?= e($field) ?>-error"<?php endif; ?>>
+                        <?php if ($error !== null): ?>
+                            <p class="contact-form__error" id="contact-<?= e($field) ?>-error"><?= e($error) ?></p>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php $error = $formErrors['message'] ?? null; ?>
+                    <label class="visually-hidden" for="contact-message">Сообщение</label>
+                    <textarea id="contact-message" name="message" placeholder="Сообщение" maxlength="<?= CONTACT_MESSAGE_MAX ?>"
+                              class="<?= $error !== null ? 'is-invalid' : '' ?>" required
+                              <?php if ($error !== null): ?>aria-invalid="true" aria-describedby="contact-message-error"<?php endif; ?>><?= e($formValues['message']) ?></textarea>
+                    <?php if ($error !== null): ?>
+                        <p class="contact-form__error" id="contact-message-error"><?= e($error) ?></p>
+                    <?php endif; ?>
+                    <button type="submit" class="button">Отправить</button>
+                </form>
+            </div>
         </div>
     </div>
 </section>

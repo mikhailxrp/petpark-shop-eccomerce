@@ -99,6 +99,7 @@ return [
         '/cart/update'                 => ['CartController', 'update'],
         '/cart/remove'                 => ['CartController', 'remove'],
         '/booking'                     => ['BookingController', 'store'],
+        '/contacts'                    => ['ContentController', 'contactStore'],
         '/booking/{id}/pay/callback'   => ['BookingPaymentController', 'callback'],
         '/booking/{id}/release'        => ['BookingPaymentController', 'release'],
         '/checkout'                    => ['CheckoutController', 'store'],

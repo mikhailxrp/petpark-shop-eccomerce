@@ -1029,7 +1029,8 @@ select.nice-select::-ms-expand {
  * браузерной ширине по умолчанию и прижато к левому краю (скриншот
  * пользователя). Дублируем те же значения под наш селектор.
  */
-form.add-review.comment.leave-comment input[type="email"] {
+form.add-review.comment.leave-comment input[type="email"],
+form.add-review.comment.leave-comment input[type="tel"] {
     width: 100%;
     padding-left: 30px;
     border: 0;
@@ -2670,4 +2671,15 @@ table.shop_table td.product-name img {
         height: 100%;
         margin-bottom: 0;
     }
+}
+
+/* «Контакты»: форма обратной связи — ошибки у полей (поля стилизует form.add-review). */
+.contact-form .is-invalid {
+    box-shadow: 0 0 0 2px #dc3545;
+}
+
+.contact-form__error {
+    margin: -12px 0 16px 20px;
+    font-size: 0.875rem;
+    color: #dc3545;
 }

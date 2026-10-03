@@ -19,6 +19,14 @@ final class ContentController
     private const GALLERY_LIMIT = 7;
     private const MAP_SEARCH_URL = 'https://yandex.ru/maps/?text=';
     private const TEAM_PLACEHOLDER_PHOTO = '/assets/img/team-placeholder.svg';
+    private const CONTACT_FORM = 'contact';
+    private const CONTACT_FORM_SESSION_KEY = 'contact_form';
+    private const CONTACT_MIN_FILL_SECONDS = 3;
+    private const CONTACT_MAX_ATTEMPTS = 5;
+    private const CONTACT_DECAY_SECONDS = 60;
+    private const CONTACT_SUCCESS = 'Спасибо, заявка принята. Мы свяжемся с вами в ближайшее время.';
+    private const CONTACT_RATE_LIMITED = 'Слишком много попыток отправки. Попробуйте через минуту.';
+    private const CONTACT_INVALID = 'Проверьте поля формы — все они обязательны.';
 
     public function about(): void
     {
@@ -61,11 +69,81 @@ final class ContentController
 
     public function contacts(): void
     {
+        // Ошибки и введённые значения живут до первого показа (после redirect из contactStore).
+        $form = $_SESSION[self::CONTACT_FORM_SESSION_KEY] ?? null;
+        unset($_SESSION[self::CONTACT_FORM_SESSION_KEY]);
+
         $this->showPage('contacts', 'contacts', [
             'mapUrl' => self::MAP_SEARCH_URL . rawurlencode(SHOP_PICKUP_ADDRESS),
             // Layout собирает ссылки после View, поэтому блоку «Контакты» нужны свои.
             'messengerLinks' => messengerLinks(CHANNELS_ENABLED, siteSettingMessengerUrls(), messengerLabels()),
+            'formToken' => generateFormToken(self::CONTACT_FORM),
+            'formValues' => $form['values'] ?? ['name' => '', 'phone' => '', 'email' => '', 'message' => ''],
+            'formErrors' => $form['errors'] ?? [],
+            'formSuccess' => getFlash('contact_success'),
+            'formAlert' => getFlash('contact_error'),
         ]);
+    }
+
+    /**
+     * POST /contacts — обращение с формы. Бот-защита (honeypot, время
+     * заполнения, одноразовый токен) по паттерну ReviewController/
+     * BookingController: отказ неотличим от успеха, в БД и очередь ничего не
+     * пишется (dod-global.md). Rate-limit считает каждую попытку и не
+     * сбрасывается после успеха — иначе спамер с валидными данными не упрётся в лимит.
+     */
+    public function contactStore(): void
+    {
+        requireCsrf();
+
+        if (tooManyAttempts(self::CONTACT_FORM, self::CONTACT_MAX_ATTEMPTS, self::CONTACT_DECAY_SECONDS)) {
+            logWarning('Контакты: превышен лимит отправок');
+            setFlash('contact_error', self::CONTACT_RATE_LIMITED);
+            redirect('/contacts');
+        }
+        hitRateLimit(self::CONTACT_FORM);
+
+        $honeypot = trim((string) input('website'));
+        $formToken = input('form_token');
+        $tokenValid = verifyFormToken(
+            self::CONTACT_FORM,
+            is_string($formToken) && $formToken !== '' ? $formToken : null,
+            self::CONTACT_MIN_FILL_SECONDS
+        );
+        if ($honeypot !== '' || !$tokenValid) {
+            logWarning('Контакты: отклонено как бот', [
+                'honeypot_filled' => $honeypot !== '',
+                'token_valid'     => $tokenValid,
+            ]);
+            setFlash('contact_success', self::CONTACT_SUCCESS);
+            redirect('/contacts');
+        }
+
+        $result = contactFormValidate([
+            'name'    => input('name'),
+            'phone'   => input('phone'),
+            'email'   => input('email'),
+            'message' => input('message'),
+        ]);
+
+        if ($result['errors'] !== []) {
+            $_SESSION[self::CONTACT_FORM_SESSION_KEY] = $result;
+            setFlash('contact_error', self::CONTACT_INVALID);
+            redirect('/contacts');
+        }
+
+        $values = $result['values'];
+        $id = contactRequestCreate($values['name'], $values['phone'], $values['email'], $values['message']);
+
+        try {
+            notifierEnqueueContactRequest(['id' => $id] + $values);
+        } catch (\Throwable $e) {
+            // Обращение уже сохранено; сбой очереди не должен превращаться для посетителя в ошибку.
+            logException($e);
+        }
+
+        setFlash('contact_success', self::CONTACT_SUCCESS);
+        redirect('/contacts');
     }
 
     public function privacy(): void
