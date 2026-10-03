@@ -6,8 +6,11 @@ namespace App\Controllers;
 
 /**
  * /sitemap.xml (phase-1.md, Таск 9, [INFRA] из _status.md) — реальные
- * URL активных Товаров и всех Категорий (`categories` без признака
- * активности — все включены, database.md). Результат кешируется файлом
+ * URL активных Товаров, всех Категорий (`categories` без признака
+ * активности — все включены, database.md), страниц фазы 8 (главная,
+ * статические страницы из `content_pages`, Услуги, Тарифы, профили
+ * Специалистов; неактивные Услуги и отключённые сотрудники не попадают —
+ * phase-8.md, Таск 8). Результат кешируется файлом
  * (Core/Cache.php) — не полный скан products/categories на каждый
  * заход краулера.
  */
@@ -15,6 +18,10 @@ final class SitemapController
 {
     private const CACHE_TTL_SECONDS = 3600;
     private const CACHE_KEY = 'sitemap.xml';
+
+    // Страницы `content_pages`, у которых есть публичный маршрут
+    // (config/routes.php) — строка с другим slug дала бы 404 в sitemap.
+    private const CONTENT_PAGE_SLUGS = ['about', 'contacts', 'privacy', 'offer'];
 
     public function index(): void
     {
@@ -31,7 +38,25 @@ final class SitemapController
 
     private function build(): string
     {
-        $urls = [];
+        $urls = [
+            ['loc' => '/', 'lastmod' => null],
+            ['loc' => '/services', 'lastmod' => null],
+            ['loc' => '/pricing', 'lastmod' => null],
+        ];
+
+        foreach (contentPageListForSitemap() as $page) {
+            if (in_array($page['slug'], self::CONTENT_PAGE_SLUGS, true)) {
+                $urls[] = ['loc' => '/' . $page['slug'], 'lastmod' => $page['updated_at']];
+            }
+        }
+
+        foreach (servicesPublicList() as $service) {
+            $urls[] = ['loc' => '/services/' . $service['slug'], 'lastmod' => null];
+        }
+
+        foreach (specialistListForPublic() as $specialist) {
+            $urls[] = ['loc' => '/team/' . $specialist['slug'], 'lastmod' => null];
+        }
 
         foreach (productActiveForSitemap() as $product) {
             $urls[] = [

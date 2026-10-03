@@ -81,7 +81,7 @@ declare(strict_types=1);
 
                             <i class="fa-solid fa-angle-right"></i>
 
-                            <a href="/booking">Груминг</a>
+                            <a href="/pricing#grooming">Груминг</a>
 
                         </li>
 
@@ -89,7 +89,7 @@ declare(strict_types=1);
 
                             <i class="fa-solid fa-angle-right"></i>
 
-                            <a href="/booking">Ветконсультации</a>
+                            <a href="/pricing#vet">Ветконсультации</a>
 
                         </li>
 

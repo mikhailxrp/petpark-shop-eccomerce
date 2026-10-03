@@ -43,3 +43,16 @@ function contentPageImages(int $contentPageId): array
 
     return $stmt->fetchAll();
 }
+
+/**
+ * Slug и дата правки всех страниц — для sitemap.xml.
+ *
+ * @return array<int, array{slug: string, updated_at: string}>
+ */
+function contentPageListForSitemap(): array
+{
+    return getPdo()->query('
+        SELECT slug, updated_at
+        FROM content_pages
+    ')->fetchAll();
+}
