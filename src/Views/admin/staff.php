@@ -91,6 +91,9 @@ ob_start();
                                 <?php endif; ?>
                             </td>
                             <td class="staff-table__cell staff-table__cell--actions">
+                                <?php if ($member['role'] === 'specialist'): ?>
+                                    <a href="/admin/staff/<?= $memberId ?>/profile" class="btn btn-outline-secondary btn-sm">Профиль</a>
+                                <?php endif; ?>
                                 <?php if ($member['can_manage']): ?>
                                     <form method="post" action="/admin/staff/<?= $memberId ?>/active" class="d-inline">
                                         <?= csrfField() ?>

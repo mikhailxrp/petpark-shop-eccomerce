@@ -39,6 +39,125 @@ function specialistCreate(int $userId, string $workStart, string $workEnd, ?int 
 }
 
 /**
+ * Профиль Специалиста по `users.id` с id его Услуг; null — строки
+ * `specialists` у сотрудника нет.
+ *
+ * @return array{id: int, work_start: string, work_end: string, day_off: ?int, service_ids: list<int>}|null
+ */
+function specialistFindByUserId(int $userId): ?array
+{
+    $pdo = getPdo();
+
+    $stmt = $pdo->prepare('SELECT id, work_start, work_end, day_off FROM specialists WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    if ($row === false) {
+        return null;
+    }
+
+    $services = $pdo->prepare('SELECT service_id FROM specialist_services WHERE specialist_id = ? ORDER BY service_id');
+    $services->execute([(int) $row['id']]);
+
+    return [
+        'id'          => (int) $row['id'],
+        'work_start'  => (string) $row['work_start'],
+        'work_end'    => (string) $row['work_end'],
+        'day_off'     => $row['day_off'] === null ? null : (int) $row['day_off'],
+        'service_ids' => array_map('intval', $services->fetchAll(PDO::FETCH_COLUMN)),
+    ];
+}
+
+/**
+ * Профиль с графиком по умолчанию (значения колонок) и без Услуг, если строки
+ * `specialists` у сотрудника ещё нет. Повторный вызов ничего не меняет
+ * (UNIQUE по `user_id`).
+ */
+function specialistEnsureForUser(int $userId): void
+{
+    getPdo()->prepare('INSERT IGNORE INTO specialists (user_id) VALUES (?)')->execute([$userId]);
+}
+
+/**
+ * Сохранить график и заменить набор Услуг Специалиста. Одна транзакция с
+ * блокировкой строки Специалиста — той же, что в bookingCreate(), поэтому
+ * параллельная Запись видит либо старый график, либо новый целиком. Если
+ * профиля ещё нет (роль сменили до Таска 13), он создаётся здесь же.
+ *
+ * @param string    $workStart "HH:MM"
+ * @param string    $workEnd   "HH:MM"
+ * @param int|null  $dayOff    0=воскресенье … 6=суббота; null — выходного нет
+ * @param list<int> $serviceIds активные Услуги; пусто — Специалист без Услуг
+ */
+function specialistUpdate(int $userId, string $workStart, string $workEnd, ?int $dayOff, array $serviceIds): void
+{
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        specialistEnsureForUser($userId);
+
+        $lock = $pdo->prepare('SELECT id FROM specialists WHERE user_id = ? FOR UPDATE');
+        $lock->execute([$userId]);
+        $specialistId = (int) $lock->fetchColumn();
+
+        $pdo->prepare('UPDATE specialists SET work_start = ?, work_end = ?, day_off = ? WHERE id = ?')
+            ->execute([$workStart, $workEnd, $dayOff, $specialistId]);
+
+        $pdo->prepare('DELETE FROM specialist_services WHERE specialist_id = ?')->execute([$specialistId]);
+
+        $link = $pdo->prepare('INSERT INTO specialist_services (specialist_id, service_id) VALUES (?, ?)');
+        foreach ($serviceIds as $serviceId) {
+            $link->execute([$specialistId, $serviceId]);
+        }
+
+        $pdo->commit();
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
+ * Будущие Записи Специалиста, занимающие слот (подтверждённые и удержание,
+ * ждущее оплаты), с Услугами — для проверки по графику после его правки.
+ *
+ * @return list<array{id: int, scheduled_at: string, client_name: string, duration_minutes: int, service_ids: list<int>, kinds: list<string>}>
+ */
+function specialistFutureBookings(int $specialistId): array
+{
+    $stmt = getPdo()->prepare(
+        "SELECT b.id, b.scheduled_at, u.name AS client_name,
+                COALESCE(SUM(bs.duration_minutes), 0) AS duration_minutes,
+                GROUP_CONCAT(bs.service_id) AS service_ids,
+                GROUP_CONCAT(DISTINCT s.kind) AS kinds
+         FROM bookings b
+         JOIN users u ON u.id = b.user_id
+         LEFT JOIN booking_services bs ON bs.booking_id = b.id
+         LEFT JOIN services s ON s.id = bs.service_id
+         WHERE b.specialist_id = ?
+           AND b.scheduled_at >= NOW()
+           AND (b.status = 'confirmed' OR (b.status = 'slot_selected' AND b.slot_hold_expires_at > NOW()))
+         GROUP BY b.id, b.scheduled_at, u.name
+         ORDER BY b.scheduled_at, b.id"
+    );
+    $stmt->execute([$specialistId]);
+
+    return array_map(
+        static fn (array $row): array => [
+            'id'               => (int) $row['id'],
+            'scheduled_at'     => (string) $row['scheduled_at'],
+            'client_name'      => (string) $row['client_name'],
+            'duration_minutes' => (int) $row['duration_minutes'],
+            'service_ids'      => $row['service_ids'] === null ? [] : array_map('intval', explode(',', (string) $row['service_ids'])),
+            'kinds'            => $row['kinds'] === null ? [] : explode(',', (string) $row['kinds']),
+        ],
+        $stmt->fetchAll()
+    );
+}
+
+/**
  * Не закончившиеся закрытые периоды: всех Специалистов (null) или одного.
  *
  * @return list<array{id: int, specialist_id: int, specialist_name: string, date_from: string, date_to: string, reason: ?string}>

@@ -125,6 +125,44 @@ function specialistScheduleErrors(string $workStart, string $workEnd, string $da
     return $errors;
 }
 
+const BOOKING_CONFLICT_LABELS = [
+    'day_off'         => 'выходной',
+    'outside_hours'   => 'вне часов работы',
+    'service_removed' => 'Услуга снята',
+];
+
+/**
+ * Почему будущая Запись не вписывается в новый график Специалиста
+ * (phase-7.md, Таск 13): выпала на выходной, блок (с буфером) выходит за
+ * рабочие часы, или среди её Услуг есть та, что Специалист больше не оказывает.
+ * Пустой список — Запись в порядке. Саму Запись правка не отменяет.
+ *
+ * @param array{work_start: string, work_end: string, day_off: int|string|null} $schedule
+ * @param list<int> $serviceIds Услуги Специалиста после правки
+ * @param array{scheduled_at: string, block_minutes: int, service_ids: list<int>} $booking
+ * @return list<string> ключи BOOKING_CONFLICT_LABELS
+ */
+function bookingScheduleConflicts(array $schedule, array $serviceIds, array $booking): array
+{
+    $start = new DateTimeImmutable($booking['scheduled_at']);
+    $startMinutes = (int) $start->format('G') * 60 + (int) $start->format('i');
+    $reasons = [];
+
+    if ($schedule['day_off'] !== null && (int) $schedule['day_off'] === (int) $start->format('w')) {
+        $reasons[] = 'day_off';
+    }
+    if ($startMinutes < bookingTimeToMinutes($schedule['work_start'])
+        || $startMinutes + $booking['block_minutes'] > bookingTimeToMinutes($schedule['work_end'])
+    ) {
+        $reasons[] = 'outside_hours';
+    }
+    if (array_diff($booking['service_ids'], $serviceIds) !== []) {
+        $reasons[] = 'service_removed';
+    }
+
+    return $reasons;
+}
+
 /**
  * Свободные начала визита Специалиста на дату, по возрастанию, формат "HH:MM".
  *

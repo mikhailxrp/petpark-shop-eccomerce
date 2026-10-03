@@ -14,6 +14,7 @@ namespace App\Controllers\Admin;
 final class StaffController
 {
     private const FORM_FLASH = 'staff_form';
+    private const PROFILE_FORM_FLASH = 'staff_profile_form';
 
     private const NAME_MAX = 100;
     private const EMAIL_MAX = 150;
@@ -174,6 +175,12 @@ final class StaffController
 
         userUpdateRole((int) $member['id'], $role);
 
+        // Профиль нужен, чтобы Специалиста можно было настроить; при смене роли
+        // с `specialist` строку не удаляем — на неё ссылаются Записи.
+        if ($role === self::ROLE_SPECIALIST) {
+            specialistEnsureForUser((int) $member['id']);
+        }
+
         setFlash('success', 'Роль изменена: ' . $member['name'] . ' — ' . adminRoleLabel($role) . '.');
         redirect('/admin/staff');
     }
@@ -189,6 +196,160 @@ final class StaffController
             ? 'Доступ восстановлен: ' . $member['name'] . '.'
             : 'Сотрудник отключён: ' . $member['name'] . '.');
         redirect('/admin/staff');
+    }
+
+    /**
+     * Правка графика и Услуг существующего Специалиста (phase-7.md, Таск 13).
+     * Будущие Записи вне нового графика не отменяются — страница показывает их
+     * списком (см. `futureBookingConflicts()`).
+     */
+    public function editForm(string $id): void
+    {
+        $member = $this->specialistMember($id, false);
+        $actorRole = (string) $_SESSION['user_role'];
+
+        $profile = specialistFindByUserId((int) $member['id']);
+        $form = $this->takeForm(self::PROFILE_FORM_FLASH);
+
+        render('admin/staff-edit', [
+            'pageTitle' => 'Профиль Специалиста — PetPark',
+            'roleLabel' => adminRoleLabel($actorRole),
+            'homeUrl'   => homePathForRole($actorRole),
+            'userRole'  => $actorRole,
+            'member'    => $member,
+            'values'    => $form['values'] ?? $this->profileValues($profile),
+            'errors'    => $form['errors'] ?? [],
+            'services'  => servicesActive(),
+            'conflicts' => $profile === null ? [] : $this->futureBookingConflicts($profile),
+            'success'   => getFlash('success'),
+            'error'     => getFlash('error'),
+        ]);
+    }
+
+    public function update(string $id): void
+    {
+        $member = $this->specialistMember($id, true);
+        $profileUrl = '/admin/staff/' . (int) $member['id'] . '/profile';
+
+        $values = [
+            'work_start' => trim((string) input('work_start')),
+            'work_end'   => trim((string) input('work_end')),
+            'day_off'    => trim((string) input('day_off')),
+        ];
+        $errors = specialistScheduleErrors($values['work_start'], $values['work_end'], $values['day_off']);
+
+        [$values['service_ids'], $servicesError] = $this->validateServices(input('service_ids', []));
+        if ($servicesError !== null) {
+            $errors['service_ids'] = $servicesError;
+        }
+
+        if ($errors !== []) {
+            $this->rememberForm($values, $errors, self::PROFILE_FORM_FLASH);
+            redirect($profileUrl);
+        }
+
+        specialistUpdate(
+            (int) $member['id'],
+            $values['work_start'],
+            $values['work_end'],
+            $values['day_off'] === '' ? null : (int) $values['day_off'],
+            $values['service_ids']
+        );
+
+        logWarning('Сотрудники: изменён профиль Специалиста', [
+            'changed_by' => (int) $_SESSION['user_id'],
+            'staff_id'   => (int) $member['id'],
+        ]);
+
+        $profile = specialistFindByUserId((int) $member['id']);
+        $conflicts = $profile === null ? [] : $this->futureBookingConflicts($profile);
+
+        setFlash('success', 'Профиль сохранён: ' . $member['name'] . '.'
+            . ($conflicts === [] ? '' : ' Есть будущие Записи вне нового графика — они не отменены, список ниже.'));
+        redirect($profileUrl);
+    }
+
+    /**
+     * Доступ к профилю Специалиста: Владелец и Администратор смены, цель — только
+     * сотрудник с ролью `specialist`. Любой отказ — 404 без пояснений.
+     *
+     * @return array<string, mixed>
+     */
+    private function specialistMember(string $id, bool $checkCsrf): array
+    {
+        requireRole('shift_admin', 'owner');
+        if ($checkCsrf) {
+            requireCsrf();
+        }
+
+        $member = ctype_digit($id) ? userFindStaffById((int) $id) : null;
+
+        if ($member === null || $member['role'] !== self::ROLE_SPECIALIST) {
+            logWarning('Сотрудники: профиль Специалиста недоступен', [
+                'user_id'   => (int) $_SESSION['user_id'],
+                'target_id' => $id,
+            ]);
+            http_response_code(404);
+            render('errors/404');
+            exit;
+        }
+
+        return $member;
+    }
+
+    /**
+     * Значения формы из сохранённого профиля; без профиля — график по умолчанию.
+     *
+     * @param array{work_start: string, work_end: string, day_off: ?int, service_ids: list<int>}|null $profile
+     * @return array<string, mixed>
+     */
+    private function profileValues(?array $profile): array
+    {
+        if ($profile === null) {
+            return $this->emptyValues();
+        }
+
+        return [
+            'work_start'  => substr($profile['work_start'], 0, 5),
+            'work_end'    => substr($profile['work_end'], 0, 5),
+            'day_off'     => $profile['day_off'] === null ? '' : (string) $profile['day_off'],
+            'service_ids' => $profile['service_ids'],
+        ];
+    }
+
+    /**
+     * Будущие Записи Специалиста, не вписывающиеся в его сохранённый график.
+     *
+     * @param array{id: int, work_start: string, work_end: string, day_off: ?int, service_ids: list<int>} $profile
+     * @return list<array{id: int, when: string, client_name: string, reasons: list<string>}>
+     */
+    private function futureBookingConflicts(array $profile): array
+    {
+        $conflicts = [];
+
+        foreach (specialistFutureBookings($profile['id']) as $booking) {
+            $reasons = bookingScheduleConflicts($profile, $profile['service_ids'], [
+                'scheduled_at'  => $booking['scheduled_at'],
+                'block_minutes' => $booking['duration_minutes'] > 0
+                    ? bookingBlockMinutes($booking['duration_minutes'], $booking['kinds'])
+                    : 0,
+                'service_ids'   => $booking['service_ids'],
+            ]);
+
+            if ($reasons !== []) {
+                $conflicts[] = [
+                    'id'          => $booking['id'],
+                    'when'        => date('d.m.Y H:i', strtotime($booking['scheduled_at'])),
+                    'client_name' => $booking['client_name'],
+                    'reasons'     => array_map(
+                        static fn (string $reason): string => BOOKING_CONFLICT_LABELS[$reason],
+                        $reasons
+                    ),
+                ];
+            }
+        }
+
+        return $conflicts;
     }
 
     /**
@@ -326,17 +487,17 @@ final class StaffController
      * @param array<string, mixed> $values
      * @param array<string, string> $errors
      */
-    private function rememberForm(array $values, array $errors): void
+    private function rememberForm(array $values, array $errors, string $key = self::FORM_FLASH): void
     {
-        setFlash(self::FORM_FLASH, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
+        setFlash($key, json_encode(['values' => $values, 'errors' => $errors], JSON_THROW_ON_ERROR));
     }
 
     /**
      * @return array{values: array<string, mixed>, errors: array<string, string>}|null
      */
-    private function takeForm(): ?array
+    private function takeForm(string $key = self::FORM_FLASH): ?array
     {
-        $raw = getFlash(self::FORM_FLASH);
+        $raw = getFlash($key);
         if ($raw === null) {
             return null;
         }
