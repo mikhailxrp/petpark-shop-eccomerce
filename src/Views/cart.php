@@ -121,13 +121,13 @@ ob_start();
                                             <a href="<?= e($itemUrl) ?>"><?= e((string) $item['name']) ?></a>
                                         </div>
                                     </td>
-                                    <td class="product-price">
+                                    <td class="product-price" data-label="Цена">
                                         <span class="cart-item__price"><?= e(cartFormatMoney($effectivePrice)) ?> ₽</span>
                                         <?php if ($hasDiscount): ?>
                                             <del><?= e(cartFormatMoney((string) $item['price'])) ?> ₽</del>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="product-quantity">
+                                    <td class="product-quantity" data-label="Количество">
                                         <form method="post" action="/cart/update" class="cart-item__quantity-form">
                                             <?= csrfField() ?>
                                             <input type="hidden" name="item_id" value="<?= $itemId ?>">
@@ -149,7 +149,7 @@ ob_start();
                                             <p class="cart-item__warning">В наличии только <?= (int) $item['available'] ?> шт.</p>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="product-subtotal">
+                                    <td class="product-subtotal" data-label="Сумма">
                                         <span class="cart-item__line-total"><?= e(cartFormatMoney((string) $item['line_total'])) ?> ₽</span>
                                     </td>
                                 </tr>

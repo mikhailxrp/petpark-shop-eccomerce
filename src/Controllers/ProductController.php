@@ -64,6 +64,11 @@ final class ProductController
         render('product', [
             'product'          => $product,
             'variants'         => $variants,
+            'specs'            => catalogProductSpecs(
+                $product['brand_name'],
+                productConfirmedAttributes((int) $product['id']),
+                productVariantDimensions((int) $product['id'])
+            ),
             'imagePaths'       => productImagePaths((int) $product['id']),
             'selectedVariant'  => $selectedVariant,
             'categoryChain'    => $categoryChain,

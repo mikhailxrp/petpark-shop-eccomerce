@@ -323,9 +323,11 @@ function productActiveBrands(): array
 function productFindBySlug(string $slug): ?array
 {
     $stmt = getPdo()->prepare('
-        SELECT id, category_id, name, slug, description, seo_title, seo_description
-        FROM products
-        WHERE slug = ? AND is_active = 1
+        SELECT p.id, p.category_id, p.name, p.slug, p.description, p.seo_title, p.seo_description,
+               b.name AS brand_name
+        FROM products p
+        LEFT JOIN brands b ON b.id = p.brand_id
+        WHERE p.slug = ? AND p.is_active = 1
     ');
     $stmt->execute([$slug]);
     $product = $stmt->fetch();
@@ -729,6 +731,33 @@ function productDescriptionSource(int $productId): ?array
     $row = $stmt->fetch();
 
     return $row === false ? null : $row;
+}
+
+/**
+ * Измерения активных Вариантов Товара (размер, вкус...) для таблицы
+ * Характеристик Карточки: attr_name => уникальные значения, от дешёвого
+ * Варианта к дорогому (тот же порядок, что у переключателя Вариантов).
+ *
+ * @return array<string, array<int, string>>
+ */
+function productVariantDimensions(int $productId): array
+{
+    $stmt = getPdo()->prepare('
+        SELECT pva.attr_name, pva.attr_value
+        FROM product_variant_attributes pva
+        JOIN product_variants v ON v.id = pva.variant_id
+        WHERE v.product_id = ? AND v.is_active = 1
+        GROUP BY pva.attr_name, pva.attr_value
+        ORDER BY pva.attr_name, MIN(IFNULL(v.discount_price, v.price)), MIN(v.id)
+    ');
+    $stmt->execute([$productId]);
+
+    $dimensions = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $dimensions[(string) $row['attr_name']][] = (string) $row['attr_value'];
+    }
+
+    return $dimensions;
 }
 
 /**

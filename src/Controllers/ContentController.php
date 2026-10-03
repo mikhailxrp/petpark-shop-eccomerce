@@ -156,6 +156,23 @@ final class ContentController
         $this->showPage('offer', 'legal-page');
     }
 
+    public function delivery(): void
+    {
+        $this->showPage('delivery', 'delivery', [
+            'freeThreshold' => cartFormatMoney(DELIVERY_FREE_THRESHOLD),
+            'courierCost' => cartFormatMoney(DELIVERY_COURIER_COST),
+            'pickupAddress' => SHOP_PICKUP_ADDRESS,
+            'pickupHours' => SHOP_PICKUP_HOURS,
+        ]);
+    }
+
+    public function payment(): void
+    {
+        $this->showPage('payment', 'payment', [
+            'reserveMinutes' => ORDER_RESERVE_MINUTES,
+        ]);
+    }
+
     /**
      * Страница `content_pages` по slug → View; нет страницы — 404. `body`
      * очищается белым списком (contentHtmlSanitize), SEO — из seoTitle/seoDescription.

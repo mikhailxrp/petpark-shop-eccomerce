@@ -75,6 +75,9 @@ define('CHANNELS_ENABLED',                  env('CHANNELS_ENABLED', 'max,telegra
 define('CHANNEL_POLL_INTERVAL_SECONDS',     5);
 define('CHANNEL_REPLY_MAX_LENGTH',          2000);
 
+// Маркетплейсы (Core/Marketplace.php, BR-007): наценка к эффективной цене Варианта, %.
+define('MARKETPLACE_MARKUP_PERCENT', 15);
+
 require_once ROOT_PATH . '/src/Core/Logger.php';
 require_once ROOT_PATH . '/src/Core/Database.php';
 require_once ROOT_PATH . '/src/Core/Seo.php';
@@ -94,6 +97,7 @@ require_once ROOT_PATH . '/src/Core/Report.php';
 require_once ROOT_PATH . '/src/Core/Client.php';
 require_once ROOT_PATH . '/src/Core/ContactForm.php';
 require_once ROOT_PATH . '/src/Core/ContentPageForm.php';
+require_once ROOT_PATH . '/src/Core/Marketplace.php';
 require_once ROOT_PATH . '/src/Models/Category.php';
 require_once ROOT_PATH . '/src/Models/Brand.php';
 require_once ROOT_PATH . '/src/Models/Product.php';
@@ -116,6 +120,7 @@ require_once ROOT_PATH . '/src/Models/SiteSetting.php';
 require_once ROOT_PATH . '/src/Models/Report.php';
 require_once ROOT_PATH . '/src/Models/Client.php';
 require_once ROOT_PATH . '/src/Models/ContactRequest.php';
+require_once ROOT_PATH . '/src/Models/MarketplaceListing.php';
 require_once ROOT_PATH . '/src/Services/Mailer.php';
 require_once ROOT_PATH . '/src/Services/Notifier.php';
 require_once ROOT_PATH . '/src/Services/FileUpload.php';

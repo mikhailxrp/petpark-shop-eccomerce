@@ -15,6 +15,7 @@ declare(strict_types=1);
  * @var string $date Опорная дата, Y-m-d
  * @var string $periodLabel
  * @var array{days: list<array{day: string, orders_count: int, revenue: string}>, orders_count: int, revenue: string} $orders
+ * @var list<array{source: string, label: string, orders_count: int, revenue: string}> $sources
  * @var array<int, array{product_name: string, quantity: int|string, revenue: string}> $topProducts
  * @var array{kinds: list<array{kind: string, label: string, bookings_count: int, services_count: int, revenue: string}>, bookings_count: int, services_count: int, revenue: string} $services
  */
@@ -77,6 +78,34 @@ ob_start();
         </div>
     </div>
 </div>
+
+<section class="card" aria-labelledby="report-sources-title">
+    <div class="card-header">
+        <h2 class="card-title" id="report-sources-title">Выручка по источникам</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Источник</th>
+                        <th scope="col">Заказов</th>
+                        <th scope="col">Выручка</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($sources as $row): ?>
+                        <tr>
+                            <th scope="row"><?= e($row['label']) ?></th>
+                            <td><?= $row['orders_count'] ?></td>
+                            <td><?= e($money($row['revenue'])) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
 
 <section class="card" aria-labelledby="report-revenue-title">
     <div class="card-header">

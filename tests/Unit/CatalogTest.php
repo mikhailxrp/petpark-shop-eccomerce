@@ -401,4 +401,24 @@ final class CatalogTest extends TestCase
     {
         $this->assertNull(\catalogSelectVariant([], 10));
     }
+
+    public function testProductSpecsCollectsBrandAttributesAndVariantDimensions(): void
+    {
+        $specs = \catalogProductSpecs(
+            'ВетЛайн',
+            ['вид_животного' => 'кошки'],
+            ['Объём/размер' => ['400г', '2кг', '400г'], 'Вкус' => ['курица']]
+        );
+
+        $this->assertSame(
+            ['Бренд' => 'ВетЛайн', 'Вид животного' => 'кошки', 'Объём/размер' => '400г, 2кг', 'Вкус' => 'курица'],
+            $specs
+        );
+    }
+
+    public function testProductSpecsSkipsEmptyValuesAndMissingBrand(): void
+    {
+        $this->assertSame([], \catalogProductSpecs(null, ['возраст' => ' '], ['Размер' => []]));
+        $this->assertSame([], \catalogProductSpecs('  ', [], []));
+    }
 }

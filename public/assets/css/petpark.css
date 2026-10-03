@@ -413,11 +413,6 @@ select.nice-select::-ms-expand {
     width: 240px;
     font-weight: bold;
 }
-.pd-tab-subheading {
-    font-weight: bold;
-    margin-top: 30px;
-    margin-bottom: 10px;
-}
 .pd-tab-content .pd-description {
     margin-bottom: 0;
 }
@@ -1056,6 +1051,11 @@ form.add-review.comment.leave-comment input[type="tel"] {
     --cart-gap-sm: 0.5rem;
     --cart-gap-lg: 3rem;
     --cart-quantity-width: 110px;
+    --cart-border: #c1c1c1;
+    --cart-card-radius: 12px;
+    --cart-card-padding: 12px;
+    --cart-thumb-size: 72px;
+    --cart-remove-space: 40px;
 }
 
 /* Карточка в листинге (components/product-card.php) */
@@ -1093,6 +1093,93 @@ form.add-review.comment.leave-comment input[type="tel"] {
 .cart-table {
     overflow-x: auto;
     overflow-y: hidden;
+}
+/*
+ * Корзина до 768px (AC-09): таблица макета шириной ~560px не помещалась
+ * в окно 351px и пряталась за внутренним горизонтальным скроллом
+ * .cart-table — колонки «Количество»/«Сумма» и «Обновить» были не видны.
+ * Здесь каждая позиция — карточка, подписи полей берутся из data-label
+ * (cart.php). style.css макета desktop-first, поэтому переопределяем
+ * вниз max-width: на ≥768px таблица остаётся как была.
+ * !important у margin — только перебить `margin: -1px !important`
+ * из style.css (`table.shop_table tr td`).
+ */
+@media (max-width: 767.98px) {
+    .cart-page table.shop_table,
+    .cart-page table.shop_table tbody,
+    .cart-page table.shop_table tr,
+    .cart-page table.shop_table td {
+        display: block;
+        width: 100%;
+    }
+    .cart-page table.shop_table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+    .cart-page .cart-item {
+        position: relative;
+        margin-bottom: var(--cart-gap-sm);
+        border: 1px solid var(--cart-border);
+        border-radius: var(--cart-card-radius);
+    }
+    .cart-page table.shop_table tr td {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+        border: none;
+        margin: 0 !important;
+        text-align: left;
+    }
+    .cart-page table.shop_table td.product-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: auto;
+        padding: 0;
+    }
+    .cart-page table.shop_table td.product-name {
+        display: flex;
+        flex-wrap: nowrap;
+        padding-right: var(--cart-remove-space);
+    }
+    .cart-page table.shop_table td.product-name img {
+        flex: 0 0 var(--cart-thumb-size);
+        width: var(--cart-thumb-size);
+        margin: 0 var(--cart-card-padding) 0 0;
+        padding: var(--cart-gap-sm);
+    }
+    .cart-page table.shop_table td.product-name a {
+        font-size: 16px;
+    }
+    .cart-page table.shop_table td.product-price,
+    .cart-page table.shop_table td.product-quantity,
+    .cart-page table.shop_table td.product-subtotal {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--cart-gap-sm);
+        border-top: 1px solid var(--cart-border);
+    }
+    .cart-page table.shop_table td.product-price {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+    }
+    .cart-page table.shop_table td[data-label]::before {
+        content: attr(data-label);
+        margin-right: auto;
+        font-weight: bold;
+        color: var(--cart-muted);
+    }
+    .cart-page table.shop_table td.product-price bdi {
+        font-size: 18px;
+    }
+    .cart-page table.shop_table td.product-quantity input.cart-item__quantity {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+    }
+    .cart-page table.shop_table td.product-quantity .cart-item__warning {
+        flex-basis: 100%;
+    }
 }
 .cart-item__remove {
     padding: var(--cart-gap-sm);
@@ -2819,4 +2906,124 @@ table.shop_table td.product-name img {
 
 .pricing-section__meta {
     font-weight: 700;
+}
+
+/* «Доставка» и «Оплата» (phase-9.md, Таск 5): карточки условий и акцентная полоса. */
+:root {
+    --info-radius: 24px;
+    --info-gap: 24px;
+    --info-icon-size: 72px;
+    --info-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    --info-badge-bg: #fff1ed;
+}
+
+.info-page__intro {
+    max-width: 720px;
+    margin: 0 auto 40px;
+    font-size: 1.125rem;
+    line-height: 1.7;
+    text-align: center;
+}
+
+.info-card-col {
+    margin-bottom: var(--info-gap);
+}
+
+.info-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 28px 24px;
+    border-radius: var(--info-radius);
+    background-color: #fff;
+    box-shadow: var(--info-shadow);
+}
+
+.info-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.info-card__icon,
+.info-banner__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--info-icon-size);
+    height: var(--info-icon-size);
+    border-radius: 50%;
+    font-size: 1.75rem;
+    color: #fff;
+    background-color: var(--color-primary);
+}
+
+.info-card__badge {
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--color-primary);
+    background-color: var(--info-badge-bg);
+}
+
+.info-card__title {
+    padding-bottom: 8px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.info-card__text {
+    margin-bottom: 12px;
+    line-height: 1.7;
+}
+
+.info-card__list {
+    margin: auto 0 0;
+    padding: 16px 0 0;
+    border-top: 1px dashed var(--color-bg-light);
+    list-style: none;
+}
+
+.info-card__list li {
+    padding: 4px 0;
+    font-weight: 500;
+}
+
+.info-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: var(--info-gap);
+    padding: 28px 24px;
+    border-radius: var(--info-radius);
+    text-align: center;
+    background-color: var(--color-bg-light);
+}
+
+.info-banner__title {
+    padding-bottom: 6px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.info-banner__text {
+    margin: 0;
+    line-height: 1.7;
+}
+
+@media (min-width: 768px) {
+    .info-card {
+        padding: 36px 32px;
+    }
+
+    .info-banner {
+        flex-direction: row;
+        padding: 32px 40px;
+        text-align: left;
+    }
 }

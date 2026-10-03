@@ -313,6 +313,147 @@ function orderCreateFromRows(
 }
 
 /**
+ * Приём Заказа с площадки (FR-MARKET-003, phase-9.md Таск 3): Заказ +
+ * order_items + списание остатка — одна транзакция. Цена позиции — цена
+ * площадки из `marketplace_listings` (Вариант должен быть выгружен на эту
+ * площадку). Остаток списывается сразу, без резерва, условным UPDATE
+ * (не хватило — откат всего Заказа). Покупатель на стороне площадки:
+ * user_id и contact_* пустые, уведомлений нет. Оплата — на площадке.
+ *
+ * @param array<int, array{variant_id: int, quantity: int}> $lines
+ * @return array{status: 'created', order_id: int}
+ *       | array{status: 'exists', order_id: int}
+ *       | array{status: 'unavailable', product_name: string}
+ *       | array{status: 'not_listed'}
+ */
+function orderCreateFromMarketplace(string $marketplace, string $externalOrderId, array $lines): array
+{
+    marketplaceAssertKnown($marketplace);
+
+    $existing = orderFindByExternalId($marketplace, $externalOrderId);
+    if ($existing !== null) {
+        return ['status' => 'exists', 'order_id' => (int) $existing['id']];
+    }
+
+    $pdo = getPdo();
+    $pdo->beginTransaction();
+
+    try {
+        $listingStmt = $pdo->prepare('
+            SELECT v.sku, p.name, ml.marketplace_price
+            FROM marketplace_listings ml
+            JOIN product_variants v ON v.id = ml.variant_id
+            JOIN products p ON p.id = v.product_id
+            WHERE ml.variant_id = :variant_id AND ml.marketplace = :marketplace
+        ');
+
+        $rows = [];
+        $totalKopecks = 0;
+        foreach ($lines as $line) {
+            $variantId = (int) $line['variant_id'];
+            $quantity = (int) $line['quantity'];
+
+            $listingStmt->execute(['variant_id' => $variantId, 'marketplace' => $marketplace]);
+            $listing = $listingStmt->fetch(PDO::FETCH_ASSOC);
+            if ($listing === false || $quantity < 1) {
+                $pdo->rollBack();
+                return ['status' => 'not_listed'];
+            }
+
+            $rows[] = $listing + ['variant_id' => $variantId, 'quantity' => $quantity];
+            $totalKopecks += orderMoneyToKopecks((string) $listing['marketplace_price']) * $quantity;
+        }
+
+        $stmt = $pdo->prepare('
+            INSERT INTO orders (
+                source, external_order_id, status, payment_status, delivery_method, payment_method,
+                delivery_cost, total
+            ) VALUES (
+                :source, :external_order_id, \'new\', \'paid\', \'marketplace\', \'marketplace\', 0, :total
+            )
+        ');
+        $stmt->execute([
+            'source'            => $marketplace,
+            'external_order_id' => $externalOrderId,
+            'total'             => orderKopecksToMoney($totalKopecks),
+        ]);
+        $orderId = (int) $pdo->lastInsertId();
+
+        $variantAttributes = productVariantAttributesForVariants(array_map(
+            static fn (array $row): int => $row['variant_id'],
+            $rows
+        ));
+
+        // :qty дважды — повтор named-плейсхолдера не поддерживается при
+        // ATTR_EMULATE_PREPARES=false, см. orderCreateFromRows().
+        $stockStmt = $pdo->prepare('
+            UPDATE product_variants
+            SET stock_quantity = stock_quantity - :qty
+            WHERE id = :id AND stock_quantity >= :qty_check
+        ');
+        $insertItemStmt = $pdo->prepare('
+            INSERT INTO order_items (order_id, variant_id, product_name, variant_label, price, quantity)
+            VALUES (:order_id, :variant_id, :product_name, :variant_label, :price, :quantity)
+        ');
+
+        foreach ($rows as $row) {
+            $stockStmt->execute(['qty' => $row['quantity'], 'id' => $row['variant_id'], 'qty_check' => $row['quantity']]);
+            if ($stockStmt->rowCount() === 0) {
+                $pdo->rollBack();
+                return ['status' => 'unavailable', 'product_name' => (string) $row['name']];
+            }
+
+            $attributes = $variantAttributes[$row['variant_id']] ?? [];
+            $insertItemStmt->execute([
+                'order_id'      => $orderId,
+                'variant_id'    => $row['variant_id'],
+                'product_name'  => (string) $row['name'],
+                'variant_label' => $attributes !== [] ? implode(', ', $attributes) : (string) $row['sku'],
+                'price'         => (string) $row['marketplace_price'],
+                'quantity'      => $row['quantity'],
+            ]);
+        }
+
+        $pdo->commit();
+
+        return ['status' => 'created', 'order_id' => $orderId];
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        // Гонка двух приёмов одного external_order_id — UNIQUE словил дубль
+        // раньше проверки в начале функции; это тот же Заказ, не ошибка.
+        if ($e->getCode() === '23000' && str_contains($e->getMessage(), 'uq_orders_source_external')) {
+            $raceWinner = orderFindByExternalId($marketplace, $externalOrderId);
+            if ($raceWinner !== null) {
+                return ['status' => 'exists', 'order_id' => (int) $raceWinner['id']];
+            }
+        }
+
+        throw $e;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $e;
+    }
+}
+
+/**
+ * @return array{id: int}|null
+ */
+function orderFindByExternalId(string $source, string $externalOrderId): ?array
+{
+    $stmt = getPdo()->prepare('SELECT id FROM orders WHERE source = :source AND external_order_id = :external_order_id');
+    $stmt->execute(['source' => $source, 'external_order_id' => $externalOrderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row === false ? null : $row;
+}
+
+/**
  * @return array{id: int}|null
  */
 function orderFindByCheckoutToken(string $token): ?array
@@ -451,7 +592,7 @@ function orderTransition(
 
     try {
         $stmt = $pdo->prepare('
-            SELECT id, status, payment_status, contact_name, contact_email, total, delivery_method
+            SELECT id, status, source, payment_status, contact_name, contact_email, total, delivery_method
             FROM orders
             WHERE id = ?
             FOR UPDATE
@@ -462,6 +603,7 @@ function orderTransition(
 
         if (
             $fromStatus === false
+            || !orderIsManagedBySite((string) $order['source'])
             || !orderCanTransition((string) $fromStatus, $toStatus)
             || ($allowedFromStatuses !== null && !in_array((string) $fromStatus, $allowedFromStatuses, true))
         ) {
@@ -555,7 +697,7 @@ function orderFindExpiredIds(): array
     $stmt = getPdo()->query("
         SELECT id
         FROM orders
-        WHERE status = 'new' AND reserved_until < NOW()
+        WHERE status = 'new' AND source = 'site' AND reserved_until < NOW()
         ORDER BY id ASC
     ");
 
@@ -576,6 +718,7 @@ function orderFindUnclaimedIds(int $days): array
         SELECT id
         FROM orders
         WHERE status IN ('ready_for_pickup', 'shipped')
+          AND source = 'site'
           AND status_changed_at < NOW() - INTERVAL :days DAY
         ORDER BY id ASC
     ");
@@ -610,20 +753,30 @@ function orderPaymentLogCreate(int $orderId, string $provider, bool $signatureVa
  *
  * @return array<int, array<string, mixed>>
  */
-function orderListForAdmin(?string $status, int $limit, int $offset): array
+function orderListForAdmin(?string $status, int $limit, int $offset, ?string $source = null): array
 {
     $sql = '
         SELECT
-            o.id, o.status, o.delivery_method, o.payment_method, o.payment_status,
+            o.id, o.status, o.source, o.delivery_method, o.payment_method, o.payment_status,
             o.contact_name, o.contact_phone, o.total, o.created_at,
             (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS items_count
         FROM orders o
     ';
+    $conditions = [];
     $params = [];
 
     if ($status !== null) {
-        $sql .= ' WHERE o.status = :status';
+        $conditions[] = 'o.status = :status';
         $params[':status'] = $status;
+    }
+
+    if ($source !== null) {
+        $conditions[] = 'o.source = :source';
+        $params[':source'] = $source;
+    }
+
+    if ($conditions !== []) {
+        $sql .= ' WHERE ' . implode(' AND ', $conditions);
     }
 
     $sql .= ' ORDER BY o.created_at DESC, o.id DESC LIMIT :limit OFFSET :offset';
@@ -639,14 +792,24 @@ function orderListForAdmin(?string $status, int $limit, int $offset): array
     return $stmt->fetchAll();
 }
 
-function orderCountForAdmin(?string $status): int
+function orderCountForAdmin(?string $status, ?string $source = null): int
 {
-    if ($status === null) {
-        return (int) getPdo()->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+    $conditions = [];
+    $params = [];
+
+    if ($status !== null) {
+        $conditions[] = 'status = :status';
+        $params['status'] = $status;
     }
 
-    $stmt = getPdo()->prepare('SELECT COUNT(*) FROM orders WHERE status = ?');
-    $stmt->execute([$status]);
+    if ($source !== null) {
+        $conditions[] = 'source = :source';
+        $params['source'] = $source;
+    }
+
+    $sql = 'SELECT COUNT(*) FROM orders' . ($conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions));
+    $stmt = getPdo()->prepare($sql);
+    $stmt->execute($params);
 
     return (int) $stmt->fetchColumn();
 }
@@ -661,9 +824,9 @@ function orderFindForAdmin(int $id): ?array
 {
     $stmt = getPdo()->prepare('
         SELECT
-            id, user_id, status, payment_status, delivery_method, payment_method,
-            delivery_cost, delivery_address, contact_name, contact_phone, contact_email,
-            customer_note, total, created_at, reserved_until, status_changed_at,
+            id, user_id, status, source, external_order_id, payment_status, delivery_method,
+            payment_method, delivery_cost, delivery_address, contact_name, contact_phone,
+            contact_email, customer_note, total, created_at, reserved_until, status_changed_at,
             amocrm_id
         FROM orders
         WHERE id = ?
@@ -688,6 +851,7 @@ function orderMarkPaid(int $orderId): bool
         WHERE id = :id
           AND payment_method = 'cash_or_card_on_delivery'
           AND payment_status = 'unpaid'
+          AND source = 'site'
           AND status <> 'cancelled'
     ");
     $stmt->execute(['id' => $orderId]);
@@ -766,7 +930,7 @@ function orderEditItems(int $orderId, array $change): array
 
     try {
         $stmt = $pdo->prepare('
-            SELECT status, delivery_method, payment_method, payment_status, total
+            SELECT status, source, delivery_method, payment_method, payment_status, total
             FROM orders
             WHERE id = ?
             FOR UPDATE
@@ -779,7 +943,7 @@ function orderEditItems(int $orderId, array $change): array
             return ['status' => 'not_found'];
         }
 
-        if (!orderIsEditable((string) $order['status'])) {
+        if (!orderIsManagedBySite((string) $order['source']) || !orderIsEditable((string) $order['status'])) {
             $pdo->rollBack();
             return ['status' => 'not_editable'];
         }

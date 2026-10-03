@@ -144,6 +144,13 @@ declare(strict_types=1);
                                     <span class="side-menu__label">Склад</span>
                                 </a>
                             </li>
+                            <?php $marketplacesActive = str_starts_with($currentPath, '/admin/marketplaces'); ?>
+                            <li class="slide<?= $marketplacesActive ? ' active' : '' ?>">
+                                <a href="/admin/marketplaces" class="side-menu__item<?= $marketplacesActive ? ' active' : '' ?>">
+                                    <i class="fe fe-shopping-bag side-menu__icon"></i>
+                                    <span class="side-menu__label">Маркетплейсы</span>
+                                </a>
+                            </li>
                             <?php $inboxActive = str_starts_with($currentPath, '/admin/inbox'); ?>
                             <li class="slide<?= $inboxActive ? ' active' : '' ?>">
                                 <a href="/admin/inbox" class="side-menu__item<?= $inboxActive ? ' active' : '' ?>">

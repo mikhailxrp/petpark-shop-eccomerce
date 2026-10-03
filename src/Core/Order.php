@@ -32,6 +32,15 @@ const ORDER_EDITABLE_STATUSES = ['new', 'confirmed', 'assembled'];
 // Покупатель сам отменяет Заказ только до отгрузки (ADR-032).
 const ORDER_CUSTOMER_CANCELLABLE_STATUSES = ['new', 'confirmed', 'assembled'];
 
+// Источник Заказа — orders.source; всё кроме 'site' приходит с площадки
+// (Фаза 9), и статусом такого Заказа управляет площадка.
+const ORDER_SOURCE_SITE = 'site';
+const ORDER_SOURCE_LABELS = [
+    ORDER_SOURCE_SITE => 'Сайт',
+    'wildberries'     => 'Wildberries',
+    'ozon'            => 'Ozon',
+];
+
 const ORDER_ITEM_MAX_QUANTITY = 999;
 
 const ORDER_ADDRESS_MAX_LENGTH = 255;
@@ -160,6 +169,15 @@ function orderRecalculateTotals(
 function orderIsEditable(string $status): bool
 {
     return in_array($status, ORDER_EDITABLE_STATUSES, true);
+}
+
+/**
+ * Ведётся ли Заказ на сайте. Заказ с площадки — только для чтения: статус,
+ * оплату и состав меняет площадка, а не админка и не фоновые задачи.
+ */
+function orderIsManagedBySite(string $source): bool
+{
+    return $source === ORDER_SOURCE_SITE;
 }
 
 /**
