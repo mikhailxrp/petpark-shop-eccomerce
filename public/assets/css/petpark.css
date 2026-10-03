@@ -1051,6 +1051,11 @@ form.add-review.comment.leave-comment input[type="tel"] {
     --cart-gap-sm: 0.5rem;
     --cart-gap-lg: 3rem;
     --cart-quantity-width: 110px;
+    --cart-border: #c1c1c1;
+    --cart-card-radius: 12px;
+    --cart-card-padding: 12px;
+    --cart-thumb-size: 72px;
+    --cart-remove-space: 40px;
 }
 
 /* Карточка в листинге (components/product-card.php) */
@@ -1088,6 +1093,93 @@ form.add-review.comment.leave-comment input[type="tel"] {
 .cart-table {
     overflow-x: auto;
     overflow-y: hidden;
+}
+/*
+ * Корзина до 768px (AC-09): таблица макета шириной ~560px не помещалась
+ * в окно 351px и пряталась за внутренним горизонтальным скроллом
+ * .cart-table — колонки «Количество»/«Сумма» и «Обновить» были не видны.
+ * Здесь каждая позиция — карточка, подписи полей берутся из data-label
+ * (cart.php). style.css макета desktop-first, поэтому переопределяем
+ * вниз max-width: на ≥768px таблица остаётся как была.
+ * !important у margin — только перебить `margin: -1px !important`
+ * из style.css (`table.shop_table tr td`).
+ */
+@media (max-width: 767.98px) {
+    .cart-page table.shop_table,
+    .cart-page table.shop_table tbody,
+    .cart-page table.shop_table tr,
+    .cart-page table.shop_table td {
+        display: block;
+        width: 100%;
+    }
+    .cart-page table.shop_table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+    .cart-page .cart-item {
+        position: relative;
+        margin-bottom: var(--cart-gap-sm);
+        border: 1px solid var(--cart-border);
+        border-radius: var(--cart-card-radius);
+    }
+    .cart-page table.shop_table tr td {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+        border: none;
+        margin: 0 !important;
+        text-align: left;
+    }
+    .cart-page table.shop_table td.product-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: auto;
+        padding: 0;
+    }
+    .cart-page table.shop_table td.product-name {
+        display: flex;
+        flex-wrap: nowrap;
+        padding-right: var(--cart-remove-space);
+    }
+    .cart-page table.shop_table td.product-name img {
+        flex: 0 0 var(--cart-thumb-size);
+        width: var(--cart-thumb-size);
+        margin: 0 var(--cart-card-padding) 0 0;
+        padding: var(--cart-gap-sm);
+    }
+    .cart-page table.shop_table td.product-name a {
+        font-size: 16px;
+    }
+    .cart-page table.shop_table td.product-price,
+    .cart-page table.shop_table td.product-quantity,
+    .cart-page table.shop_table td.product-subtotal {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--cart-gap-sm);
+        border-top: 1px solid var(--cart-border);
+    }
+    .cart-page table.shop_table td.product-price {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+    }
+    .cart-page table.shop_table td[data-label]::before {
+        content: attr(data-label);
+        margin-right: auto;
+        font-weight: bold;
+        color: var(--cart-muted);
+    }
+    .cart-page table.shop_table td.product-price bdi {
+        font-size: 18px;
+    }
+    .cart-page table.shop_table td.product-quantity input.cart-item__quantity {
+        padding: var(--cart-gap-sm) var(--cart-card-padding);
+    }
+    .cart-page table.shop_table td.product-quantity .cart-item__warning {
+        flex-basis: 100%;
+    }
 }
 .cart-item__remove {
     padding: var(--cart-gap-sm);
